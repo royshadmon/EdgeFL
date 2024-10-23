@@ -9,6 +9,7 @@ app = Flask(__name__)
 data_batches = []
 local_training_handler = None
 flask_connection = None
+# PartyProtocolHandler?
 
 '''
 /init [POST]
