@@ -4,7 +4,7 @@ from ibmfl.aggregator.aggregator import Aggregator
 from ibmfl.party.party import Party
 
 class FLSession:
-    def __init__(self, num_parties, dataset, points_per_party, model, t_rounds):
+    def __init__(self, num_parties, dataset, points_per_party, model, t_rounds, fusion_model):
         self.num_parties = num_parties
         self.dataset = dataset
         self.points_per_party = points_per_party
@@ -12,9 +12,11 @@ class FLSession:
         self.t_rounds = t_rounds
         self.aggregator = None
         self.parties = []
+        self.fusion_model = fusion_model
+
 
     def init_party(self, pid):
-        party = Party(config_file=f"examples/configs/iter_avg/{self.model}/config_party{pid}.yml")
+        party = Party(config_file=f"examples/configs/{self.fusion_model}/{self.model}/config_party{pid}.yml")
         party.start()
         party.register_party()
         party.proto_handler.is_private = False
@@ -33,10 +35,10 @@ class FLSession:
     def init_aggregator(self):
         # Generate the data and config files
         os.system(f'python examples/generate_data.py -n {self.num_parties} -d {self.dataset} -pp {self.points_per_party}')
-        os.system(f'python examples/generate_configs.py -f iter_avg -m {self.model} -n {self.num_parties} -d {self.dataset} -p examples/data/{self.dataset}/random')
+        os.system(f"python examples/generate_configs.py -f {self.fusion_model} -m {self.model} -n {self.num_parties} -d {self.dataset} -p examples/data/{self.dataset}/random")
 
         # Start aggregator
-        self.aggregator = Aggregator(config_file=f"examples/configs/iter_avg/{self.model}/config_agg.yml")
+        self.aggregator = Aggregator(config_file=f"examples/configs/{self.fusion_model}/{self.model}/config_agg.yml")
         self.aggregator.start()
 
         # Wait for parties to connect
@@ -58,13 +60,14 @@ class FLSession:
 
 
 if __name__ == "__main__":
+    fusion_model = 'iter_avg'
     num_parties = 2
     dataset = "mnist"
     points_per_party = 200
     model = "pytorch"
     t_rounds = 2  # Number of training rounds
 
-    sim = FLSession(num_parties, dataset, points_per_party, model, t_rounds)
+    sim = FLSession(num_parties, dataset, points_per_party, model, t_rounds, fusion_model)
     sim.init_aggregator()
     sim.init_parties()
     sim.run_training()
