@@ -23,7 +23,7 @@ contract ModelParameters {
     }
 
     // event emitted to nodes with updated model params from aggregator
-    event updateNode(uint[] updatedParamgs);
+    event updateNode(uint[] updatedParams);
 
     // event emitted to aggregator with newly trained model params from nodes
     event updateAgg(uint[][] nodeParams); 
@@ -39,11 +39,13 @@ contract ModelParameters {
 
     // function to update aggregator model parameters, reset node model parameters, and then send event 
     // to nodes listening that model paramters have been updated from the aggregator
-    function updateParams(uint[] memory newParams) public {
+    function updateParams(uint[] memory newParams, bool updateNodes) public {
         require(msg.sender == Aggregator);
         aggregatorParams = newParams;
         delete nodeParams;
-        emit updateNode(aggregatorParams);
+        if (updateNodes) {
+            emit updateNode(aggregatorParams);
+        }
     }
 
     // function to add model paramters trained by a node and emit the event to the aggregator that all nodes

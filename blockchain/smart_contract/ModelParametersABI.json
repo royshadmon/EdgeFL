@@ -1,0 +1,128 @@
+[
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "nodes",
+				"type": "address[]"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [],
+		"name": "startTraining",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256[][]",
+				"name": "nodeParams",
+				"type": "uint256[][]"
+			}
+		],
+		"name": "updateAgg",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256[]",
+				"name": "updatedParams",
+				"type": "uint256[]"
+			}
+		],
+		"name": "updateNode",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "Aggregator",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "Nodes",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newNode",
+				"type": "address"
+			}
+		],
+		"name": "addNode",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "newNodeParams",
+				"type": "uint256[]"
+			}
+		],
+		"name": "addNodeParams",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "initTraining",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "newParams",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "bool",
+				"name": "updateNodes",
+				"type": "bool"
+			}
+		],
+		"name": "updateParams",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+]
