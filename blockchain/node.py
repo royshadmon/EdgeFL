@@ -32,11 +32,20 @@ class Node:
         data_handler = config['data']['path'] 
         self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
 
-    
+    '''
+    add_data_batch(data)
+        - Adds passed in data to local storage
+        - Used for simulating data stream
+        - Assumes data is in correct format for model / datahandler
+    '''
     def add_data_batch(self, data):
         self.data_batches.append(data)
 
-    def add_node_params(self, new_node_model_params):
+    '''
+    add_node_params()
+        - Returns current node nodel parameters to blockchain via event listener
+    '''
+    def add_node_params(self):
         if not self.contract_instance:
             return {
                 'status': 'error',
@@ -45,6 +54,7 @@ class Node:
 
         try:
             # Build the transaction to call addNodeParams 
+            new_node_model_params = self.local_training_handler.fl_model # I think this would get the fl_model?
             tx = self.deployed_contract.functions.addNodeParams(new_node_model_params).buildTransaction({
                 'from': self.node_address,
                 'nonce': self.w3.eth.get_transaction_count(self.node_address),
@@ -74,7 +84,6 @@ class Node:
     train_model_params(aggregator_model_params)
         - Uses updated aggreagtor model params and updates local model
         - Gets local data and runs training on updated model
-        - Returns new node model params
     '''
     def train_model_params(self, aggregator_model_params):
         # Get local Data
@@ -92,7 +101,6 @@ class Node:
         # Do local training
         model_update = self.local_training_handler.train()
 
-        # Return updated model parameters
         return jsonify({"status": "training_complete", "model_update": str(model_update)})
 
 

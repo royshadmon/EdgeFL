@@ -75,11 +75,10 @@ def listen_for_update_node():
     while True:
         try:
             for event in event_filter.get_new_entries():
-                updated_params = event['args']['updatedParams']
-                print(f"Received 'updateNode' event with updatedParams: {updated_params}")
+                print(f"Received 'updateNode' event.")
                 # Call add_node_params with the updated parameters
-                result = node_instance.add_node_params(updated_params)
-                print(f"add_node_params result: {result}")
+                result = node_instance.add_node_params()
+                print(f"add_node_params result (i.e. nodes model parameters): {result}")
         except Exception as e:
             print(f"Error listening for 'updateNode' event: {str(e)}")
 
@@ -96,9 +95,10 @@ def listen_for_start_training():
         try:
             for event in event_filter.get_new_entries():
                 print("Received 'startTraining' event.")
+                aggregator_params = event['args']['aggregatorParams']
                 # Call add_node_params with an empty list
-                result = node_instance.start
-                print(f"add_node_params result: {result}")
+                result = node_instance.start_training(aggregator_params)
+                print(f"start_training result (i.e. nodes model parameters after training): {result}")
         except Exception as e:
             print(f"Error listening for 'startTraining' event: {str(e)}")
 
