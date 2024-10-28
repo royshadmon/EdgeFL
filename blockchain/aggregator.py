@@ -2,6 +2,7 @@ import os
 import json
 from web3 import Web3
 
+
 class Aggregator:
     def __init__(self, provider_url, private_key):
         # Initialize Web3 connection to the Ethereum node
@@ -13,11 +14,14 @@ class Aggregator:
 
         # Set the deployer's private key and address
         self.private_key = private_key
-        self.deployer_account = self.w3.eth.account.privateKeyToAccount(private_key)
-        self.deployer_address = self.deployer_account.address
+        self.deployer_account = self.w3.eth.account.from_key(private_key)
+        self.deployer_address = self.w3.to_checksum_address(self.deployer_account.address)
+
+        balance = self.w3.eth.get_balance(self.deployer_address)
+        print(f"Deployer Address Balance: {self.w3.from_wei(balance, 'ether')} ETH")
 
         # Load the ABI and bytecode
-        base_path = os.path.join(os.path.dirname(__file__), 'smart-contract')
+        base_path = os.path.join(os.path.dirname(__file__), 'smart_contract')
         with open(os.path.join(base_path, 'ModelParametersABI.json'), 'r') as abi_file:
             self.contract_abi = json.load(abi_file)
         with open(os.path.join(base_path, 'ModelParametersBytecode.txt'), 'r') as bytecode_file:
@@ -27,22 +31,25 @@ class Aggregator:
         self.deployed_contract_address = None
         self.deployed_contract = None
 
-    def deploy_contract(self, predifined_nodes):
+    def deploy_contract(self, predefined_nodes):
         try:
             # Initialize the contract object
             contract = self.w3.eth.contract(abi=self.contract_abi, bytecode=self.contract_bytecode)
 
-            # Build the deployment transaction 
-            tx = contract.constructor(predifined_nodes).buildTransaction({
+            # Convert all node addresses to checksum format
+            predefined_nodes = [self.w3.to_checksum_address(addr) for addr in predefined_nodes]
+
+            # Build the deployment transaction
+            tx = contract.constructor(predefined_nodes).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 2000000,
-                'gasPrice': self.w3.toWei('50', 'gwei')
+                'gasPrice': self.w3.to_wei('50', 'gwei')
             })
 
             # Sign and send the transaction
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
             # Wait for the transaction receipt
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -73,7 +80,7 @@ class Aggregator:
         try:
 
             # Build the transaction to call initTraining
-            tx = self.deployed_contract.functions.initTraining().buildTransaction({
+            tx = self.deployed_contract.functions.initTraining().build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 100000,
@@ -82,7 +89,7 @@ class Aggregator:
 
             # Sign and send the transaction
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
             # Wait for the transaction receipt
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -99,15 +106,15 @@ class Aggregator:
             }
 
     def add_node(self, new_node_address):
-         if not self.deployed_contract_address:
+        if not self.deployed_contract_address:
             return {
                 'status': 'error',
                 'message': 'Contract not deployed yet'
             }
 
         try:
-            # Build the transaction to call addNode 
-            tx = self.deployed_contract.functions.addNode(new_node_address).buildTransaction({
+            # Build the transaction to call addNode
+            tx = self.deployed_contract.functions.addNode(new_node_address).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 100000,
@@ -116,7 +123,7 @@ class Aggregator:
 
             # Sign and send the transaction for production environment
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
             # Wait for the transaction receipt
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -140,8 +147,8 @@ class Aggregator:
             }
 
         try:
-            # Build the transaction to call addNode 
-            tx = self.deployed_contract.functions.updateParams(new_model_parameters, update_params).buildTransaction({
+            # Build the transaction to call addNode
+            tx = self.deployed_contract.functions.updateParams(new_model_parameters, update_params).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 100000,
@@ -150,7 +157,7 @@ class Aggregator:
 
             # Sign and send the transaction for production environment
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
             # Wait for the transaction receipt
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -165,8 +172,8 @@ class Aggregator:
                 'status': 'error',
                 'message': str(e)
             }
-    
+
     def aggregate_model_params(model_params_from_nodes):
         # TO DO
         # aggregate model params from nodes using some fusion model like iter_avg etc.
-        
+        pass

@@ -1,43 +1,69 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from aggregator import Aggregator
 import threading
 import time
+import requests
 
 app = Flask(__name__)
 
 # Initialize the Aggregator instance
-PROVIDER_URL = 'http://127.0.0.1:8545'
-PRIVATE_KEY = '<SOME-PRIVATE-KEY>'
+PROVIDER_URL = 'http://127.0.0.1:8545'  # <- ganache test network
+# From my ganache test network. Everytime you run the CLI, you get a new set of accounts and private keys so be sure to
+# change this value.
+PRIVATE_KEY = '0x6e5ac5342bed40e9b1fab14251db21a98a83294f433878be6cfef9f186dd38db'
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
-CONTRACT_ADDRESS = None
 
 TOTAL_ROUNDS = 0  # Number of rounds to be initialized from the init_training method
 CURRENT_ROUND = 1  # Track the current round
 
+'''
 
-@app.route('deploy-contract', methods=['POST'])
+CURL REQUEST FOR DEPLOYING CONTRACT
+
+curl -X POST http://localhost:8080/deploy-contract \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeAddresses": [
+    "0x9385dab67f3a7698A14E483E4A3d8373a2095CE0" <- example node address chosen from ganache test network
+  ],
+  "nodeUrls": [
+    "http://localhost:8081" <- example host where other node is running
+  ],
+  "config": {  
+    "model": {
+      "path": "/path/to/model" <- Needs to be a model compatible for ibm FL
+    },
+    "data": {
+      "path": "/path/to/data" <- Needs to be a path to data handler
+    }
+  }
+}'
+
+'''
+
+
+@app.route('/deploy-contract', methods=['POST'])
 def deploy_contract():
     """Deploy the smart contract with predefined nodes."""
-    global CONTRACT_ADDRESS
 
     try:
         # Get the list of nodes and node URLs from the request body
         data = request.json
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
+        config = data.get('config', {})
 
-        
         if not node_addresses:
             return jsonify({'status': 'error', 'message': 'No nodes provided'}), 400
 
         # Deploy the contract and return the result
         result = aggregator.deploy_contract(node_addresses)
         if result['status'] == 'success':
-            CONTRACT_ADDRESS = result['contractAddress']
-            print(f"Contract deployed and saved: {CONTRACT_ADDRESS}")
+            contract_address = result['contractAddress']
+            print(f"Contract deployed and saved: {contract_address}")
 
             # Send the contract address to each node
-            send_contract_address_to_nodes(CONTRACT_ADDRESS, node_urls)
+            send_contract_address_to_nodes(contract_address, node_urls, config)
 
         return jsonify(result)
 
@@ -45,18 +71,20 @@ def deploy_contract():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def send_contract_address_to_nodes(contract_address, node_urls):
+def send_contract_address_to_nodes(contract_address, node_urls, config):
     """Send the deployed contract address to multiple node servers."""
     for url in node_urls:
         try:
-            response = requests.post(f'{url}/set-contract-address', json={'contractAddress': contract_address})
+            response = requests.post(f'{url}/set-contract-address', json={
+                'contractAddress': contract_address,
+                'config': config
+            })
             if response.status_code == 200:
                 print(f"Contract address successfully sent to node at {url}")
             else:
                 print(f"Failed to send contract address to {url}: {response.text}")
         except Exception as e:
             print(f"Error sending contract address to {url}: {str(e)}")
-
 
 
 @app.route('/init-training', methods=['POST'])
@@ -93,7 +121,7 @@ def listen_for_update_agg():
     """Listen for the updateAgg event from the blockchain."""
     global CURRENT_ROUND
 
-    event_filter = aggregator.deployed_contract.events.updateAgg.createFilter(fromBlock='latest')
+    event_filter = aggregator.deployed_contract.events.updateAgg.create_filter(from_block='latest')
 
     print(f"Listening for updateAgg events... Total Rounds: {TOTAL_ROUNDS}")
 
@@ -127,7 +155,6 @@ def listen_for_update_agg():
         time.sleep(2)  # Poll every 2 seconds
 
 
-
 if __name__ == '__main__':
     # Run the Flask server
-    app.run(host='0.0.0.0', port=5000) # <- needs to be configurable
+    app.run(host='0.0.0.0', port=8080)  # <- needs to be configurable
