@@ -121,7 +121,7 @@ def listen_for_update_agg():
     """Listen for the updateAgg event from the blockchain."""
     global CURRENT_ROUND
 
-    event_filter = aggregator.deployed_contract.events.updateAgg.createFilter(fromBlock='latest')
+    event_filter = aggregator.deployed_contract.events.updateAgg.create_filter(from_block='latest')
 
     print(f"Listening for updateAgg events... Total Rounds: {TOTAL_ROUNDS}")
 
