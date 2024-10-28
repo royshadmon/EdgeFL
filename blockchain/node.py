@@ -29,7 +29,7 @@ class Node:
                 'message': 'Contract not found'
             }
 
-         try:
+        try:
             # Build the transaction to call addNodeParams 
             tx = self.deployed_contract.functions.addNodeParams(new_node_model_params).buildTransaction({
                 'from': self.node_address,
@@ -40,7 +40,7 @@ class Node:
 
             # Sign and send the transaction for production environment
             signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
             # Wait for the transaction receipt
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -59,6 +59,6 @@ class Node:
     def train_model_params(aggregator_model_params):
         #TO DO
         # fine tune the model params from the aggregator with node's data
-
+        pass
 
         

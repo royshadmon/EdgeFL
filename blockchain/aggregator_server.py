@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 from aggregator import Aggregator
 import threading
 import time
@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # Initialize the Aggregator instance
 PROVIDER_URL = 'http://127.0.0.1:8545'
-PRIVATE_KEY = '<SOME-PRIVATE-KEY>'
+PRIVATE_KEY = '0x80851bccef4a5e6b1f8ecadc6aaa6d7ec07b3b2ca2c558e36a34d42c3d2e1701'
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
 CONTRACT_ADDRESS = None
 
@@ -15,7 +15,7 @@ TOTAL_ROUNDS = 0  # Number of rounds to be initialized from the init_training me
 CURRENT_ROUND = 1  # Track the current round
 
 
-@app.route('deploy-contract', methods=['POST'])
+@app.route('/deploy-contract', methods=['POST'])
 def deploy_contract():
     """Deploy the smart contract with predefined nodes."""
     global CONTRACT_ADDRESS
