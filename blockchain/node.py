@@ -10,7 +10,7 @@ class Node:
     
         self.contract_address = contract_address
 
-        # Set the deployer's private key and address
+        # Set the node's private key and address
         self.private_key = private_key
         self.node_account = self.w3.eth.account.privateKeyToAccount(private_key)
         self.node_address = self.node_account.address
