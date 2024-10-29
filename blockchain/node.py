@@ -7,10 +7,12 @@ from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 
 
 class Node:
-    def __init__(self, contract_address, provider_url, private_key, config):
+    def __init__(self, contract_address, provider_url, private_key, config, replica_name):
 
         # Initialize Web3 connection to the Ethereum node
         self.w3 = Web3(Web3.HTTPProvider(provider_url))
+
+        self.replicaName = replica_name
 
         self.contract_address = contract_address
 
@@ -53,7 +55,7 @@ class Node:
         - Returns current node nodel parameters to blockchain via event listener
     '''
 
-    def add_node_params(self):
+    def add_node_params(self, round_number, newly_trained_params):
         if not self.contract_instance:
             return {
                 'status': 'error',
@@ -62,8 +64,8 @@ class Node:
 
         try:
             # Build the transaction to call addNodeParams 
-            new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
-            tx = self.contract_instance.functions.addNodeParams(new_node_model_params).build_transaction({
+            # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
+            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params, self.replicaName).build_transaction({
                 'from': self.node_address,
                 'nonce': self.w3.eth.get_transaction_count(self.node_address),
                 'gas': 100000,
@@ -110,4 +112,4 @@ class Node:
         # Do local training
         model_update = self.local_training_handler.train()
 
-        return jsonify({"status": "training_complete", "model_update": str(model_update)})
+        return model_update

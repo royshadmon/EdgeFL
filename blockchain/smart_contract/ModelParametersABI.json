@@ -1,19 +1,21 @@
 [
 	{
+		"anonymous": false,
 		"inputs": [
 			{
-				"internalType": "address[]",
-				"name": "nodes",
-				"type": "address[]"
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "roundNumber",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "initParams",
+				"type": "string"
 			}
 		],
-		"stateMutability": "nonpayable",
-		"type": "constructor"
-	},
-	{
-		"anonymous": false,
-		"inputs": [],
-		"name": "startTraining",
+		"name": "newRound",
 		"type": "event"
 	},
 	{
@@ -21,78 +23,36 @@
 		"inputs": [
 			{
 				"indexed": false,
-				"internalType": "uint256[][]",
-				"name": "nodeParams",
-				"type": "uint256[][]"
-			}
-		],
-		"name": "updateAgg",
-		"type": "event"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
+				"internalType": "uint256",
+				"name": "numberOfParams",
+				"type": "uint256"
+			},
 			{
 				"indexed": false,
-				"internalType": "uint256[]",
-				"name": "updatedParams",
-				"type": "uint256[]"
+				"internalType": "string[]",
+				"name": "paramsFromNodes",
+				"type": "string[]"
 			}
 		],
-		"name": "updateNode",
+		"name": "updateAggregatorWithParamsFromNodes",
 		"type": "event"
-	},
-	{
-		"inputs": [],
-		"name": "Aggregator",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
 	},
 	{
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "",
+				"name": "roundNumber",
 				"type": "uint256"
-			}
-		],
-		"name": "Nodes",
-		"outputs": [
+			},
 			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "newNode",
-				"type": "address"
-			}
-		],
-		"name": "addNode",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256[]",
+				"internalType": "string",
 				"name": "newNodeParams",
-				"type": "uint256[]"
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "replicaName",
+				"type": "string"
 			}
 		],
 		"name": "addNodeParams",
@@ -101,8 +61,19 @@
 		"type": "function"
 	},
 	{
-		"inputs": [],
-		"name": "initTraining",
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "initParams",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "roundNumber",
+				"type": "uint256"
+			}
+		],
+		"name": "startRound",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -110,14 +81,14 @@
 	{
 		"inputs": [
 			{
-				"internalType": "uint256[]",
-				"name": "newParams",
-				"type": "uint256[]"
+				"internalType": "uint256",
+				"name": "roundNumber",
+				"type": "uint256"
 			},
 			{
-				"internalType": "bool",
-				"name": "updateNodes",
-				"type": "bool"
+				"internalType": "string",
+				"name": "newParamsFromAggregator",
+				"type": "string"
 			}
 		],
 		"name": "updateParams",

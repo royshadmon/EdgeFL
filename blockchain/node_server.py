@@ -9,8 +9,8 @@ app = Flask(__name__)
 # Configuration
 PROVIDER_URL = 'http://127.0.0.1:8545'  # <- ganache test network
 # From my ganache test network. Everytime you run the CLI, you get a new set of accounts and private keys so be sure to
-# change this value. Should be different than aggregators private key
-PRIVATE_KEY = '0x0e7a408d373289dc8ca6e92c01ae6e2493f8d9db153ce4bc1e8c0fc0701b24b5'
+# change this value.
+PRIVATE_KEY = '0x37bf2e24cc36ca7a752a368da4113c6d73226d73b79dc419dcf8a586c531ed42'
 
 # Initialize the Node instance 
 node_instance = None
@@ -23,8 +23,8 @@ node_instance = None
 '''
 
 
-@app.route('/set-contract-address', methods=['POST'])
-def set_contract_address():
+@app.route('/init-node', methods=['POST'])
+def init_node():
     """Receive the contract address from the aggregator server."""
     global node_instance
     try:
@@ -42,11 +42,10 @@ def set_contract_address():
             return jsonify({'status': 'error', 'message': 'No config provided'}), 400
 
         # Instantiate the Node class
-        node_instance = Node(contract_address, PROVIDER_URL, PRIVATE_KEY, config)
+        node_instance = Node(contract_address, PROVIDER_URL, PRIVATE_KEY, config, "replica1")
 
-        # Start event listeners in separate threads
-        threading.Thread(target=listen_for_start_training).start()
-        threading.Thread(target=listen_for_update_node).start()
+        # Start event listener for start round
+        threading.Thread(target=listen_for_start_round).start()
 
         return jsonify({'status': 'success', 'message': 'Contract address set and Node initialized successfully'}), 200
 
@@ -69,48 +68,34 @@ def receive_data():
     return jsonify({"error": "No data provided"}), 400
 
 
-def listen_for_update_node():
-    """Listen for the 'updateNode' event from the blockchain."""
-    print("Listening for 'updateNode' events...")
+def listen_for_start_round():
+    """Listen for the 'newRound' event from the blockchain."""
+    print("Listening for 'newRound' events...")
 
-    event_filter = node_instance.contract_instance.events.updateNode.create_filter(from_block='latest')
+    event_filter = node_instance.contract_instance.events.newRound.create_filter(from_block='latest')
 
     while True:
         try:
             for event in event_filter.get_new_entries():
-                print(f"Received 'updateNode' event.")
-                aggregator_params = event['args']['aggregatorParams']
+                print(f"Received 'startRound' event.")
+                init_params = event['args']['initParams']
+                round_number = event['args']['roundNumber']
 
                 # Train model parameters updated from aggregator with local node data
-                response = node_instance.train_model_params(aggregator_params)
-                print(response)
+                model_update = node_instance.train_model_params(init_params)
+                print(model_update)
 
-                # Call add_node_params with the updated parameters
-                result = node_instance.add_node_params()
-                print(f"add_node_params result (i.e. nodes model parameters): {result}")
+                # add node params to the block chain
+                result = node_instance.add_node_params(round_number, model_update)
+                print(f"add_node_params result: {result}")
+
+
         except Exception as e:
-            print(f"Error listening for 'updateNode' event: {str(e)}")
+            print(f"Error listening for 'newRound' event: {str(e)}")
 
         time.sleep(2)  # Poll every 2 seconds
 
 
-def listen_for_start_training():
-    """Listen for the 'startTraining' event from the blockchain."""
-    print("Listening for 'startTraining' events...")
-
-    event_filter = node_instance.contract_instance.events.startTraining.create_filter(from_block='latest')
-
-    while True:
-        try:
-            for event in event_filter.get_new_entries():
-                print("Received 'startTraining' event.")
-                # Call add_node_params with an empty list
-                result = node_instance.train_model_params("some value for starting parameters")
-                print(f"start_training result (i.e. nodes model parameters after training): {result}")
-        except Exception as e:
-            print(f"Error listening for 'startTraining' event: {str(e)}")
-
-        time.sleep(2)  # Poll every 2 seconds
 
 
 if __name__ == '__main__':
