@@ -31,16 +31,13 @@ class Aggregator:
         self.deployed_contract_address = None
         self.deployed_contract = None
 
-    def deploy_contract(self, predefined_nodes):
+    def deploy_contract(self):
         try:
             # Initialize the contract object
             contract = self.w3.eth.contract(abi=self.contract_abi, bytecode=self.contract_bytecode)
 
-            # Convert all node addresses to checksum format
-            predefined_nodes = [self.w3.to_checksum_address(addr) for addr in predefined_nodes]
-
             # Build the deployment transaction
-            tx = contract.constructor(predefined_nodes).build_transaction({
+            tx = contract.constructor().build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 2000000,
@@ -69,8 +66,9 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def init_training(self):
-        """Call the initTraining function of the deployed contract."""
+    # function to call the start round function from the smart contract
+    def start_round(self, initParams, roundNumber):
+        """Call the startRound function of the deployed contract."""
         if not self.deployed_contract_address:
             return {
                 'status': 'error',
@@ -80,7 +78,7 @@ class Aggregator:
         try:
 
             # Build the transaction to call initTraining
-            tx = self.deployed_contract.functions.initTraining().build_transaction({
+            tx = self.deployed_contract.functions.startRound(initParams, roundNumber).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 100000,
@@ -105,7 +103,8 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def add_node(self, new_node_address):
+    # function to call the update params method in the smart contract
+    def updateParams(self, roundNumber, newParamsFromAggregator):
         if not self.deployed_contract_address:
             return {
                 'status': 'error',
@@ -114,41 +113,7 @@ class Aggregator:
 
         try:
             # Build the transaction to call addNode
-            tx = self.deployed_contract.functions.addNode(new_node_address).build_transaction({
-                'from': self.deployer_address,
-                'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
-                'gas': 100000,
-                'gasPrice': self.w3.toWei('50', 'gwei')
-            })
-
-            # Sign and send the transaction for production environment
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-
-            return {
-                'status': 'success',
-                'message': 'node added successfully',
-                'transactionHash': tx_hash.hex()
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
-
-    def update_model_parameters(self, new_model_parameters, update_params):
-        if not self.deployed_contract_address:
-            return {
-                'status': 'error',
-                'message': 'Contract not deployed yet'
-            }
-
-        try:
-            # Build the transaction to call addNode
-            tx = self.deployed_contract.functions.updateParams(new_model_parameters, update_params).build_transaction({
+            tx = self.deployed_contract.functions.updateParams(roundNumber, newParamsFromAggregator).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 100000,
@@ -173,7 +138,7 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def aggregate_model_params(model_params_from_nodes):
+    def aggregate_model_params(self, model_params_from_nodes):
         # TO DO
         # aggregate model params from nodes using some fusion model like iter_avg etc.
         pass

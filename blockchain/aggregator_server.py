@@ -10,11 +10,8 @@ app = Flask(__name__)
 PROVIDER_URL = 'http://127.0.0.1:8545'  # <- ganache test network
 # From my ganache test network. Everytime you run the CLI, you get a new set of accounts and private keys so be sure to
 # change this value.
-PRIVATE_KEY = '0x6e5ac5342bed40e9b1fab14251db21a98a83294f433878be6cfef9f186dd38db'
+PRIVATE_KEY = '0x37bf2e24cc36ca7a752a368da4113c6d73226d73b79dc419dcf8a586c531ed42'
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
-
-TOTAL_ROUNDS = 0  # Number of rounds to be initialized from the init_training method
-CURRENT_ROUND = 1  # Track the current round
 
 '''
 
@@ -57,13 +54,13 @@ def deploy_contract():
             return jsonify({'status': 'error', 'message': 'No nodes provided'}), 400
 
         # Deploy the contract and return the result
-        result = aggregator.deploy_contract(node_addresses)
+        result = aggregator.deploy_contract()
         if result['status'] == 'success':
             contract_address = result['contractAddress']
             print(f"Contract deployed and saved: {contract_address}")
 
             # Send the contract address to each node
-            send_contract_address_to_nodes(contract_address, node_urls, config)
+            initialize_nodes(contract_address, node_urls, config)
 
         return jsonify(result)
 
@@ -71,11 +68,11 @@ def deploy_contract():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def send_contract_address_to_nodes(contract_address, node_urls, config):
+def initialize_nodes(contract_address, node_urls, config):
     """Send the deployed contract address to multiple node servers."""
     for url in node_urls:
         try:
-            response = requests.post(f'{url}/set-contract-address', json={
+            response = requests.post(f'{url}/init-node', json={
                 'contractAddress': contract_address,
                 'config': config
             })
@@ -87,69 +84,77 @@ def send_contract_address_to_nodes(contract_address, node_urls, config):
             print(f"Error sending contract address to {url}: {str(e)}")
 
 
-@app.route('/init-training', methods=['POST'])
-def init_training():
-    """Initialize the training process by setting the number of rounds."""
-    global TOTAL_ROUNDS, CURRENT_ROUND
+'''
 
+EXAMPLE CURL REQUEST
+
+curl -X POST http://localhost:8080/start-training \
+-H "Content-Type: application/json" \
+-d '{
+  "totalRounds": 5
+}'
+
+'''
+
+
+@app.route('/start-training', methods=['POST'])
+def init_training():
+    """start the training process by setting the number of rounds."""
     try:
         # Get the number of rounds from the request body
         data = request.json
-        TOTAL_ROUNDS = data.get('totalRounds', 0)
+        num_rounds = data.get('totalRounds', 1) # 1 round default value
 
-        if TOTAL_ROUNDS <= 0:
+        if num_rounds <= 0:
             return jsonify({'status': 'error', 'message': 'Invalid number of rounds'}), 400
 
-        print(f"Training initialized with {TOTAL_ROUNDS} rounds.")
+        print(f"Training initialized with {num_rounds} rounds.")
 
-        # Reset the current round to 1
-        CURRENT_ROUND = 1
+        initialParams = ''
 
-        # Start the event listener in a separate thread
-        listener_thread = threading.Thread(target=listen_for_update_agg)
-        listener_thread.start()
+        for r in range(num_rounds):
+            # start a new round
+            aggregator.start_round(initialParams, r)
 
-        aggregator.init_training()
+            # list for updates from nodes
+            newAggregatorParams = listen_for_update_agg(r)
 
-        return jsonify({'status': 'success', 'message': 'Training initialized successfully'})
+            # set initial params to newly aggregated params for next round
+            initialParams = newAggregatorParams
+
+        return jsonify({'status': 'success', 'message': 'Training completed successfully'})
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def listen_for_update_agg():
+def listen_for_update_agg(roundNumber):
     """Listen for the updateAgg event from the blockchain."""
-    global CURRENT_ROUND
 
-    event_filter = aggregator.deployed_contract.events.updateAgg.create_filter(from_block='latest')
+    event_filter = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.create_filter(from_block='latest')
 
-    print(f"Listening for updateAgg events... Total Rounds: {TOTAL_ROUNDS}")
-
-    while CURRENT_ROUND <= TOTAL_ROUNDS:
+    # Keep polling until the event is detected
+    while True:
         try:
-            for event in event_filter.get_new_entries():
-                node_params = event['args']['nodeParams']
-                print(f"Received updateAgg event in round {CURRENT_ROUND}: {node_params}")
+            events = event_filter.get_new_entries()
+            if events:
+                print("Received 'updateAgg' event.")
+                # Process the event data if needed
+                for event in events:
+                    node_params = event['args']['paramsFromNodes']
+                    nodes_participated = event['args']['numberOfParams']
+                    if nodes_participated >= 1:  # some arbitrary number of nodes that need to have participated
+                        # aggregate parameters
+                        newAggregatorParams = aggregator.aggregate_model_params(node_params)
 
-                # Call the aggregator's logic to aggregate parameters
-                new_model_params = aggregator.aggregate_model_params(node_params)
+                        # push aggregated params to blockchain
+                        aggregator.updateParams(roundNumber, newAggregatorParams)
 
-                # Determine if we need to update nodes (only if not the last round)
-                update_nodes = CURRENT_ROUND < TOTAL_ROUNDS
-
-                # Call the update_model_parameters function
-                result = aggregator.update_model_parameters(new_model_params, update_nodes)
-                print(f"Round {CURRENT_ROUND} update result: {result}")
-
-                # Increment the round counter
-                CURRENT_ROUND += 1
-
-                if CURRENT_ROUND > TOTAL_ROUNDS:
-                    print("Training completed.")
-                    return  # Exit the loop when all rounds are completed
+                        # return the updated aggregator parameters
+                        return newAggregatorParams  # Exit the function once the aggregator updates the values
 
         except Exception as e:
-            print(f"Error listening for updateAgg event: {str(e)}")
+            print(f"Error listening for 'updateAgg' event: {str(e)}")
 
         # Sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds

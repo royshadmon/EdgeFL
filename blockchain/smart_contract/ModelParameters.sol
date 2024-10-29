@@ -4,74 +4,83 @@ pragma solidity >=0.8.2 <0.9.0;
 
 contract ModelParameters {
 
-    // model parameters coming in from each node
-    uint[][] nodeParams;
+    // uint: round number
+    // roundParams: metadata for the specific round
+    mapping(uint => roundParams) roundMetaData;
 
-    // model parameters coming from aggregator
-    uint[] aggregatorParams;
+    uint currentRoundNumber = 0;
 
-    // address of the aggregator (contract deployer)
-    address public Aggregator;
-
-    // list of predifined node addresses for training
-    address[] public Nodes;
-
-    // constructor called upon at deployment of contract by aggregator server
-    constructor(address[] memory nodes) {
-        Aggregator = msg.sender;
-        Nodes = nodes;
+    // struct defined for the metadata
+    struct roundParams {
+        // node parameters that have been added by nodes that can be accessed from the index of the node name from replicaNameToNodeIndex
+        // replicaName -> mapped to -> index, this index then refers to a specific index in nodeParams
+        string[] nodeParams;
+        string initParams; // initial params for the rounds
+        string aggregatorParams;  // aggregator params which serve as init params for the next round
+        mapping(string => uint) replicaNameToNodeIndex; // node name mapped to a node index
+        string[] replicaNames; // node names
     }
 
-    // event emitted to nodes with updated model params from aggregator
-    event updateNode(uint[] updatedParams);
+    // function to start new round of training
+    function startRound(string memory initParams, uint roundNumber) public {
+        // check the current round
+        require(currentRoundNumber + 1 == roundNumber, "Incorrect round number");
 
-    // event emitted to aggregator with newly trained model params from nodes
-    event updateAgg(uint[][] nodeParams); 
+        // increment current round numbers
+        currentRoundNumber += 1;
 
-    // event emitted to nodes to initally start training
-    event startTraining();
+        // initialize this rounds initial params
+        roundMetaData[roundNumber].initParams = initParams;
 
-    // function to add a new node if the list of nodes used for training needs to be updated
-    function addNode(address newNode) public {
-        require(msg.sender == Aggregator);
-        Nodes.push(newNode);
+        // emit that a new round is starting
+        emit newRound(roundNumber, initParams);
     }
 
-    // function to update aggregator model parameters, reset node model parameters, and then send event 
+    // function to add model parameters trained by a node and emit the event to the aggregator that all nodes
+    // have trained their local model parameters
+    function addNodeParams(uint roundNumber, string memory newNodeParams, string memory replicaName) public {
+        // check the current round
+        require(currentRoundNumber == roundNumber, "Incorrect round number");
+
+        // add the new node params to the list for node params for this round
+        roundMetaData[roundNumber].nodeParams.push(newNodeParams);
+
+        // add the replica name to the list of names that have participated in this round
+        roundMetaData[roundNumber].replicaNames.push(replicaName);
+
+        // map the replica name to an index number generated from the length of the number of node params added to the list of node params
+        // the length - 1 indicates the last node to have added its parameters to the list of node params, which serves as the index to
+        // find that node's params in the node param list
+        roundMetaData[roundNumber].replicaNameToNodeIndex[replicaName] = roundMetaData[roundNumber].nodeParams.length - 1;
+
+        // emit the number nodes that have added their node params to the list of node params so that aggregator can
+        // check how many have participated
+        emit updateAggregatorWithParamsFromNodes(roundMetaData[roundNumber].nodeParams.length, roundMetaData[roundNumber].nodeParams);
+    }
+
+
+    // function to update aggregator model parameters and then send event
     // to nodes listening that model paramters have been updated from the aggregator
-    function updateParams(uint[] memory newParams, bool updateNodes) public {
-        require(msg.sender == Aggregator);
-        aggregatorParams = newParams;
-        delete nodeParams;
-        if (updateNodes) {
-            emit updateNode(aggregatorParams);
-        }
+    function updateParams(uint roundNumber, string memory newParamsFromAggregator) public {
+        // check the current round
+        require(currentRoundNumber == roundNumber, "Incorrect round number");
+
+        // update the aggregator params for this round
+        roundMetaData[roundNumber].aggregatorParams = newParamsFromAggregator;
+
+//        // emit the new aggregator params to all the nodes
+//        emit updateNodesWithParamsFromAggregator(roundMetaData[roundNumber].aggregatorParams);
+
     }
 
-    // function to add model paramters trained by a node and emit the event to the aggregator that all nodes
-    // have trained their local model paramaters
-    function addNodeParams(uint[] memory newNodeParams) public {
-        require(isSenderAllowed(msg.sender));
-        nodeParams.push(newNodeParams);
-        if (nodeParams.length == Nodes.length) {
-            emit updateAgg(nodeParams);
-        }
-    }
+    // event to start a new round
+    event newRound(uint roundNumber, string initParams);
 
-    // Internal function to check if an address is in the predefined list of nodes
-    function isSenderAllowed(address _sender) internal view returns (bool) {
-        for (uint i = 0; i < Nodes.length; i++) {
-            if (Nodes[i] == _sender) {
-                return true;
-            }
-        }
-        return false;
-    }
+    // event to tell aggregator how many nodes participated
+    event updateAggregatorWithParamsFromNodes(uint numberOfParams, string[] paramsFromNodes);
 
-    // function to emit the event that will trigger all the nodes to initially start training
-    function initTraining() public {
-        require(msg.sender == Aggregator);
-        emit startTraining();
-    }
+//    // event to update nodes with new parameters from aggregator
+//    event updateNodesWithParamsFromAggregator(string newAggregatorParams);
+
 
 }
