@@ -18,10 +18,11 @@ contract ModelParameters {
         string initParams; // initial params for the rounds
         mapping(string => uint) replicaNameToNodeIndex; // node name mapped to a node index
         string[] replicaNames; // node names
+        uint minNumParams; // minimum number of parameters required by aggregator
     }
 
     // function to start new round of training
-    function startRound(string memory initParams, uint roundNumber) public {
+    function startRound(string memory initParams, uint roundNumber, uint minNumParams) public {
         // check the current round
         require(currentRoundNumber + 1 == roundNumber, "Incorrect round number");
 
@@ -30,6 +31,9 @@ contract ModelParameters {
 
         // initialize this rounds initial params
         roundMetaData[roundNumber].initParams = initParams;
+
+        // save the minimum amount of participation required by aggregator
+        roundMetaData[roundNumber].minNumParams = minNumParams;
 
         // emit that a new round is starting
         emit newRound(roundNumber, initParams);
@@ -54,19 +58,9 @@ contract ModelParameters {
 
         // emit the number nodes that have added their node params to the list of node params so that aggregator can
         // check how many have participated
-        emit updateAggregatorWithParamsFromNodes(roundMetaData[roundNumber].nodeParams.length, roundMetaData[roundNumber].nodeParams);
-    }
-
-
-    // function to update aggregator model parameters and then send event
-    // to nodes listening that model paramters have been updated from the aggregator
-    function updateParams(uint roundNumber, string memory newParamsFromAggregator) public {
-        // check the current round
-        require(currentRoundNumber == roundNumber, "Incorrect round number");
-
-        // update the aggregator params for this round
-        roundMetaData[roundNumber].aggregatorParams = newParamsFromAggregator;
-
+        if (roundMetaData[roundNumber].nodeParams.length == roundMetaData[roundNumber].minNumParams) {
+            emit updateAggregatorWithParamsFromNodes(roundMetaData[roundNumber].nodeParams.length, roundMetaData[roundNumber].nodeParams);
+        }
     }
 
     // event to start a new round

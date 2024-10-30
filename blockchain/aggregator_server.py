@@ -91,7 +91,8 @@ EXAMPLE CURL REQUEST
 curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
 -d '{
-  "totalRounds": 5
+  "totalRounds": 5, 
+  "minParams": 1
 }'
 
 '''
@@ -103,7 +104,8 @@ def init_training():
     try:
         # Get the number of rounds from the request body
         data = request.json
-        num_rounds = data.get('totalRounds', 1) # 1 round default value
+        num_rounds = data.get('totalRounds', 1)  # 1 round default value
+        min_params = data.get('minParams', 1)  # 1 node default value
 
         if num_rounds <= 0:
             return jsonify({'status': 'error', 'message': 'Invalid number of rounds'}), 400
@@ -114,7 +116,7 @@ def init_training():
 
         for r in range(num_rounds):
             # start a new round
-            aggregator.start_round(initialParams, r)
+            aggregator.start_round(initialParams, r, min_params)
 
             # list for updates from nodes
             newAggregatorParams = listen_for_update_agg(r)
@@ -136,22 +138,16 @@ def listen_for_update_agg(roundNumber):
     # Keep polling until the event is detected
     while True:
         try:
-            events = event_filter.get_new_entries()
-            if events:
+            for event in event_filter.get_new_entries():
                 print("Received 'updateAgg' event.")
                 # Process the event data if needed
-                for event in events:
-                    node_params = event['args']['paramsFromNodes']
-                    nodes_participated = event['args']['numberOfParams']
-                    if nodes_participated >= 1:  # some arbitrary number of nodes that need to have participated
-                        # aggregate parameters
-                        newAggregatorParams = aggregator.aggregate_model_params(node_params)
+                node_params = event['args']['paramsFromNodes']
 
-                        # push aggregated params to blockchain
-                        aggregator.updateParams(roundNumber, newAggregatorParams)
+                # aggregate parameters
+                newAggregatorParams = aggregator.aggregate_model_params(node_params)
 
-                        # return the updated aggregator parameters
-                        return newAggregatorParams  # Exit the function once the aggregator updates the values
+                # return the updated aggregator parameters
+                return newAggregatorParams  # Exit the function once the aggregator updates the values
 
         except Exception as e:
             print(f"Error listening for 'updateAgg' event: {str(e)}")

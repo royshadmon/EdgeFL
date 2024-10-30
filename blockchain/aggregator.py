@@ -67,7 +67,7 @@ class Aggregator:
             }
 
     # function to call the start round function from the smart contract
-    def start_round(self, initParams, roundNumber):
+    def start_round(self, initParams, roundNumber, minParams):
         """Call the startRound function of the deployed contract."""
         if not self.deployed_contract_address:
             return {
@@ -78,7 +78,7 @@ class Aggregator:
         try:
 
             # Build the transaction to call initTraining
-            tx = self.deployed_contract.functions.startRound(initParams, roundNumber).build_transaction({
+            tx = self.deployed_contract.functions.startRound(initParams, roundNumber, minParams).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
                 'gas': 100000,
@@ -95,41 +95,6 @@ class Aggregator:
             return {
                 'status': 'success',
                 'message': 'initTraining called successfully',
-                'transactionHash': tx_hash.hex()
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
-
-    # function to call the update params method in the smart contract
-    def updateParams(self, roundNumber, newParamsFromAggregator):
-        if not self.deployed_contract_address:
-            return {
-                'status': 'error',
-                'message': 'Contract not deployed yet'
-            }
-
-        try:
-            # Build the transaction to call addNode
-            tx = self.deployed_contract.functions.updateParams(roundNumber, newParamsFromAggregator).build_transaction({
-                'from': self.deployer_address,
-                'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
-                'gas': 100000,
-                'gasPrice': self.w3.toWei('50', 'gwei')
-            })
-
-            # Sign and send the transaction for production environment
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-
-            return {
-                'status': 'success',
-                'message': 'model parameters updated successfully',
                 'transactionHash': tx_hash.hex()
             }
         except Exception as e:
