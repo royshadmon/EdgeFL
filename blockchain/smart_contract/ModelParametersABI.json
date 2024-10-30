@@ -71,6 +71,11 @@
 				"internalType": "uint256",
 				"name": "roundNumber",
 				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "minNumParams",
+				"type": "uint256"
 			}
 		],
 		"name": "startRound",
