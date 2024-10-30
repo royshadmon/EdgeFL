@@ -16,7 +16,6 @@ contract ModelParameters {
         // replicaName -> mapped to -> index, this index then refers to a specific index in nodeParams
         string[] nodeParams;
         string initParams; // initial params for the rounds
-        string aggregatorParams;  // aggregator params which serve as init params for the next round
         mapping(string => uint) replicaNameToNodeIndex; // node name mapped to a node index
         string[] replicaNames; // node names
     }
@@ -68,9 +67,6 @@ contract ModelParameters {
         // update the aggregator params for this round
         roundMetaData[roundNumber].aggregatorParams = newParamsFromAggregator;
 
-//        // emit the new aggregator params to all the nodes
-//        emit updateNodesWithParamsFromAggregator(roundMetaData[roundNumber].aggregatorParams);
-
     }
 
     // event to start a new round
@@ -78,9 +74,5 @@ contract ModelParameters {
 
     // event to tell aggregator how many nodes participated
     event updateAggregatorWithParamsFromNodes(uint numberOfParams, string[] paramsFromNodes);
-
-//    // event to update nodes with new parameters from aggregator
-//    event updateNodesWithParamsFromAggregator(string newAggregatorParams);
-
 
 }
