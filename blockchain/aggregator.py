@@ -141,4 +141,5 @@ class Aggregator:
     def aggregate_model_params(self, model_params_from_nodes):
         # TO DO
         # aggregate model params from nodes using some fusion model like iter_avg etc.
+        
         pass

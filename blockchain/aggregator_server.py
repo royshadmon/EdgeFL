@@ -30,6 +30,7 @@ curl -X POST http://localhost:8080/deploy-contract \
     "model": {
       "path": "/path/to/model" <- Needs to be a model compatible for ibm FL
     },
+  "expectedNumberOfNodes"
     "data": {
       "path": "/path/to/data" <- Needs to be a path to data handler
     }
@@ -48,6 +49,7 @@ def deploy_contract():
         data = request.json
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
+        expectedNumberOfNodes = len(node_urls)
         config = data.get('config', {})
 
         if not node_addresses:
@@ -60,15 +62,15 @@ def deploy_contract():
             print(f"Contract deployed and saved: {contract_address}")
 
             # Send the contract address to each node
-            initialize_nodes(contract_address, node_urls, config)
-
+            initialize_nodes(contract_address, node_urls, expectedNumberOfNodes, config)
+        
         return jsonify(result)
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def initialize_nodes(contract_address, node_urls, config):
+def initialize_nodes(contract_address, node_urls, expectedNumberOfNodes, config):
     """Send the deployed contract address to multiple node servers."""
     for url in node_urls:
         try:
