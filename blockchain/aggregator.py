@@ -1,6 +1,7 @@
 import os
 import json
 from web3 import Web3
+from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
 
 
 class Aggregator:
@@ -26,6 +27,9 @@ class Aggregator:
             self.contract_abi = json.load(abi_file)
         with open(os.path.join(base_path, 'ModelParametersBytecode.txt'), 'r') as bytecode_file:
             self.contract_bytecode = bytecode_file.read().strip()
+
+        # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
+        self.fusion_model = IterAvgFusionHandler()
 
         # Store the deployed contract address
         self.deployed_contract_address = None
@@ -106,4 +110,20 @@ class Aggregator:
     def aggregate_model_params(self, model_params_from_nodes):
         # TO DO
         # aggregate model params from nodes using some fusion model like iter_avg etc.
+        decoded_params = self.decode_params(model_params_from_nodes)
+
+        # do aggregation function here
+        aggregated_params = self.fusion_model.update_weights(decoded_params)
+
+        # encode params back to string
+        encoded_params = self.encode_params(aggregated_params)
+
+        return encoded_params
+
+    def encode_params(self, model_params_as_numerical):
+        # TO_DO encode the trained params as a string which is what the blockchain uses
+        pass
+
+    def decode_params(self, model_params_as_string):
+        # TO_DO decode the model params from string format into numerical format to be used for training
         pass

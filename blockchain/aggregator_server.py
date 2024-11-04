@@ -119,7 +119,7 @@ def init_training():
             aggregator.start_round(initialParams, r, min_params)
 
             # list for updates from nodes
-            newAggregatorParams = listen_for_update_agg(r)
+            newAggregatorParams = listen_for_update_agg()
 
             # set initial params to newly aggregated params for next round
             initialParams = newAggregatorParams
@@ -130,7 +130,7 @@ def init_training():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def listen_for_update_agg(roundNumber):
+def listen_for_update_agg():
     """Listen for the updateAgg event from the blockchain."""
 
     event_filter = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.create_filter(from_block='latest')

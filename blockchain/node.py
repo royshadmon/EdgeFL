@@ -103,13 +103,30 @@ class Node:
 
         data = self.local_training_handler.data_batches.pop(0)
 
+        # decode model params from string to numerical
+        decoded_params = self.decode_params(aggregator_model_params)
+
         # Update local model with sent model params
-        self.local_training_handler.model_update(aggregator_model_params)
+        self.local_training_handler.model_update(decoded_params)
 
         # Load local data
         self.local_training_handler.data_handler.load_data(data)
 
         # Do local training
         model_update = self.local_training_handler.train()
+        print(model_update) # see what is in the model update object
 
-        return model_update
+        # the node parameters part of model_update needs to be encoded to a string before being returned
+        encoded_params = self.encode_params(model_update) # this will probably need to change to the correct field in model_update object
+
+        return encoded_params
+
+    def encode_params(self, model_params_as_numerical):
+        # TO_DO encode the trained params as a string which is what the blockchain uses
+        pass
+
+    def decode_params(self, model_params_as_string):
+        # TO_DO decode the model params from string format into numerical format to be used for training
+        pass
+
+
