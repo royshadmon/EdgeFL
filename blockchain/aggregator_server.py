@@ -3,48 +3,45 @@ from aggregator import Aggregator
 import threading
 import time
 import requests
+import os
 
 app = Flask(__name__)
 
+
+# Use environment variables for sensitive data
+PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
+PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
+
 # Initialize the Aggregator instance
-PROVIDER_URL = 'http://127.0.0.1:8545'  # <- ganache test network
-# From my ganache test network. Everytime you run the CLI, you get a new set of accounts and private keys so be sure to
-# change this value.
-PRIVATE_KEY = '0x37bf2e24cc36ca7a752a368da4113c6d73226d73b79dc419dcf8a586c531ed42'
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
 
 '''
-
 CURL REQUEST FOR DEPLOYING CONTRACT
 
 curl -X POST http://localhost:8080/deploy-contract \
 -H "Content-Type: application/json" \
 -d '{
   "nodeAddresses": [
-    "0x9385dab67f3a7698A14E483E4A3d8373a2095CE0" <- example node address chosen from ganache test network
+    "0xFEe882466e0804831746336A3eb2c6727CC35d63"
   ],
   "nodeUrls": [
-    "http://localhost:8081" <- example host where other node is running
+    "http://localhost:8081"
   ],
   "config": {  
     "model": {
-      "path": "/path/to/model" <- Needs to be a model compatible for ibm FL
+      "path": "/path/to/model"
     },
     "data": {
-      "path": "/path/to/data" <- Needs to be a path to data handler
+      "path": "/path/to/data"
     }
   }
 }'
-
 '''
-
 
 @app.route('/deploy-contract', methods=['POST'])
 def deploy_contract():
     """Deploy the smart contract with predefined nodes."""
-
     try:
-        # Get the list of nodes and node URLs from the request body
         data = request.json
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
@@ -57,7 +54,7 @@ def deploy_contract():
         result = aggregator.deploy_contract()
         if result['status'] == 'success':
             contract_address = result['contractAddress']
-            print(f"Contract deployed and saved: {contract_address}")
+            print(f"Contract deployed at address: {contract_address}")
 
             # Send the contract address to each node
             initialize_nodes(contract_address, node_urls, config)
@@ -85,8 +82,7 @@ def initialize_nodes(contract_address, node_urls, config):
 
 
 '''
-
-EXAMPLE CURL REQUEST
+EXAMPLE CURL REQUEST FOR STARTING TRAINING
 
 curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
@@ -94,18 +90,15 @@ curl -X POST http://localhost:8080/start-training \
   "totalRounds": 5, 
   "minParams": 1
 }'
-
 '''
-
 
 @app.route('/start-training', methods=['POST'])
 def init_training():
-    """start the training process by setting the number of rounds."""
+    """Start the training process by setting the number of rounds."""
     try:
-        # Get the number of rounds from the request body
         data = request.json
-        num_rounds = data.get('totalRounds', 1)  # 1 round default value
-        min_params = data.get('minParams', 1)  # 1 node default value
+        num_rounds = data.get('totalRounds', 1)
+        min_params = data.get('minParams', 1)
 
         if num_rounds <= 0:
             return jsonify({'status': 'error', 'message': 'Invalid number of rounds'}), 400
@@ -114,14 +107,15 @@ def init_training():
 
         initialParams = ''
 
-        for r in range(num_rounds):
-            # start a new round
+        for r in range(1, num_rounds + 1):
+            print(f"Starting round {r}")
             aggregator.start_round(initialParams, r, min_params)
 
-            # list for updates from nodes
+            # Listen for updates from nodes
             newAggregatorParams = listen_for_update_agg()
+            print("Received aggregated parameters")
 
-            # set initial params to newly aggregated params for next round
+            # Set initial params to newly aggregated params for the next round
             initialParams = newAggregatorParams
 
         return jsonify({'status': 'success', 'message': 'Training completed successfully'})
@@ -132,7 +126,6 @@ def init_training():
 
 def listen_for_update_agg():
     """Listen for the updateAgg event from the blockchain."""
-
     event_filter = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.create_filter(from_block='latest')
 
     # Keep polling until the event is detected
@@ -140,22 +133,20 @@ def listen_for_update_agg():
         try:
             for event in event_filter.get_new_entries():
                 print("Received 'updateAgg' event.")
-                # Process the event data if needed
                 node_params = event['args']['paramsFromNodes']
 
-                # aggregate parameters
+                # Aggregate parameters
                 newAggregatorParams = aggregator.aggregate_model_params(node_params)
 
-                # return the updated aggregator parameters
-                return newAggregatorParams  # Exit the function once the aggregator updates the values
+                return newAggregatorParams  # Return updated params after aggregation
 
         except Exception as e:
             print(f"Error listening for 'updateAgg' event: {str(e)}")
 
-        # Sleep to avoid excessive polling
-        time.sleep(2)  # Poll every 2 seconds
+        # Avoid excessive polling
+        time.sleep(2)
 
 
 if __name__ == '__main__':
     # Run the Flask server
-    app.run(host='0.0.0.0', port=8080)  # <- needs to be configurable
+    app.run(host='0.0.0.0', port=8080)
