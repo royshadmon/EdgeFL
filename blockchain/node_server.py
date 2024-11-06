@@ -3,20 +3,16 @@ from node import Node
 import numpy as np
 import threading
 import time
-import requests
+from web3 import Web3
+import os
 import json
+import requests
 
 app = Flask(__name__)
 
 # Configuration
-# PROVIDER_URL = 'http://127.0.0.1:8545'  # <- ganache test network
-# # From my ganache test network. Everytime you run the CLI, you get a new set of accounts and private keys so be sure to
-# # change this value.
-# PRIVATE_KEY = '0x37bf2e24cc36ca7a752a368da4113c6d73226d73b79dc419dcf8a586c531ed42'
-
-PROVIDER_URL = 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e'
-PRIVATE_KEY = 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977'
-PUBLIC_KEY = "0x5F02C14eDd7491e339bDf4e942b228A688515838" # use for node addresses 
+PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
+PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
 
 # Initialize the Node instance 
 node_instance = None
@@ -65,6 +61,14 @@ def init_node():
 '''
 
 
+# @app.route('/receive_data', methods=['POST'])
+# def receive_data():
+#     data = request.json.get('data')
+#     if data:
+#         node_instance.add_data_batch(np.array(data))
+#         return jsonify({"status": "data_received", "batch_size": len(data)})
+#     return jsonify({"error": "No data provided"}), 400
+
 @app.route('/receive_data', methods=['POST'])
 def receive_data():
     data = request.json.get('data')
@@ -91,32 +95,50 @@ def receive_data():
     
     return jsonify({"error": "No data provided"}), 400
 
-
 def listen_for_start_round():
     """Listen for the 'newRound' event from the blockchain."""
     print("Listening for 'newRound' events...")
 
-    event_filter = node_instance.contract_instance.events.newRound.create_filter(from_block='latest')
+    # Generate the event signature for the 'newRound' event
+    event_signature = "0x" + Web3.keccak(text="newRound(uint256,string)").hex()
+    
+    # Get the latest block to start listening from
+    latest_block = node_instance.w3.eth.block_number
 
     while True:
         try:
-            for event in event_filter.get_new_entries():
-                print(f"Received 'startRound' event.")
-                init_params = event['args']['initParams']
-                round_number = event['args']['roundNumber']
+            # Fetch new logs for the `newRound` event
+            logs = node_instance.w3.eth.get_logs({
+                'fromBlock': latest_block + 1,  # Start from the latest processed block
+                'toBlock': 'latest',
+                'address': node_instance.contract_address,
+                'topics': [event_signature]  # Filter for the `newRound` event signature
+            })
+
+            for log in logs:
+                # Decode log data for the `newRound` event
+                decoded_event = node_instance.contract_instance.events.newRound().process_log(log)
+                init_params = decoded_event['args']['initParams']
+                round_number = decoded_event['args']['roundNumber']
+
+                print(f"Received 'newRound' event with initParams: {init_params}, roundNumber: {round_number}")
 
                 # Train model parameters updated from aggregator with local node data
                 model_update = node_instance.train_model_params(init_params)
-                print(model_update)
+                print(f"Model update: {model_update}")
 
-                # add node params to the block chain
+                # Add node parameters to the blockchain
                 result = node_instance.add_node_params(round_number, model_update)
                 print(f"add_node_params result: {result}")
 
+            # Update the latest processed block to avoid reprocessing
+            if logs:
+                latest_block = logs[-1]['blockNumber']
 
         except Exception as e:
             print(f"Error listening for 'newRound' event: {str(e)}")
 
+        # Sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds
 
 
