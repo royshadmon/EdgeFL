@@ -124,9 +124,12 @@ class Aggregator:
         return encoded_params
 
     def encode_params(self, model_params_as_numerical):
-        # TO_DO encode the trained params as a string which is what the blockchain uses
-        pass
+        #turns aggregator model params dictionary into encoded string
+        params = model_params_as_numerical.weights
+        encoded_params = json.dumps(params)
+        return encoded_params
 
     def decode_params(self, model_params_as_string):
-        # TO_DO decode the model params from string format into numerical format to be used for training
-        pass
+        #turns model params encoded string from nodes into decoded dict
+        decoded_params = json.loads(model_params_as_string)
+        return decoded_params
