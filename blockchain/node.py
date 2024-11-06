@@ -68,7 +68,7 @@ class Node:
             tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params, self.replicaName).build_transaction({
                 'from': self.node_address,
                 'nonce': self.w3.eth.get_transaction_count(self.node_address),
-                'gas': 100000,
+                'gas': 200000,
                 'gasPrice': self.w3.toWei('50', 'gwei')
             })
 

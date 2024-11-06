@@ -1,7 +1,7 @@
 
 import time
 import threading
-from web3 import HTTPProvider, Web3, WebsocketProvider
+from web3 import HTTPProvider, Web3
 
 
 abi = [  {   "anonymous": False,   "inputs": [ {  "indexed": False,  "internalType": "uint256",  "name": "roundNumber",  "type": "uint256" }, {  "indexed": False,  "internalType": "string",  "name": "initParams",  "type": "string" }   ],   "name": "newRound",   "type": "event"  },  {   "anonymous": False,   "inputs": [ {  "indexed": False,  "internalType": "uint256",  "name": "numberOfParams",  "type": "uint256" }, {  "indexed": False,  "internalType": "string[]",  "name": "paramsFromNodes",  "type": "string[]" }   ],   "name": "updateAggregatorWithParamsFromNodes",   "type": "event"  },  {   "inputs": [ {  "internalType": "uint256",  "name": "roundNumber",  "type": "uint256" }, {  "internalType": "string",  "name": "newNodeParams",  "type": "string" }, {  "internalType": "string",  "name": "replicaName",  "type": "string" }   ],   "name": "addNodeParams",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  },  {   "inputs": [ {  "internalType": "string",  "name": "initParams",  "type": "string" }, {  "internalType": "uint256",  "name": "roundNumber",  "type": "uint256" }, {  "internalType": "uint256",  "name": "minNumParams",  "type": "uint256" }   ],   "name": "startRound",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  } ]
@@ -13,7 +13,7 @@ private_key = "f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977"
 
 # Connect to provider
 
-w3 = Web3(HTTPProvider("https://optimism-sepolia.infura.io/v3/[your infura key]"))
+w3 = Web3(HTTPProvider("https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e"))
 
 
 print (f"IS CONNECTED {w3.is_connected()}")
@@ -27,7 +27,7 @@ def deploy_contract():
     transaction['nonce'] = nonce  # Get correct transaction nonce for sender from the node
     transaction['from'] = w3.to_checksum_address(public_key)
     signed_tx = senderAccount.sign_transaction(transaction)
-    txHash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+    txHash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
     transaction['chainId'] = 11155420
     # Waits for the transaction specified by transaction_hash to be included in a block, then returns its transaction receipt.
     tx_receipt = w3.eth.wait_for_transaction_receipt(txHash)
@@ -44,7 +44,7 @@ def start_round(contract_instance, init_params, round_number, min_num_params):
         'from': w3.to_checksum_address(public_key),
     })
     signed_tx = senderAccount.sign_transaction(transaction)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
     tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     print(f"Transaction receipt (hash): {tx_receipt}")
 
