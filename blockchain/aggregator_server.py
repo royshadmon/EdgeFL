@@ -93,7 +93,7 @@ curl -X POST http://localhost:8080/start-training \
 '''
 
 @app.route('/start-training', methods=['POST'])
-def init_training():
+async def init_training():
     """Start the training process by setting the number of rounds."""
     try:
         data = request.json
@@ -112,7 +112,7 @@ def init_training():
             aggregator.start_round(initialParams, r, min_params)
 
             # Listen for updates from nodes
-            newAggregatorParams = listen_for_update_agg()
+            newAggregatorParams = await listen_for_update_agg()
             print("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
@@ -124,27 +124,50 @@ def init_training():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def listen_for_update_agg():
-    """Listen for the updateAgg event from the blockchain."""
-    event_filter = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.create_filter(from_block='latest')
+async def listen_for_update_agg():
+    """Asynchronously poll for the 'updateAggregatorWithParamsFromNodes' event from the blockchain."""
+    print("Starting async polling for 'updateAggregatorWithParamsFromNodes' events...")
 
-    # Keep polling until the event is detected
+    # Define the event signature for 'updateAggregatorWithParamsFromNodes(uint256,string[])' and ensure it starts with '0x'
+    event_signature = "0x" + aggregator.w3.keccak(text="updateAggregatorWithParamsFromNodes(uint256,string[])").hex()
+
+    lastest_block = aggregator.w3.eth.block_number
+
     while True:
         try:
-            for event in event_filter.get_new_entries():
-                print("Received 'updateAgg' event.")
-                node_params = event['args']['paramsFromNodes']
+            # Define filter parameters for polling
+            filter_params = {
+                "fromBlock": lastest_block + 1,
+                "toBlock": "latest",
+                "address": aggregator.deployed_contract_address,
+                "topics": [event_signature]
+            }
+
+            # Poll for logs
+            logs = aggregator.w3.eth.get_logs(filter_params)
+            for log in logs:
+                # Decode event data
+                decoded_event = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.process_log(log)
+                number_of_params = decoded_event['args']['numberOfParams']
+                params_from_nodes = decoded_event['args']['paramsFromNodes']
+
+                print(f"Received 'updateAgg' event with params: {params_from_nodes}. Number of params: {number_of_params}")
 
                 # Aggregate parameters
-                newAggregatorParams = aggregator.aggregate_model_params(node_params)
+                newAggregatorParams = aggregator.aggregate_model_params(params_from_nodes)
 
-                return newAggregatorParams  # Return updated params after aggregation
+                # Return the updated aggregator parameters and exit the function
+                return newAggregatorParams
+
+            # Update latest_block to avoid re-processing old events
+            if logs:
+                latest_block = logs[-1]['blockNumber']
 
         except Exception as e:
-            print(f"Error listening for 'updateAgg' event: {str(e)}")
+            print(f"Error polling for 'updateAgg' event: {str(e)}")
 
-        # Avoid excessive polling
-        time.sleep(2)
+        # Asynchronously sleep to avoid excessive polling
+        time.sleep(2)  # Poll every 2 seconds
 
 
 if __name__ == '__main__':
