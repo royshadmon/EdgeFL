@@ -23,13 +23,16 @@ app = Flask(__name__)
 # ALTER USER edge CREATEDB 
 # ^ allow user to create databases
 
+# don't do this line below, just here for reference
 # CREATE DATABASE smoking OWNER edge
 
 # from here, /q to close postgresql terminal
 # can log in from now with psql -U edge -d smoking -W
 
-SQL_USER = "edge" 
-SQL_PASSWORD = "lake"
+# SQL_USER = "edge" 
+# SQL_PASSWORD = "lake"
+SQL_USER = "postgres" 
+SQL_PASSWORD = "Noobodiii!!!123"
 PORT = 5432 # default upon postgresql setup
 DB_NAME = "smoking"
 HOST = "localhost"
@@ -71,15 +74,16 @@ def initialize_tables(num_nodes=1):
         conn = get_db_connection()
         with conn.cursor() as cur:
             # Create tables dynamically based on num_nodes
-            for i in range(1, num_nodes + 1):
+            for i in range(num_nodes):
                 table_name = f"node_{i}"
                 cur.execute(f"""
                     CREATE TABLE IF NOT EXISTS {table_name} (
                         id SERIAL PRIMARY KEY,
-                        data TEXT
+                        round INT NULL,
+                        data TEXT NULL 
                     );
                 """)
-                print(f"Table '{table_name}' created successfully.")
+                print(f"Table '{table_name}' created successfully with empty 'round' and 'data' columns.")
 
         # Commit the transaction to save changes
         conn.commit()
@@ -99,8 +103,10 @@ def initialize():
 
     # create new db
     create_new_db()
+    print("database created")
     # initialize tables
     result = initialize_tables(num_nodes)
+    print("tables created")
 
     if "error" in result:
         return jsonify(result), 500
@@ -130,8 +136,10 @@ def add_data():
                 )
             print(f"Data added to table '{table_name}' for round {round}.")
 
+            # print_database_status();
+
         conn.commit()
-        return jsonify({"status": "success", "message": f"Data added to {table_name} for round {current_round}"}), 201
+        return jsonify({"status": "success", "message": f"Data added to {table_name} for round {round}"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -174,6 +182,29 @@ def get_data():
 
     finally:
         conn.close()
+
+def print_database_status():
+    try:
+        # Connect to the specific database
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            # Get list of tables
+            cur.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public';")
+            tables = cur.fetchall()
+
+            print("\nTables in the database:")
+            for table in tables:
+                print(f"Table: {table[0]}")
+                
+                # Retrieve data from each table
+                cur.execute(f"SELECT * FROM {table[0]};")
+                rows = cur.fetchall()
+                print(f"Contents of {table[0]}:")
+                for row in rows:
+                    print(row)
+
+    except Exception as e:
+        print("Error accessing database:", e)
 
 
 if __name__ == '__main__':

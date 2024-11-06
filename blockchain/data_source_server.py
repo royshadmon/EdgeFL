@@ -69,7 +69,8 @@ class DataSource:
             dataloader = DataLoader(
                 dataset, 
                 batch_size=self.batch_size, 
-                shuffle=True
+                shuffle=True,
+                drop_last = True # do not pad the final batch if it's a little small
             )
             self.party_dataloaders.append(dataloader)
             X_scaled, y = X_temp, y_temp
@@ -79,6 +80,9 @@ class DataSource:
     def distribute_data(self):
         """Distribute the next batch of data to each node"""
         distribution_results = []
+
+        max_batches = [len(dataloader) for dataloader in self.party_dataloaders]
+        print('max batches per node, ', max_batches)
 
         node_iterators = [iter(dataloader) for dataloader in self.party_dataloaders]
         while any(node_iterators):
@@ -102,8 +106,11 @@ class DataSource:
                     # Send data to node
                     response = requests.post(
                         f'{node_url}/receive_data',
-                        json={'data': data_batch}
-                        
+                        json={
+                            'data': data_batch,
+                            'node_id': node_idx,
+                            'round': 1
+                        }  
                     )
 
                     distribution_results.append({
@@ -114,7 +121,7 @@ class DataSource:
 
                     
 
-                    if response.status_code == 200:
+                    if response.status_code == 200 or response.status_code == 201:
                         print(f"Successfully sent batch to node {node_idx}")
                     else:
                         print(f"Failed to send batch to node {node_idx}: {response.text}")
@@ -184,6 +191,8 @@ def initialize():
 
         data_source = DataSource(num_parties, batch_size)
         data_source.node_urls = data['node_urls']
+
+        time.sleep(5)
 
         # Start data distribution
         data_source.start_distribution()
