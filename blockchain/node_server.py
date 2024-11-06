@@ -99,7 +99,7 @@ def listen_for_start_round():
 
                 # Train model parameters updated from aggregator with local node data
                 model_update = node_instance.train_model_params(init_params)
-                print(f"Model update: {model_update}")
+                # print(f"Model update: {model_update}")
 
                 # Add node parameters to the blockchain
                 result = node_instance.add_node_params(round_number, model_update)

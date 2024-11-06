@@ -89,6 +89,7 @@ class Aggregator:
             tx = self.deployed_contract.functions.startRound(initParams, roundNumber, minParams).build_transaction({
                 'from': self.deployer_address,
                 'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
+                'chainId': 11155420
             })
             print("after transaction")
 

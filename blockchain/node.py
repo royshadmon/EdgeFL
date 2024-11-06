@@ -1,7 +1,6 @@
 import os
 import json
-
-from flask import jsonify
+import numpy as np
 from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 
@@ -68,8 +67,7 @@ class Node:
             tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params, self.replicaName).build_transaction({
                 'from': self.node_address,
                 'nonce': self.w3.eth.get_transaction_count(self.node_address),
-                'gas': 200000,
-                'gasPrice': self.w3.toWei('50', 'gwei')
+                'chainId': 11155420
             })
 
             # Sign and send the transaction for production environment
@@ -98,19 +96,22 @@ class Node:
 
     def train_model_params(self, aggregator_model_params):
         # Get local Data
-        if not self.local_training_handler.data_batches:
-            return jsonify({"error": "No data to train on"}), 400
+        # if not self.data_batches:
+        #     return jsonify({"error": "No data to train on"}), 400
+        #
+        # data = self.data_batches.pop(0)
+        #
+        # # decode model params from string to numerical
+        # decoded_params = self.decode_params(aggregator_model_params)
 
-        data = self.local_training_handler.data_batches.pop(0)
-
-        # decode model params from string to numerical
-        decoded_params = self.decode_params(aggregator_model_params)
+        startingTestArray = {}
+        dataTestArray = np.zeros((1, 5))
 
         # Update local model with sent model params
-        self.local_training_handler.model_update(decoded_params)
+        self.local_training_handler.update_model(startingTestArray)
 
         # Load local data
-        self.local_training_handler.data_handler.load_data(data)
+        self.local_training_handler.data_handler.load_data(dataTestArray)
 
         # Do local training
         model_update = self.local_training_handler.train()
