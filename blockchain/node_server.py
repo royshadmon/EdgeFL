@@ -9,8 +9,9 @@ import os
 app = Flask(__name__)
 
 # Configuration
-PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
+PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/6fce3361490c4187b59947005a07c3e7')
 PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
+CONTRACT_ADDRESS="0xF21E95f39Ac900986c4D47Bb17De767d80451e3B"
 
 # Initialize the Node instance 
 node_instance = None
@@ -21,7 +22,34 @@ node_instance = None
     - Gets config file and intializes node instance
     - Starts 2 threads listening for start training and for update node
 '''
+'''
+SAMPLE CURL REQUEST COMING FROM AGGREGATOR SERVER:
 
+curl -X POST http://localhost:8081/init-node \
+-H "Content-Type: application/json" \
+-d '{
+  "contractAddress": "your_contract_address_here",
+  "config": {
+    "key1": "value1",
+    "key2": "value2"
+  }
+}'
+
+Note: when the aggregator server is calling this function, it will be with a new contract address field, but if you are 
+calling this endpoint from the terminal for testing you don't need to add it 
+
+SAMPLE CURL COMING FROM COMMAND LINE FOR TESTING:
+curl -X POST http://localhost:8081/init-node \
+-H "Content-Type: application/json" \
+-d '{
+  "config": {
+    "key1": "value1",
+    "key2": "value2"
+  }
+}'
+
+
+'''
 
 @app.route('/init-node', methods=['POST'])
 def init_node():
@@ -32,9 +60,9 @@ def init_node():
         contract_address = request.json.get('contractAddress')
 
         if not contract_address:
-            return jsonify({'status': 'error', 'message': 'No contract address provided'}), 400
+            contract_address = CONTRACT_ADDRESS
 
-        print(f"Received contract address: {contract_address}")
+        # print(f"Received contract address: {contract_address}")
 
         config = request.json.get('config')
 

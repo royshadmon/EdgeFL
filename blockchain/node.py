@@ -3,6 +3,8 @@ import json
 import numpy as np
 from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
+from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
+from ibmfl.model.pytorch_fl_model import PytorchFLModel
 
 
 class Node:
@@ -35,9 +37,20 @@ class Node:
 
         # IBM FL LocalTrainingHandler
         self.config = config
-        fl_model = config['model']['path']
-        data_handler = config['data']['path']
+
+
+        # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
+        # hard code for now for testing
+        model_spec = {
+            "loss_criterion": "nn.NLLLoss",
+            "model_definition": "configs/node/pytorch/pytorch_sequence.pt",
+            "model_name": "pytorch-nn",
+            "optimizer": "optim.Adadelta"
+        }
+        fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
+        data_handler = MnistPytorchDataHandler(data_config="data/mnist/data_party0.npz")
         self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
+
 
     '''
     add_data_batch(data)
@@ -104,23 +117,23 @@ class Node:
         # # decode model params from string to numerical
         # decoded_params = self.decode_params(aggregator_model_params)
 
-        startingTestArray = {}
-        dataTestArray = np.zeros((1, 5))
+        test_model_update = self.local_training_handler.fl_model.get_model_update()
 
         # Update local model with sent model params
-        self.local_training_handler.update_model(startingTestArray)
+        self.local_training_handler.update_model(test_model_update)
 
         # Load local data
-        self.local_training_handler.data_handler.load_data(dataTestArray)
+        loaded_data = self.local_training_handler.data_handler.load_dataset(nb_points=50)
 
         # Do local training
+        # BREAKS HERE
         model_update = self.local_training_handler.train()
         print(model_update) # see what is in the model update object
 
         # the node parameters part of model_update needs to be encoded to a string before being returned
-        encoded_params = self.encode_params(model_update) # this will probably need to change to the correct field in model_update object
+        # encoded_params = self.encode_params(model_update) # this will probably need to change to the correct field in model_update object
 
-        return encoded_params
+        return model_update
 
     def encode_params(self, model_params_as_numerical):
         # TO_DO encode the trained params as a string which is what the blockchain uses

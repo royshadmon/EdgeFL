@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 
 # Use environment variables for sensitive data
-PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
+PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/6fce3361490c4187b59947005a07c3e7')
 PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
 
 # Initialize the Aggregator instance
@@ -37,7 +37,9 @@ curl -X POST http://localhost:8080/deploy-contract \
   }
 }'
 '''
-
+# CALL THIS ONLY IF I HAVE MADE UPDATES TO THE CONTRACT, IF I DO THEN CHANGE THE "CONTRACT_ADDRESS" GLOBAL VAR IN THE
+# AGGREGATOR.PY FILE AND THE NODE_SERVER.PY FILE. IF NO UPDATES MADE, CALL THE INIT_NODE METHOD TO START THE NODE AND
+# THEN CALL THE START ROUND ENDPOINT
 @app.route('/deploy-contract', methods=['POST'])
 def deploy_contract():
     """Deploy the smart contract with predefined nodes."""
@@ -105,7 +107,7 @@ async def init_training():
 
         print(f"Training initialized with {num_rounds} rounds.")
 
-        initialParams = ''
+        initialParams = 'abc'
 
         for r in range(1, num_rounds + 1):
             print(f"Starting round {r}")
