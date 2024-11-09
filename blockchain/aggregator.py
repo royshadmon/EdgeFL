@@ -1,5 +1,7 @@
 import os
 import json
+import pickle
+
 from web3 import Web3
 from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
 
@@ -128,6 +130,9 @@ class Aggregator:
         # TO_DO encode the trained params as a string which is what the blockchain uses
         pass
 
-    def decode_params(self, model_params_as_string):
-        # TO_DO decode the model params from string format into numerical format to be used for training
-        pass
+    def decode_params(self, encoded_model_update):
+        # turns model params encoded string from nodes into decoded dict
+        decoded_model_update_string = pickle.loads(encoded_model_update)
+        decoded_model_update = decoded_model_update_string.decode('ascii')
+
+        return decoded_model_update

@@ -1,5 +1,10 @@
+import base64
 import os
 import json
+import pickle
+import zlib
+
+import msgpack
 import numpy as np
 from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
@@ -11,7 +16,8 @@ class Node:
     def __init__(self, contract_address, provider_url, private_key, config, replica_name):
 
         # Initialize Web3 connection to the Ethereum node
-        self.w3 = Web3(Web3.HTTPProvider(provider_url))
+        self.w3 = Web3(Web3.HTTPProvider(provider_url, {"timeout": 100000}))
+
 
         self.replicaName = replica_name
 
@@ -38,19 +44,21 @@ class Node:
         # IBM FL LocalTrainingHandler
         self.config = config
 
-
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
         # hard code for now for testing
         model_spec = {
             "loss_criterion": "nn.NLLLoss",
-            "model_definition": "configs/node/pytorch/pytorch_sequence.pt",
+            "model_definition": "/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/federated-learning-lib-main/examples/configs/iter_avg/pytorch/pytorch_sequence.pt",
             "model_name": "pytorch-nn",
             "optimizer": "optim.Adadelta"
         }
-        fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-        data_handler = MnistPytorchDataHandler(data_config="data/mnist/data_party0.npz")
-        self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
+        data_config = {
+            "npz_file": "/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/data/mnist/data_party0.npz"
+        }
 
+        fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
+        data_handler = MnistPytorchDataHandler(data_config=data_config)
+        self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
 
     '''
     add_data_batch(data)
@@ -77,7 +85,8 @@ class Node:
         try:
             # Build the transaction to call addNodeParams 
             # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
-            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params, self.replicaName).build_transaction({
+            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params,
+                                                                self.replicaName).build_transaction({
                 'from': self.node_address,
                 'nonce': self.w3.eth.get_transaction_count(self.node_address),
                 'chainId': 11155420
@@ -123,24 +132,23 @@ class Node:
         self.local_training_handler.update_model(test_model_update)
 
         # Load local data
-        loaded_data = self.local_training_handler.data_handler.load_dataset(nb_points=50)
+        self.local_training_handler.data_handler.load_dataset(nb_points=50)
 
         # Do local training
-        # BREAKS HERE
-        model_update = self.local_training_handler.train()
-        print(model_update) # see what is in the model update object
+        model_update = self.local_training_handler.train({})
 
         # the node parameters part of model_update needs to be encoded to a string before being returned
-        # encoded_params = self.encode_params(model_update) # this will probably need to change to the correct field in model_update object
+        encoded_params = self.encode_model(model_update)
 
-        return model_update
+        return encoded_params
 
-    def encode_params(self, model_params_as_numerical):
-        # TO_DO encode the trained params as a string which is what the blockchain uses
-        pass
+    def encode_model(self, model_update):
+        serialized_data = pickle.dumps(model_update)
+        compressed_data = zlib.compress(serialized_data)
+        encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
+        return encoded_model_update
 
-    def decode_params(self, model_params_as_string):
-        # TO_DO decode the model params from string format into numerical format to be used for training
-        pass
-
-
+    def decode_params(self, encoded_model_update):
+        # turns model params encoded string from nodes into decoded dict
+        decoded_model_update = pickle.loads(encoded_model_update)
+        return decoded_model_update
