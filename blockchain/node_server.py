@@ -73,7 +73,10 @@ def init_node():
 def receive_data():
     data = request.json.get('data')
     node_id = request.json.get('node_id')
-    round_number = request.json.get('round')
+
+    round_number = node_instance.round
+    print("round number: ", round_number)
+
     if data:
         node_instance.add_data_batch(np.array(data))
         # return jsonify({"status": "data_received", "batch_size": len(data)})
@@ -120,6 +123,9 @@ def listen_for_start_round():
                 decoded_event = node_instance.contract_instance.events.newRound().process_log(log)
                 init_params = decoded_event['args']['initParams']
                 round_number = decoded_event['args']['roundNumber']
+                
+                # update node's internal round number, used to label data in sql
+                node_instance.round = round_number + 1;
 
                 print(f"Received 'newRound' event with initParams: {init_params}, roundNumber: {round_number}")
 

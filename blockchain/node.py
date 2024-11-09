@@ -21,6 +21,8 @@ class Node:
         self.node_account = self.w3.eth.account.from_key(private_key)
         self.node_address = self.w3.to_checksum_address(self.node_account.address)
 
+        self.round = 1;
+
         balance = self.w3.eth.get_balance(self.node_address)
         print(f"Deployer Address Balance: {self.w3.from_wei(balance, 'ether')} ETH")
 
@@ -33,6 +35,7 @@ class Node:
 
         # Node local data batches
         self.data_batches = []
+
 
         # IBM FL LocalTrainingHandler
         self.config = config
