@@ -24,14 +24,20 @@
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "numberOfParams",
+				"name": "numberOfNodes",
 				"type": "uint256"
 			},
 			{
 				"indexed": false,
-				"internalType": "string[]",
+				"internalType": "string",
+				"name": "replicaName",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
 				"name": "paramsFromNodes",
-				"type": "string[]"
+				"type": "string"
 			}
 		],
 		"name": "updateAggregatorWithParamsFromNodes",
@@ -53,6 +59,11 @@
 				"internalType": "string",
 				"name": "replicaName",
 				"type": "string"
+			},
+			{
+				"internalType": "bool",
+				"name": "finishNode",
+				"type": "bool"
 			}
 		],
 		"name": "addNodeParams",

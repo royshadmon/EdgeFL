@@ -10,14 +10,20 @@ contract ModelParameters {
 
     uint currentRoundNumber = 0;
 
+    // struct to store a node's split parameters
+    struct nodeParams {
+        string[] spiltNodeParam;
+    }
+
     // struct defined for the metadata
     struct roundParams {
-        // node parameters that have been added by nodes that can be accessed from the index of the node name from replicaNameToNodeIndex
+        // node parameters that have been added by nodes that can be accessed from the index of the node name from replicaNameToNodeParams
         // replicaName -> mapped to -> index, this index then refers to a specific index in nodeParams
-        string[] nodeParams;
+        // string[] nodeParams;
         string initParams; // initial params for the rounds
-        mapping(string => uint) replicaNameToNodeIndex; // node name mapped to a node index
-        string[] replicaNames; // node names
+        mapping(string => nodeParams) replicaNameToNodeParams; // replica name mapped to a node params struct
+        mapping(string => bool) replicaNamesExists; // map replica names to a boolean to check if they exist
+        string[] replicaNames; // Iterable data structure storing keys for replicaNameToNodeParams of nodes that have participated
         uint minNumParams; // minimum number of parameters required by aggregator
     }
 
@@ -39,34 +45,58 @@ contract ModelParameters {
         emit newRound(roundNumber, initParams);
     }
 
-    // function to add model parameters trained by a node and emit the event to the aggregator that all nodes
+    // function to add segment of model parameters trained by a node and emit the event to the aggregator that all nodes
     // have trained their local model parameters
-    function addNodeParams(uint roundNumber, string memory newNodeParams, string memory replicaName) public {
+    // NOTE:
+    // have to iterate through all the node parameter segments and emit each one individually because we can't emit
+    // the entire string[] which contains all the segments since it could give us the same timeout error because it's too large
+    function addNodeParams(uint roundNumber, string memory newNodeParams, string memory replicaName, bool finishNode) public {
         // check the current round
         require(currentRoundNumber == roundNumber, "Incorrect round number");
 
-        // add the new node params to the list for node params for this round
-        roundMetaData[roundNumber].nodeParams.push(newNodeParams);
+        // add the new node params to the array of split node params in the node params struct for a specific node
+        roundMetaData[roundNumber].replicaNameToNodeParams[replicaName].spiltNodeParam.push(newNodeParams);
 
-        // add the replica name to the list of names that have participated in this round
-        roundMetaData[roundNumber].replicaNames.push(replicaName);
+        // if all of nodes segments have been uploaded
+        if (finishNode) {
+            // check if the replica name doesn't exists in the list already
+            if (!roundMetaData[roundNumber].replicaNamesExists[replicaName]) {
+                // add the new replica name to the map indicating that it exists
+                roundMetaData[roundNumber].replicaNamesExists[replicaName] = true;
 
-        // map the replica name to an index number generated from the length of the number of node params added to the list of node params
-        // the length - 1 indicates the last node to have added its parameters to the list of node params, which serves as the index to
-        // find that node's params in the node param list
-        roundMetaData[roundNumber].replicaNameToNodeIndex[replicaName] = roundMetaData[roundNumber].nodeParams.length - 1;
-
-        // emit the number nodes that have added their node params to the list of node params so that aggregator can
-        // check how many have participated
-        if (roundMetaData[roundNumber].nodeParams.length == roundMetaData[roundNumber].minNumParams) {
-            emit updateAggregatorWithParamsFromNodes(roundMetaData[roundNumber].nodeParams.length, roundMetaData[roundNumber].nodeParams);
+                // add the new replica name to the list that keeps track of the keys
+                roundMetaData[roundNumber].replicaNames.push(replicaName);
+            }
         }
+
+        // first value emitted is the number nodes that have participated
+        // second value emitted is a node parameter segment
+        if (roundMetaData[roundNumber].replicaNames.length == roundMetaData[roundNumber].minNumParams) {
+
+            // iterate through the replicas that have participated
+            for (uint i = 0; i < roundMetaData[roundNumber].replicaNames.length; i++) {
+                // gather the name from the list
+                string memory name = roundMetaData[roundNumber].replicaNames[i];
+
+                // itertate through the split up node params for a replica name
+                for (uint j = 0; i < roundMetaData[roundNumber].replicaNameToNodeParams[name].spiltNodeParam.length; j++) {
+                    // gather the node paramater segment
+                    string memory nodeParamsSegment = roundMetaData[roundNumber].replicaNameToNodeParams[name].spiltNodeParam[j];
+
+                    // emit the event with the number of nodes that participated, node name, and node parameter segment
+                    emit updateAggregatorWithParamsFromNodes(roundMetaData[roundNumber].replicaNames.length, name, nodeParamsSegment);
+                }
+            }
+        }
+
+
+
     }
 
     // event to start a new round
     event newRound(uint roundNumber, string initParams);
 
-    // event to tell aggregator how many nodes participated
-    event updateAggregatorWithParamsFromNodes(uint numberOfParams, string[] paramsFromNodes);
+    // event to tell aggregator how many nodes participated and the trained parameters from the nodes
+    event updateAggregatorWithParamsFromNodes(uint numberOfNodes, string replicaName, string paramsFromNodes);
 
 }

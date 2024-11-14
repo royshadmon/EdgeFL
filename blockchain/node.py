@@ -18,7 +18,6 @@ class Node:
         # Initialize Web3 connection to the Ethereum node
         self.w3 = Web3(Web3.HTTPProvider(provider_url, {"timeout": 100000}))
 
-
         self.replicaName = replica_name
 
         self.contract_address = contract_address
@@ -84,25 +83,45 @@ class Node:
 
         try:
             # Build the transaction to call addNodeParams 
-            # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
-            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params[0:25000],
-                                                                self.replicaName).build_transaction({
-                'from': self.node_address,
-                'nonce': self.w3.eth.get_transaction_count(self.node_address),
-                'chainId': 11155420
-            })
+            # Define chunk size
+            chunk_size = 25000
 
-            # Sign and send the transaction for production environment
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            # Split the newly_trained_params string into chunks of the defined size
+            chunks = [newly_trained_params[i:i + chunk_size] for i in range(0, len(newly_trained_params), chunk_size)]
 
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            tx_hash_hex_list = []
+
+            # Loop through each chunk and send a transaction
+            for index, chunk in enumerate(chunks):
+                # Set finishNode to True for the last chunk
+                finish_node = (index == len(chunks) - 1)
+
+                # Build the transaction
+                tx = self.contract_instance.functions.addNodeParams(
+                    round_number,
+                    chunk,
+                    self.replicaName,
+                    finish_node
+                ).build_transaction({
+                    'from': self.node_address,
+                    'nonce': self.w3.eth.get_transaction_count(self.node_address) + index,  # Ensure nonce increments
+                    'chainId': 11155420
+                })
+
+                # Sign and send the transaction
+                signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+                tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                tx_hash_hex_list.append(tx_hash.hex())
+
+                # Wait for the transaction receipt (optional, can also be async if needed)
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                print(f"Transaction sent. Tx hash: {tx_hash.hex()}, finishNode: {finish_node}")
+
 
             return {
                 'status': 'success',
                 'message': 'node model parameters added successfully',
-                'transactionHash': tx_hash.hex()
+                'transactionHashes': tx_hash_hex_list
             }
         except Exception as e:
             return {
