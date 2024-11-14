@@ -9,9 +9,11 @@ import os
 app = Flask(__name__)
 
 # Configuration
-PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/6fce3361490c4187b59947005a07c3e7')
+# PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/6fce3361490c4187b59947005a07c3e7')
+# PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
+PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
 PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
-CONTRACT_ADDRESS="0xF21E95f39Ac900986c4D47Bb17De767d80451e3B"
+CONTRACT_ADDRESS="0x976cfb0aD698388B524a3333c3C184b0Ba955523"
 
 # Initialize the Node instance 
 node_instance = None

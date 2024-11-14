@@ -85,7 +85,7 @@ class Node:
         try:
             # Build the transaction to call addNodeParams 
             # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
-            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params,
+            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params[0:25000],
                                                                 self.replicaName).build_transaction({
                 'from': self.node_address,
                 'nonce': self.w3.eth.get_transaction_count(self.node_address),
@@ -136,14 +136,21 @@ class Node:
 
         # Do local training
         model_update = self.local_training_handler.train({})
+        # serialized_data = pickle.dumps(model_update)
+        # # weights = model_update.weights
+        #
+        # # Write the encoded parameters to a file
+        # with open("/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/model_update_raw.txt",
+        #           "wb") as file:
+        #     file.write(serialized_data)
 
         # the node parameters part of model_update needs to be encoded to a string before being returned
-        encoded_params = self.encode_model(model_update)
+        encoded_params_compressed = self.encode_model(model_update)
 
-        return encoded_params
+        return encoded_params_compressed
 
-    def encode_model(self, model_update):
-        serialized_data = pickle.dumps(model_update)
+    def encode_model(self, model_weights):
+        serialized_data = pickle.dumps(model_weights)
         compressed_data = zlib.compress(serialized_data)
         encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
         return encoded_model_update
