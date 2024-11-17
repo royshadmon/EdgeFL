@@ -3,9 +3,8 @@ import os
 import json
 import pickle
 import zlib
-
-import msgpack
-import numpy as np
+import firebase_admin
+from firebase_admin import credentials, db
 from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
@@ -15,8 +14,16 @@ from ibmfl.model.pytorch_fl_model import PytorchFLModel
 class Node:
     def __init__(self, contract_address, provider_url, private_key, config, replica_name):
 
+        self.database_url = 'https://anylog-edgelake-fl-default-rtdb.firebaseio.com/'
+
+        cred = credentials.Certificate("/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/credentials/anylog-edgelake-fl-firebase-adminsdk-8ue2n-1dffdbfe00.json")
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': self.database_url
+        })
+
         # Initialize Web3 connection to the Ethereum node
         self.w3 = Web3(Web3.HTTPProvider(provider_url, {"timeout": 100000}))
+
 
         self.replicaName = replica_name
 
@@ -74,7 +81,7 @@ class Node:
         - Returns current node nodel parameters to blockchain via event listener
     '''
 
-    def add_node_params(self, round_number, newly_trained_params):
+    def add_node_params(self, round_number, newly_trained_params_db_link):
         if not self.contract_instance:
             return {
                 'status': 'error',
@@ -83,45 +90,25 @@ class Node:
 
         try:
             # Build the transaction to call addNodeParams 
-            # Define chunk size
-            chunk_size = 25000
+            # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
+            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params_db_link,
+                                                                self.replicaName).build_transaction({
+                'from': self.node_address,
+                'nonce': self.w3.eth.get_transaction_count(self.node_address),
+                'chainId': 11155420
+            })
 
-            # Split the newly_trained_params string into chunks of the defined size
-            chunks = [newly_trained_params[i:i + chunk_size] for i in range(0, len(newly_trained_params), chunk_size)]
+            # Sign and send the transaction for production environment
+            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
 
-            tx_hash_hex_list = []
-
-            # Loop through each chunk and send a transaction
-            for index, chunk in enumerate(chunks):
-                # Set finishNode to True for the last chunk
-                finish_node = (index == len(chunks) - 1)
-
-                # Build the transaction
-                tx = self.contract_instance.functions.addNodeParams(
-                    round_number,
-                    chunk,
-                    self.replicaName,
-                    finish_node
-                ).build_transaction({
-                    'from': self.node_address,
-                    'nonce': self.w3.eth.get_transaction_count(self.node_address) + index,  # Ensure nonce increments
-                    'chainId': 11155420
-                })
-
-                # Sign and send the transaction
-                signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-                tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-                tx_hash_hex_list.append(tx_hash.hex())
-
-                # Wait for the transaction receipt (optional, can also be async if needed)
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-                print(f"Transaction sent. Tx hash: {tx_hash.hex()}, finishNode: {finish_node}")
-
+            # Wait for the transaction receipt
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
             return {
                 'status': 'success',
                 'message': 'node model parameters added successfully',
-                'transactionHashes': tx_hash_hex_list
+                'transactionHash': tx_hash.hex()
             }
         except Exception as e:
             return {
@@ -155,21 +142,29 @@ class Node:
 
         # Do local training
         model_update = self.local_training_handler.train({})
-        # serialized_data = pickle.dumps(model_update)
-        # # weights = model_update.weights
-        #
-        # # Write the encoded parameters to a file
-        # with open("/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/model_update_raw.txt",
-        #           "wb") as file:
-        #     file.write(serialized_data)
 
         # the node parameters part of model_update needs to be encoded to a string before being returned
         encoded_params_compressed = self.encode_model(model_update)
 
-        return encoded_params_compressed
+        # Reference to database
+        ref = db.reference('node_model_updates')
 
-    def encode_model(self, model_weights):
-        serialized_data = pickle.dumps(model_weights)
+        # create the data entry
+        data_entry = {
+            'replicaName': self.replicaName,
+            'model_update': encoded_params_compressed
+        }
+
+        # push the data
+        data_pushed = ref.push(data_entry)
+
+        # get the link to the stored object
+        object_url = f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
+
+        return object_url
+
+    def encode_model(self, model_update):
+        serialized_data = pickle.dumps(model_update)
         compressed_data = zlib.compress(serialized_data)
         encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
         return encoded_model_update

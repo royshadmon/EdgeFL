@@ -122,7 +122,7 @@ def listen_for_start_round():
             for log in logs:
                 # Decode log data for the `newRound` event
                 decoded_event = node_instance.contract_instance.events.newRound().process_log(log)
-                init_params = decoded_event['args']['initParams']
+                init_params = decoded_event['args']['initParamsDownloadLink']
                 round_number = decoded_event['args']['roundNumber']
 
                 print(f"Received 'newRound' event with initParams: {init_params}, roundNumber: {round_number}")

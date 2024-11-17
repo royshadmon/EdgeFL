@@ -153,12 +153,12 @@ async def listen_for_update_agg():
                 # Decode event data
                 decoded_event = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.process_log(log)
                 number_of_params = decoded_event['args']['numberOfParams']
-                params_from_nodes = decoded_event['args']['paramsFromNodes']
+                params_from_nodes_db_links = decoded_event['args']['paramsFromNodes']
 
-                print(f"Received 'updateAgg' event with params: {params_from_nodes}. Number of params: {number_of_params}")
+                print(f"Received 'updateAgg' event with params: {params_from_nodes_db_links}. Number of params: {number_of_params}")
 
                 # Aggregate parameters
-                newAggregatorParams = aggregator.aggregate_model_params(params_from_nodes)
+                newAggregatorParams = aggregator.aggregate_model_params(params_from_nodes_db_links)
 
                 # Return the updated aggregator parameters and exit the function
                 return newAggregatorParams
