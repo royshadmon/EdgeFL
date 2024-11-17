@@ -201,6 +201,7 @@ class Aggregator:
             # Wait for the transaction receipt
             receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
+
             return {
                 'status': 'success',
                 'message': 'initTraining called successfully',
@@ -232,6 +233,10 @@ class Aggregator:
         encoded_params = self.encode_params(aggregated_params)
 
         agg_ref = db.reference('agg_model_updates')
+
+        # delete the old aggregated params
+        if agg_ref.get() is not None:
+            agg_ref.delete()
 
         data_entry = {
             'newUpdates': encoded_params
