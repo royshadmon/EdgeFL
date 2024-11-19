@@ -5,6 +5,10 @@ import threading
 import time
 from web3 import Web3
 import os
+import argparse
+'''
+TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
+'''
 
 app = Flask(__name__)
 
@@ -128,7 +132,7 @@ def listen_for_start_round():
                 print(f"Received 'newRound' event with initParams: {init_params}, roundNumber: {round_number}")
 
                 # Train model parameters updated from aggregator with local node data
-                model_update = node_instance.train_model_params(init_params)
+                model_update = node_instance.train_model_params(init_params, round_number)
                 # print(f"Model update: {model_update}")
 
                 # Add node parameters to the blockchain
@@ -149,5 +153,10 @@ def listen_for_start_round():
 
 
 if __name__ == '__main__':
-    # Run the Flask server
-    app.run(host='0.0.0.0', port=8081)  # <- needs to be configurable
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Start the Flask server.')
+    parser.add_argument('--port', type=int, default=8081, help='Port to run the Flask server on.')
+    args = parser.parse_args()
+
+    # Run the Flask server on the specified port
+    app.run(host='0.0.0.0', port=args.port)
