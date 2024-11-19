@@ -9,21 +9,21 @@ from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
-
+from dotenv import load_dotenv
+load_dotenv()
 
 class Node:
     def __init__(self, contract_address, provider_url, private_key, config, replica_name):
 
-        self.database_url = 'https://anylog-edgelake-fl-default-rtdb.firebaseio.com/'
+        self.database_url = os.getenv('DATABASE_URL')
 
-        cred = credentials.Certificate("/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/credentials/anylog-edgelake-fl-firebase-adminsdk-8ue2n-1dffdbfe00.json")
+        cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
         firebase_admin.initialize_app(cred, {
             'databaseURL': self.database_url
         })
 
         # Initialize Web3 connection to the Ethereum node
         self.w3 = Web3(Web3.HTTPProvider(provider_url, {"timeout": 100000}))
-
 
         self.replicaName = replica_name
 
@@ -54,12 +54,12 @@ class Node:
         # hard code for now for testing
         model_spec = {
             "loss_criterion": "nn.NLLLoss",
-            "model_definition": "/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/federated-learning-lib-main/examples/configs/iter_avg/pytorch/pytorch_sequence.pt",
+            "model_definition": "/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/configs/node/pytorch/pytorch_sequence.pt",
             "model_name": "pytorch-nn",
             "optimizer": "optim.Adadelta"
         }
         data_config = {
-            "npz_file": "/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/data/mnist/data_party0.npz"
+            "npz_file": "/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/data/mnist/data_party0.npz"
         }
 
         fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
