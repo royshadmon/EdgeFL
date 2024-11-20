@@ -28,7 +28,8 @@ curl -X POST http://localhost:8080/deploy-contract \
     "0xFEe882466e0804831746336A3eb2c6727CC35d63"
   ],
   "nodeUrls": [
-    "http://localhost:8081"
+    "http://localhost:8081", 
+    "http://localhost:8082"
   ],
   "config": {  
     "model": {
@@ -110,7 +111,7 @@ async def init_training():
 
         print(f"Training initialized with {num_rounds} rounds.")
 
-        initialParams = 'abc'
+        initialParams = ''
 
         for r in range(1, num_rounds + 1):
             print(f"Starting round {r}")
