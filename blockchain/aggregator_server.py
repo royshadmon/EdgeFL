@@ -1,3 +1,6 @@
+import argparse
+from dotenv import load_dotenv
+
 from flask import Flask, jsonify, request
 from aggregator import Aggregator
 import threading
@@ -6,13 +9,11 @@ import requests
 import os
 
 app = Flask(__name__)
-
+load_dotenv()
 
 # Use environment variables for sensitive data
-# PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/6fce3361490c4187b59947005a07c3e7')
-# PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
-PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
-PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
+PROVIDER_URL = os.getenv('PROVIDER_URL')
+PRIVATE_KEY = os.getenv('PRIVATE_KEY')
 
 # Initialize the Aggregator instance
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
@@ -176,5 +177,10 @@ async def listen_for_update_agg():
 
 
 if __name__ == '__main__':
-    # Run the Flask server
-    app.run(host='0.0.0.0', port=8080)
+    # Add argument parsing to make the port configurable
+    parser = argparse.ArgumentParser(description="Run the Aggregator Server.")
+    parser.add_argument('--port', type=int, default=8080, help="Port to run the server on")
+    args = parser.parse_args()
+
+    # Run the Flask server on the provided port
+    app.run(host='0.0.0.0', port=args.port)

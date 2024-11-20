@@ -1,3 +1,6 @@
+import argparse
+from dotenv import load_dotenv
+
 from flask import Flask, request, jsonify
 from node import Node
 import numpy as np
@@ -11,13 +14,11 @@ TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number
 '''
 
 app = Flask(__name__)
+load_dotenv()
 
 # Configuration
-# PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/6fce3361490c4187b59947005a07c3e7')
-# PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
-PROVIDER_URL = os.getenv('PROVIDER_URL', 'https://optimism-sepolia.infura.io/v3/524787abec0740b9a443cb825966c31e')
-PRIVATE_KEY = os.getenv('PRIVATE_KEY', 'f155acda1fc73fa6f50456545e3487b78fd517411708ffa1f67358c1d3d54977')
-CONTRACT_ADDRESS="0x976cfb0aD698388B524a3333c3C184b0Ba955523"
+PROVIDER_URL = os.getenv('PROVIDER_URL')
+PRIVATE_KEY = os.getenv('PRIVATE_KEY')
 
 # Initialize the Node instance 
 node_instance = None
@@ -64,9 +65,6 @@ def init_node():
     try:
         # Get the contract address from the request body
         contract_address = request.json.get('contractAddress')
-
-        if not contract_address:
-            contract_address = CONTRACT_ADDRESS
 
         # print(f"Received contract address: {contract_address}")
 
@@ -160,3 +158,5 @@ if __name__ == '__main__':
 
     # Run the Flask server on the specified port
     app.run(host='0.0.0.0', port=args.port)
+
+
