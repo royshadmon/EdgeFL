@@ -124,106 +124,58 @@ class Node:
         - Gets local data and runs training on updated model
     '''
 
-    def train_model_params(self, aggregator_model_params_db_link, round_number):
-        # Get local Data
-        # if not self.data_batches:
-        #     return jsonify({"error": "No data to train on"}), 400
-        #
-        # data = self.data_batches.pop(0)
-        #
-        # # decode model params from string to numerical
-        # decoded_params = self.decode_params(aggregator_model_params)
 
+    def train_model_params(self, aggregator_model_params_db_link, round_number):
         # if it's the first round,
         if round_number == 1:
             initial_model_update = self.local_training_handler.fl_model.get_model_update()
             # Update local model with sent model params
             self.local_training_handler.update_model(initial_model_update)
         else:
-            agg_ref = db.reference('agg_model_updates')
+            # Use the provided database link to fetch the aggregated model update
+            try:
+                response = requests.get(aggregator_model_params_db_link)
+                response.raise_for_status()  # Raise an error for bad HTTP response
+                data = response.json()  # Parse the JSON response
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Error fetching model update from {aggregator_model_params_db_link}: {str(e)}")
 
-            # Fetch all entries in 'agg_model_updates'
-            agg_model_updates = agg_ref.get()
+            # Assuming 'newUpdates' is the key for the model update in the JSON response
+            model_update_encoded = data.get('newUpdates')
+            if not model_update_encoded:
+                raise ValueError(f"Missing 'newUpdates' in the response from {aggregator_model_params_db_link}")
 
-            # Assuming there is only one entry in 'agg_model_updates'
-            for key, value in agg_model_updates.items():
-                model_update_encoded = value.get('newUpdates')  # Assuming 'newUpdates' is the key for the model update
-                if not model_update_encoded:
-                    raise ValueError(f"Missing 'newUpdates' in entry with key: {key}")
+            # Decode the model
+            decoded_weights = self.decode_params(model_update_encoded)
 
-                # Decode the model
-                decoded_weights = self.decode_params(model_update_encoded)
-                print(type(decoded_weights))
+            # Update model
+            self.local_training_handler.update_model(decoded_weights)
 
-                # Update model
-                self.local_training_handler.update_model(decoded_weights)
-                break  # Exit after processing the first entry
         # Load local data
         self.local_training_handler.data_handler.load_dataset(nb_points=50)
 
         # Do local training
         model_update = self.local_training_handler.train({})
 
-        # the node parameters part of model_update needs to be encoded to a string before being returned
+        # The node parameters part of model_update needs to be encoded to a string before being returned
         encoded_params_compressed = self.encode_model(model_update)
 
         # Reference to database
         ref = db.reference('node_model_updates')
 
-        # create the data entry
+        # Create the data entry
         data_entry = {
             'replicaName': self.replicaName,
             'model_update': encoded_params_compressed
         }
 
-        # push the data
+        # Push the data
         data_pushed = ref.push(data_entry)
 
-        # get the link to the stored object
+        # Get the link to the stored object
         object_url = f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
 
         return object_url
-
-    # def train_model_params(self, aggregator_model_params, round_number):
-    #     # Get local Data
-    #     # if not self.data_batches:
-    #     #     return jsonify({"error": "No data to train on"}), 400
-    #     #
-    #     # data = self.data_batches.pop(0)
-    #     #
-    #     # # decode model params from string to numerical
-    #     # decoded_params = self.decode_params(aggregator_model_params)
-    #
-    #     test_model_update = self.local_training_handler.fl_model.get_model_update()
-    #
-    #     # Update local model with sent model params
-    #     self.local_training_handler.update_model(test_model_update)
-    #
-    #     # Load local data
-    #     self.local_training_handler.data_handler.load_dataset(nb_points=50)
-    #
-    #     # Do local training
-    #     model_update = self.local_training_handler.train({})
-    #
-    #     # the node parameters part of model_update needs to be encoded to a string before being returned
-    #     encoded_params_compressed = self.encode_model(model_update)
-    #
-    #     # Reference to database
-    #     ref = db.reference('node_model_updates')
-    #
-    #     # create the data entry
-    #     data_entry = {
-    #         'replicaName': self.replicaName,
-    #         'model_update': encoded_params_compressed
-    #     }
-    #
-    #     # push the data
-    #     data_pushed = ref.push(data_entry)
-    #
-    #     # get the link to the stored object
-    #     object_url = f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
-    #
-    #     return object_url
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
