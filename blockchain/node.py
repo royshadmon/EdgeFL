@@ -32,6 +32,8 @@ class Node:
         # IBM FL LocalTrainingHandler
         self.config = config
 
+        self.currentRound = 1;
+
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
         # hard code for now for testing
         model_spec = {

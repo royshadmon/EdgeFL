@@ -9,6 +9,8 @@ import time
 from web3 import Web3
 import os
 import argparse
+import requests
+
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
 '''
@@ -77,7 +79,9 @@ def init_node():
         node_instance = Node(contract_address, PROVIDER_URL, PRIVATE_KEY, config, "replica1")
 
         # Start event listener for start round
-        threading.Thread(target=listen_for_start_round).start()
+        threading.Thread(target=listen_for_start_round(node_instance)).start()
+        
+
 
         return jsonify({'status': 'success', 'message': 'Contract address set and Node initialized successfully'}), 200
 
@@ -101,20 +105,29 @@ def receive_data():
 
 
 
-def listen_for_start_round():
-    """Listen for the 'newRound' event from the blockchain."""
-    print("Listening for 'newRound' events...")
-
-    # # Generate the event signature for the 'newRound' event
-    # event_signature = "0x" + Web3.keccak(text="newRound(uint256,string)").hex()
-    
-    # # Get the latest block to start listening from
-    # latest_block = node_instance.w3.eth.block_number
+def listen_for_start_round(node_instance):
 
     while True:
-        # curl command to update
+
+
+        # curl: listen for enough params to be added
+        headers = {
+            "Content-Type": "text/plain",
+            "command": f"blockchain get a{node_instance.currentRound}",
+        }
+
+        response = requests.get(os.getenv("EXTERNAL_IP"), headers=headers)
         
-        # Sleep to avoid excessive polling
+        if response: 
+
+            paramsLink = response["paramsLink"]
+            modelUpdate = node_instance.train_model_params(paramsLink, node_instance.currentRound)
+
+            node_instance.add_node_params(node_instance.currentRound, modelUpdate);
+        
+            node_instance.currentRound += 1;
+        
+        # Asynchronously sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds
 
 

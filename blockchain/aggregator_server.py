@@ -109,7 +109,7 @@ async def init_training():
             aggregator.start_round(initialParams, r, min_params)
 
             # Listen for updates from nodes
-            newAggregatorParams = await listen_for_update_agg(min_params)
+            newAggregatorParams = await listen_for_update_agg(min_params, r)
             print("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
@@ -121,19 +121,35 @@ async def init_training():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-async def listen_for_update_agg(min_params):
+async def listen_for_update_agg(min_params, roundNumber):
     """Asynchronously poll for the 'updateAggregatorWithParamsFromNodes' event from the blockchain."""
     print("Starting async polling for 'updateAggregatorWithParamsFromNodes' events...")
 
     count = 0
 
 
-    while count < min_params:
+    while True:
 
-        # Make curl to egt Updates
+        # curl: listen for enough params to be added
+        headers = {
+            "Content-Type": "text/plain",
+            "command": f"blockchain get r{roundNumber} count",
+        }
 
+        response = requests.get(os.getenv("EXTERNAL_IP"), headers=headers)
+        count = response; # response outputs just the number afaik
 
+        if count == min_params:
+            headers = {
+                "Content-Type": "text/plain",
+                "command": f"blockchain get r{roundNumber}",
+            }
 
+            response = requests.get(os.getenv("EXTERNAL_IP"), headers=headers)
+
+            # need to figure out what response is later & how to handle
+            return response;
+        
         # Asynchronously sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds
 
