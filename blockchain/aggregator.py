@@ -3,6 +3,7 @@ import os
 import requests
 import pickle
 import zlib
+from dotenv import load_dotenv
 
 from web3 import Web3
 from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
@@ -100,13 +101,14 @@ bin = "60806040525f6001553480156012575f80fd5b50610bd7806100205f395ff3fe608060405
 CONTRACT_ADDRESS = "0x4ae311B85B017bf7EAa7a96D3109f58795F5F4BF"
 
 
+load_dotenv()
+
 class Aggregator:
     def __init__(self, provider_url, private_key):
         # Initialize Firebase database connection
-        self.database_url = 'https://anylog-edgelake-fl-default-rtdb.firebaseio.com/'
+        self.database_url = os.getenv('DATABASE_URL')
 
-        cred = credentials.Certificate(
-            "/Users/ishaandas/Documents/CSE_115D/Anylog-Edgelake-CSE115D/blockchain/credentials/anylog-edgelake-fl-firebase-adminsdk-8ue2n-1dffdbfe00.json")
+        cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
         firebase_admin.initialize_app(cred, {
             'databaseURL': self.database_url
         })
@@ -140,8 +142,8 @@ class Aggregator:
         self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler)
 
         # Store the deployed contract address
-        self.deployed_contract_address = CONTRACT_ADDRESS
-        self.deployed_contract = self.w3.eth.contract(address=CONTRACT_ADDRESS, abi=abi)
+        self.deployed_contract_address = address=os.getenv('CONTRACT_ADDRESS')
+        self.deployed_contract = self.w3.eth.contract(address=os.getenv('CONTRACT_ADDRESS'), abi=abi)
 
 
     def deploy_contract(self):
