@@ -38,7 +38,8 @@ curl -X POST http://localhost:8080/deploy-contract \
     "data": {
       "path": "/path/to/data"
     }
-  }
+  },
+  "contractAddress": "0xF21E95f39Ac900986c4D47Bb17De767d80451e3B"
 }'
 '''
 # CALL THIS ONLY IF I HAVE MADE UPDATES TO THE CONTRACT, IF I DO THEN CHANGE THE "CONTRACT_ADDRESS" GLOBAL VAR IN THE
@@ -52,20 +53,10 @@ def deploy_contract():
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
         config = data.get('config', {})
+        contract_address = data.get('contractAddress')
 
         if not node_addresses:
             return jsonify({'status': 'error', 'message': 'No nodes provided'}), 400
-
-        # Deploy the contract and return the result
-        result = aggregator.deploy_contract()
-        if result['status'] == 'success':
-            contract_address = result['contractAddress']
-            print(f"Contract deployed at address: {contract_address}")
-
-            # Send the contract address to each node
-            initialize_nodes(contract_address, node_urls, config)
-
-        return jsonify(result)
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500

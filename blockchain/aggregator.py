@@ -113,25 +113,7 @@ class Aggregator:
             'databaseURL': self.database_url
         })
 
-        # Initialize Web3 connection to the Ethereum node
-        self.w3 = Web3(Web3.HTTPProvider(provider_url))
-
-        # Check if the connection is successful
-        if not self.w3.is_connected():
-            raise ConnectionError("Failed to connect to the Ethereum node")
-
-        # Set the deployer's private key and address
-        self.private_key = private_key
-        self.deployer_account = self.w3.eth.account.from_key(private_key)
-        self.deployer_address = self.w3.to_checksum_address(self.deployer_account.address)
-
-        balance = self.w3.eth.get_balance(self.deployer_address)
-        print(f"Deployer Address Balance: {self.w3.from_wei(balance, 'ether')} ETH")
-
         # Load the ABI and bytecode
-        base_path = os.path.join(os.path.dirname(__file__), 'smart_contract')
-        self.contract_abi = abi
-        self.contract_bytecode = bin
 
         # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
         # Define or obtain hyperparameters and protocol handler for the fusion model
@@ -141,75 +123,27 @@ class Aggregator:
         # Correctly instantiate the Fusion model with required arguments
         self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler)
 
-        # Store the deployed contract address
-        self.deployed_contract_address = address=os.getenv('CONTRACT_ADDRESS')
-        self.deployed_contract = self.w3.eth.contract(address=os.getenv('CONTRACT_ADDRESS'), abi=abi)
-
-
-    def deploy_contract(self):
-        try:
-            # Initialize the contract object
-            contract = self.w3.eth.contract(abi=self.contract_abi, bytecode=self.contract_bytecode)
-
-            # Build the deployment transaction
-            tx = contract.constructor().build_transaction({
-                'from': self.deployer_address,
-                'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
-            })
-
-            # Sign and send the transaction
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-
-            # save contract address and contract
-            self.deployed_contract_address = receipt.contractAddress
-            self.deployed_contract = self.w3.eth.contract(address=self.deployed_contract_address, abi=self.contract_abi)
-
-            return {
-                'status': 'success',
-                'contractAddress': self.deployed_contract_address,
-                'transactionHash': tx_hash.hex()
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
-
     # function to call the start round function from the smart contract
-    def start_round(self, initParams, roundNumber, minParams):
-        """Call the startRound function of the deployed contract."""
-        if not self.deployed_contract_address:
-            return {
-                'status': 'error',
-                'message': 'Contract not deployed yet'
-            }
+    def start_round(self, initParamsLink, roundNumber, minParams):
 
         try:
-            print("before transaction")
-            # Build the transaction to call initTraining
-            tx = self.deployed_contract.functions.startRound(initParams, roundNumber, minParams).build_transaction({
-                'from': self.deployer_address,
-                'nonce': self.w3.eth.get_transaction_count(self.deployer_address),
-                'chainId': 11155420
-            })
-            print("after transaction")
+            headers = {
+                "Content-Type": "text/plain",
+                "command": "blockchain insert where policy = !my_policy and local = true and blockchain = optimism",
+            }
 
-            # Sign and send the transaction
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            # Define the data payload
+            data = f'''<my_policy = {{"r{roundNumber}" : {{
+                            "initParams": {initParamsLink},
+                            "minParams"   : {minParams}
+                }}
+            }}>'''
 
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-
+            response = requests.post(os.getenv("EXTERNAL_IP"), headers=headers, data=data)
 
             return {
                 'status': 'success',
-                'message': 'initTraining called successfully',
-                'transactionHash': tx_hash.hex()
+                'message': 'initTraining called successfully'
             }
         except Exception as e:
             return {

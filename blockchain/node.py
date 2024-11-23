@@ -24,27 +24,7 @@ class Node:
             'databaseURL': self.database_url
         })
 
-        # Initialize Web3 connection to the Ethereum node
-        self.w3 = Web3(Web3.HTTPProvider(provider_url, {"timeout": 100000}))
-
         self.replicaName = replica_name
-
-        self.contract_address = contract_address
-
-        # Set the node's private key and address
-        self.private_key = private_key
-        self.node_account = self.w3.eth.account.from_key(private_key)
-        self.node_address = self.w3.to_checksum_address(self.node_account.address)
-
-        balance = self.w3.eth.get_balance(self.node_address)
-        print(f"Deployer Address Balance: {self.w3.from_wei(balance, 'ether')} ETH")
-
-        # Load the ABI
-        base_path = os.path.join(os.path.dirname(__file__), 'smart_contract')
-        with open(os.path.join(base_path, 'ModelParametersABI.json'), 'r') as abi_file:
-            self.contract_abi = json.load(abi_file)
-
-        self.contract_instance = self.w3.eth.contract(address=self.contract_address, abi=self.contract_abi)
 
         # Node local data batches
         self.data_batches = []
@@ -56,12 +36,12 @@ class Node:
         # hard code for now for testing
         model_spec = {
             "loss_criterion": "nn.NLLLoss",
-            "model_definition": "/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/configs/node/pytorch/pytorch_sequence.pt",
+            "model_definition": f"{os.getenv("MODEL_DEFINITION")}",
             "model_name": "pytorch-nn",
             "optimizer": "optim.Adadelta"
         }
         data_config = {
-            "npz_file": "/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/data/mnist/data_party0.npz"
+            "npz_file": f"{os.getenv("DATA_CONFIG")}",
         }
 
         fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
@@ -85,34 +65,26 @@ class Node:
 
     def add_node_params(self, round_number, newly_trained_params_db_link):
 
-        if not self.contract_instance:
-            return {
-                'status': 'error',
-                'message': 'Contract not found'
+        try:
+            headers = {
+                "Content-Type": "text/plain",
+                "command": "blockchain insert where policy = !my_policy and local = true and blockchain = optimism",
             }
 
-        try:
-            # Build the transaction to call addNodeParams 
-            # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
-            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params_db_link,
-                                                                self.replicaName).build_transaction({
-                'from': self.node_address,
-                'nonce': self.w3.eth.get_transaction_count(self.node_address),
-                'chainId': 11155420
-            })
+            # Define the data payload
+            data = f'''<my_policy = {{"r{round_number}" : {{
+                        "trained_params": {newly_trained_params_db_link},
+                        "replica_name": {self.replicaName}
+                 }}
+             }}>'''
 
-            # Sign and send the transaction for production environment
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            response = requests.post(os.getenv("EXTERNAL_IP"), headers=headers, data=data)
 
             return {
                 'status': 'success',
-                'message': 'node model parameters added successfully',
-                'transactionHash': tx_hash.hex()
+                'message': 'node model parameters added successfully'
             }
+
         except Exception as e:
             return {
                 'status': 'error',
