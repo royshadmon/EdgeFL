@@ -105,45 +105,15 @@ def listen_for_start_round():
     """Listen for the 'newRound' event from the blockchain."""
     print("Listening for 'newRound' events...")
 
-    # Generate the event signature for the 'newRound' event
-    event_signature = "0x" + Web3.keccak(text="newRound(uint256,string)").hex()
+    # # Generate the event signature for the 'newRound' event
+    # event_signature = "0x" + Web3.keccak(text="newRound(uint256,string)").hex()
     
-    # Get the latest block to start listening from
-    latest_block = node_instance.w3.eth.block_number
+    # # Get the latest block to start listening from
+    # latest_block = node_instance.w3.eth.block_number
 
     while True:
-        try:
-            # Fetch new logs for the `newRound` event
-            logs = node_instance.w3.eth.get_logs({
-                'fromBlock': latest_block + 1,  # Start from the latest processed block
-                'toBlock': 'latest',
-                'address': node_instance.contract_address,
-                'topics': [event_signature]  # Filter for the `newRound` event signature
-            })
-
-            for log in logs:
-                # Decode log data for the `newRound` event
-                decoded_event = node_instance.contract_instance.events.newRound().process_log(log)
-                init_params = decoded_event['args']['initParamsDownloadLink']
-                round_number = decoded_event['args']['roundNumber']
-
-                print(f"Received 'newRound' event with initParams: {init_params}, roundNumber: {round_number}")
-
-                # Train model parameters updated from aggregator with local node data
-                model_update = node_instance.train_model_params(init_params, round_number)
-                # print(f"Model update: {model_update}")
-
-                # Add node parameters to the blockchain
-                result = node_instance.add_node_params(round_number, model_update)
-                print(f"add_node_params result: {result}")
-
-            # Update the latest processed block to avoid reprocessing
-            if logs:
-                latest_block = logs[-1]['blockNumber']
-
-        except Exception as e:
-            print(f"Error listening for 'newRound' event: {str(e)}")
-
+        # curl command to update
+        
         # Sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds
 

@@ -53,7 +53,7 @@ def deploy_contract():
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
         config = data.get('config', {})
-        contract_address = data.get('contractAddress')
+        # contract_address = data.get('contractAddress')
 
         if not node_addresses:
             return jsonify({'status': 'error', 'message': 'No nodes provided'}), 400
@@ -109,7 +109,7 @@ async def init_training():
             aggregator.start_round(initialParams, r, min_params)
 
             # Listen for updates from nodes
-            newAggregatorParams = await listen_for_update_agg()
+            newAggregatorParams = await listen_for_update_agg(min_params)
             print("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
@@ -121,47 +121,18 @@ async def init_training():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-async def listen_for_update_agg():
+async def listen_for_update_agg(min_params):
     """Asynchronously poll for the 'updateAggregatorWithParamsFromNodes' event from the blockchain."""
     print("Starting async polling for 'updateAggregatorWithParamsFromNodes' events...")
 
-    # Define the event signature for 'updateAggregatorWithParamsFromNodes(uint256,string[])' and ensure it starts with '0x'
-    event_signature = "0x" + aggregator.w3.keccak(text="updateAggregatorWithParamsFromNodes(uint256,string[])").hex()
+    count = 0
 
-    lastest_block = aggregator.w3.eth.block_number
 
-    while True:
-        try:
-            # Define filter parameters for polling
-            filter_params = {
-                "fromBlock": lastest_block + 1,
-                "toBlock": "latest",
-                "address": aggregator.deployed_contract_address,
-                "topics": [event_signature]
-            }
+    while count < min_params:
 
-            # Poll for logs
-            logs = aggregator.w3.eth.get_logs(filter_params)
-            for log in logs:
-                # Decode event data
-                decoded_event = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.process_log(log)
-                number_of_params = decoded_event['args']['numberOfParams']
-                params_from_nodes_db_links = decoded_event['args']['paramsFromNodes']
+        # Make curl to egt Updates
 
-                print(f"Received 'updateAgg' event with params: {params_from_nodes_db_links}. Number of params: {number_of_params}")
 
-                # Aggregate parameters
-                newAggregatorParams = aggregator.aggregate_model_params(params_from_nodes_db_links)
-
-                # Return the updated aggregator parameters and exit the function
-                return newAggregatorParams
-
-            # Update latest_block to avoid re-processing old events
-            if logs:
-                latest_block = logs[-1]['blockNumber']
-
-        except Exception as e:
-            print(f"Error polling for 'updateAgg' event: {str(e)}")
 
         # Asynchronously sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds

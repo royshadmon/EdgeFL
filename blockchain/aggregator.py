@@ -133,7 +133,7 @@ class Aggregator:
             }
 
             # Define the data payload
-            data = f'''<my_policy = {{"r{roundNumber}" : {{
+            data = f'''<my_policy = {{"a{roundNumber}" : {{
                             "initParams": {initParamsLink},
                             "minParams"   : {minParams}
                 }}
