@@ -124,27 +124,67 @@ class Aggregator:
         self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler)
 
     # function to call the start round function from the smart contract
-    def start_round(self, initParamsLink, roundNumber, minParams):
+    # def start_round(self, initParamsLink, roundNumber, minParams):
 
+    #     try:
+    #         headers = {
+    #             "Content-Type": "text/plain",
+    #             "command": "blockchain insert where policy = !my_policy and local = true and blockchain = optimism",
+    #         }
+
+    #         # Define the data payload
+    #         data = f'''<my_policy = {{"a{roundNumber}" : {{
+    #                         "paramsLink": {initParamsLink},
+    #                         "minParams"   : {minParams}
+    #             }}
+    #         }}>'''
+
+    #         response = requests.post(os.getenv("EXTERNAL_IP"), headers=headers, data=data)
+
+    #         return {
+    #             'status': 'success',
+    #             'message': 'initTraining called successfully'
+    #         }
+    #     except Exception as e:
+    #         return {
+    #             'status': 'error',
+    #             'message': str(e)
+    #         }
+    def start_round(self, initParamsLink, roundNumber, minParams):
         try:
+            # Build the complete URL with port
+            external_ip = os.getenv("EXTERNAL_IP")
+            url = f'http://{external_ip}:32049'
+
+            # Set headers to match the working curl command
             headers = {
-                "Content-Type": "text/plain",
-                "command": "blockchain insert where policy = !my_policy and local = true and blockchain = optimism",
+                'User-Agent': 'AnyLog/1.23',
+                'Content-Type': 'text/plain',
+                'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
             }
 
-            # Define the data payload
-            data = f'''<my_policy = {{"a{roundNumber}" : {{
-                            "paramsLink": {initParamsLink},
-                            "minParams"   : {minParams}
+            # Format the data payload to match the curl command format
+            data = f'''<my_policy = {{"r{roundNumber}" : {{
+                    "node": "nodeNumber",
+                    "initParams": "{initParamsLink}",
+                    "minParams": "{minParams}",
+                    "name": "network-at-the-node-6"
                 }}
             }}>'''
 
-            response = requests.post(os.getenv("EXTERNAL_IP"), headers=headers, data=data)
-
-            return {
-                'status': 'success',
-                'message': 'initTraining called successfully'
-            }
+            response = requests.post(url, headers=headers, data=data)
+            
+            if response.status_code == 200:
+                return {
+                    'status': 'success',
+                    'message': 'initTraining called successfully'
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Request failed with status code: {response.status_code}'
+                }
+                
         except Exception as e:
             return {
                 'status': 'error',

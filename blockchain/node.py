@@ -10,19 +10,24 @@ from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 import requests
+# import pathlib
 
 from dotenv import load_dotenv
 load_dotenv()
 
 class Node:
-    def __init__(self, contract_address, provider_url, private_key, config, replica_name):
+    def __init__(self, config, replica_name):
+
+        print("Node initializing")
 
         self.database_url = os.getenv('DATABASE_URL')
 
-        cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': self.database_url
-        })
+        # Initialize Firebase
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': self.database_url
+            })
 
         self.replicaName = replica_name
 
@@ -32,24 +37,32 @@ class Node:
         # IBM FL LocalTrainingHandler
         self.config = config
 
-        self.currentRound = 1;
+        self.currentRound = 1
+        # current_dir = pathlib.Path(__file__).parent.resolve()
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
+        data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
+        model_path = os.path.join(current_dir, "configs", "node", "pytorch", "pytorch_sequence.pt")
+        
+
 
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
         # hard code for now for testing
         model_spec = {
             "loss_criterion": "nn.NLLLoss",
-            "model_definition": f"{os.getenv("MODEL_DEFINITION")}",
+            "model_definition": str(model_path),
             "model_name": "pytorch-nn",
             "optimizer": "optim.Adadelta"
         }
         data_config = {
-            "npz_file": f"{os.getenv("DATA_CONFIG")}",
+            "npz_file": str(data_path)
         }
 
         fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
         data_handler = MnistPytorchDataHandler(data_config=data_config)
         self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
 
+        
     '''
     add_data_batch(data)
         - Adds passed in data to local storage

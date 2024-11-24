@@ -28,8 +28,7 @@ curl -X POST http://localhost:8080/deploy-contract \
     "0xFEe882466e0804831746336A3eb2c6727CC35d63"
   ],
   "nodeUrls": [
-    "http://localhost:8081", 
-    "http://localhost:8082"
+    "http://localhost:8081"
   ],
   "config": {  
     "model": {
@@ -39,12 +38,10 @@ curl -X POST http://localhost:8080/deploy-contract \
       "path": "/path/to/data"
     }
   },
-  "contractAddress": "0xF21E95f39Ac900986c4D47Bb17De767d80451e3B"
+  "contractAddress": "0x0222d3b0Be3A9E087f3a97104c1166bE05E2DEee"
 }'
 '''
-# CALL THIS ONLY IF I HAVE MADE UPDATES TO THE CONTRACT, IF I DO THEN CHANGE THE "CONTRACT_ADDRESS" GLOBAL VAR IN THE
-# AGGREGATOR.PY FILE AND THE NODE_SERVER.PY FILE. IF NO UPDATES MADE, CALL THE INIT_NODE METHOD TO START THE NODE AND
-# THEN CALL THE START ROUND ENDPOINT
+
 @app.route('/deploy-contract', methods=['POST'])
 def deploy_contract():
     """Deploy the smart contract with predefined nodes."""
@@ -53,27 +50,40 @@ def deploy_contract():
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
         config = data.get('config', {})
-        # contract_address = data.get('contractAddress')
+        contract_address = data.get('contractAddress')
 
         if not node_addresses:
             return jsonify({'status': 'error', 'message': 'No nodes provided'}), 400
+        
+        # Initialize the nodes and send the contract address
+        print(f"Deploying contract with nodes: {node_addresses}")
+        initialize_nodes(contract_address, node_urls, config)
+        print("made it here")
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify(contract_address), 200
+    
 
 
 def initialize_nodes(contract_address, node_urls, config):
     """Send the deployed contract address to multiple node servers."""
     for url in node_urls:
         try:
+            print(f"Sending contract address to node at {url}")
             response = requests.post(f'{url}/init-node', json={
                 'contractAddress': contract_address,
                 'config': config
             })
-            if response.status_code == 200:
-                print(f"Contract address successfully sent to node at {url}")
-            else:
-                print(f"Failed to send contract address to {url}: {response.text}")
+
+            #TODO: figure out how to handle response
+            # I am assuming that the node initialization above will be successful without actually checking
+
+            # if response.status_code == 200:
+            #     print(f"Contract address successfully sent to node at {url}")
+            # else:
+            #     print(f"Failed to send contract address to {url}: {response.text}")
+
         except Exception as e:
             print(f"Error sending contract address to {url}: {str(e)}")
 
@@ -127,7 +137,6 @@ async def listen_for_update_agg(min_params, roundNumber):
 
     count = 0
 
-
     while True:
 
         # curl: listen for enough params to be added
@@ -148,7 +157,7 @@ async def listen_for_update_agg(min_params, roundNumber):
             response = requests.get(os.getenv("EXTERNAL_IP"), headers=headers)
 
             # need to figure out what response is later & how to handle
-            return response;
+            return response
         
         # Asynchronously sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds

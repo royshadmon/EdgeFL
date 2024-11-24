@@ -24,6 +24,9 @@ PRIVATE_KEY = os.getenv('PRIVATE_KEY')
 
 # Initialize the Node instance 
 node_instance = None
+listener_thread = None
+stop_listening_thread = False
+
 
 '''
 /set-contract-address [POST]
@@ -63,10 +66,10 @@ curl -X POST http://localhost:8081/init-node \
 @app.route('/init-node', methods=['POST'])
 def init_node():
     """Receive the contract address from the aggregator server."""
-    global node_instance
+    global node_instance, listener_thread, stop_listening_thread
     try:
-        # Get the contract address from the request body
-        contract_address = request.json.get('contractAddress')
+        # # Get the contract address from the request body
+        # contract_address = request.json.get('contractAddress')
 
         # print(f"Received contract address: {contract_address}")
 
@@ -74,15 +77,30 @@ def init_node():
 
         if not config:
             return jsonify({'status': 'error', 'message': 'No config provided'}), 400
+        print("config received")
+        if listener_thread and listener_thread.is_alive():
+            stop_listening_thread = True
+            listener_thread.join(timeout=1)
+        print("listener thread stopped")
+
+        # Reset the stop flag
+        stop_listening_thread = False
 
         # Instantiate the Node class
-        node_instance = Node(contract_address, PROVIDER_URL, PRIVATE_KEY, config, "replica1")
+        node_instance = Node(config, "replica1")
+        node_instance.currentRound = 1  # Initialize currentRound
+
+        print("replica 1 successfully initialized")
 
         # Start event listener for start round
-        threading.Thread(target=listen_for_start_round(node_instance)).start()
+        listener_thread = threading.Thread(
+            target=listen_for_start_round,
+            args=(node_instance, lambda: stop_listening_thread)
+        )
+        listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
+        listener_thread.start()
+
         
-
-
         return jsonify({'status': 'success', 'message': 'Contract address set and Node initialized successfully'}), 200
 
     except Exception as e:
@@ -105,30 +123,36 @@ def receive_data():
 
 
 
-def listen_for_start_round(node_instance):
+def listen_for_start_round(node_instance, stop_event):
+    print("Listening for start round")
+    
+    while not stop_event():
+        try:
+            # Build the complete URL with port
+            external_ip = os.getenv("EXTERNAL_IP")
+            url = f'http://{external_ip}:32049'
+            
+            headers = {
+                'User-Agent': 'AnyLog/1.23',
+                'command': f'blockchain get *'
+            }
 
-    while True:
-
-
-        # curl: listen for enough params to be added
-        headers = {
-            "Content-Type": "text/plain",
-            "command": f"blockchain get a{node_instance.currentRound}",
-        }
-
-        response = requests.get(os.getenv("EXTERNAL_IP"), headers=headers)
-        
-        if response: 
-
-            paramsLink = response["paramsLink"]
-            modelUpdate = node_instance.train_model_params(paramsLink, node_instance.currentRound)
-
-            node_instance.add_node_params(node_instance.currentRound, modelUpdate);
-        
-            node_instance.currentRound += 1;
-        
-        # Asynchronously sleep to avoid excessive polling
-        time.sleep(2)  # Poll every 2 seconds
+            print("Node is listening for start round")
+            response = requests.get(url, headers=headers)            
+            # if response.status_code == 200:
+            #     data = response.json()
+            #     if data:
+            #         paramsLink = data.get("paramsLink")
+            #         if paramsLink:
+            #             modelUpdate = node_instance.train_model_params(paramsLink, node_instance.currentRound)
+            #             node_instance.add_node_params(node_instance.currentRound, modelUpdate)
+            #             node_instance.currentRound += 1
+                    
+            time.sleep(2)  # Poll every 2 seconds
+            
+        except Exception as e:
+            print(f"Error in listener thread: {str(e)}")
+            time.sleep(2)
 
 
 
