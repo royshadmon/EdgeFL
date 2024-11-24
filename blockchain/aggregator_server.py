@@ -137,6 +137,7 @@ async def listen_for_update_agg():
     # Define the event signature for 'updateAggregatorWithParamsFromNodes(uint256,string[])' and ensure it starts with '0x'
     event_signature = "0x" + aggregator.w3.keccak(text="updateAggregatorWithParamsFromNodes(uint256,string[])").hex()
 
+
     lastest_block = aggregator.w3.eth.block_number
 
     while True:
@@ -153,26 +154,26 @@ async def listen_for_update_agg():
             logs = aggregator.w3.eth.get_logs(filter_params)
             for log in logs:
                 # Decode event data
-                decoded_event = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.process_log(log)
+                decoded_event = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes().process_log(log)
                 number_of_params = decoded_event['args']['numberOfParams']
                 params_from_nodes_db_links = decoded_event['args']['paramsFromNodes']
 
                 print(f"Received 'updateAgg' event with params: {params_from_nodes_db_links}. Number of params: {number_of_params}")
 
-                # Aggregate parameters
+
                 newAggregatorParams = aggregator.aggregate_model_params(params_from_nodes_db_links)
 
-                # Return the updated aggregator parameters and exit the function
+
                 return newAggregatorParams
 
-            # Update latest_block to avoid re-processing old events
+
             if logs:
                 latest_block = logs[-1]['blockNumber']
 
         except Exception as e:
             print(f"Error polling for 'updateAgg' event: {str(e)}")
 
-        # Asynchronously sleep to avoid excessive polling
+        # Sleep to avoid excessive polling
         time.sleep(2)  # Poll every 2 seconds
 
 
