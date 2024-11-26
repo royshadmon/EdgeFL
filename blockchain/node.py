@@ -37,7 +37,7 @@ class Node:
         # IBM FL LocalTrainingHandler
         self.config = config
 
-        self.currentRound = 1
+        self.currentRound = 0
         # current_dir = pathlib.Path(__file__).parent.resolve()
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -79,21 +79,26 @@ class Node:
     '''
 
     def add_node_params(self, round_number, newly_trained_params_db_link):
+        print("in add_node_params") 
 
         try:
+            external_ip = os.getenv("EXTERNAL_IP")
+            url = f'http://{external_ip}:32049'
+            
             headers = {
-                "Content-Type": "text/plain",
-                "command": "blockchain insert where policy = !my_policy and local = true and blockchain = optimism",
+                'User-Agent': 'AnyLog/1.23',
+                'Content-Type': 'text/plain',
+                'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
             }
 
-            # Define the data payload
-            data = f'''<my_policy = {{"r{round_number}" : {{
-                        "trained_params": {newly_trained_params_db_link},
-                        "replica_name": {self.replicaName}
-                 }}
-             }}>'''
+            data = f'''<my_policy = {{"a{round_number}" : {{
+                    "node" : "{self.replicaName}",
+                    "trained_params": "{newly_trained_params_db_link}"
+}} }}>'''
 
-            response = requests.post(os.getenv("EXTERNAL_IP"), headers=headers, data=data)
+            # print(f"Submitting results for round {round_number}")
+            response = requests.post(url, headers=headers, data=data)
+            print(f"Results submitted for round {round_number} to {self.replicaName}")
 
             return {
                 'status': 'success',
@@ -111,59 +116,37 @@ class Node:
         - Uses updated aggreagtor model params and updates local model
         - Gets local data and runs training on updated model
     '''
-
-
     def train_model_params(self, aggregator_model_params_db_link, round_number):
-        # if it's the first round,
+        print(f"in train_model_params for round {round_number}")
+        
+        # First round initialization
         if round_number == 1:
-            initial_model_update = self.local_training_handler.fl_model.get_model_update()
-            # Update local model with sent model params
-            self.local_training_handler.update_model(initial_model_update)
+            weights = self.local_training_handler.fl_model.get_model_update()
         else:
-            # Use the provided database link to fetch the aggregated model update
             try:
-                response = requests.get(aggregator_model_params_db_link)
-                response.raise_for_status()  # Raise an error for bad HTTP response
-                data = response.json()  # Parse the JSON response
-            except requests.exceptions.RequestException as e:
-                raise ValueError(f"Error fetching model update from {aggregator_model_params_db_link}: {str(e)}")
+                # Get model weights from Firebase
+                model_updates_key = aggregator_model_params_db_link.split('/')[-1].replace('.json', '')
+                data = db.reference(f'node_model_updates/{model_updates_key}').get()
+                weights = self.decode_params(data['model_update'])
+            except Exception as e:
+                print(f"Error getting weights: {str(e)}")
+                raise
 
-            # Assuming 'newUpdates' is the key for the model update in the JSON response
-            model_update_encoded = data.get('newUpdates')
-            if not model_update_encoded:
-                raise ValueError(f"Missing 'newUpdates' in the response from {aggregator_model_params_db_link}")
-
-            # Decode the model
-            decoded_weights = self.decode_params(model_update_encoded)
-
-            # Update model
-            self.local_training_handler.update_model(decoded_weights)
-
-        # Load local data
+        # Update model with weights
+        self.local_training_handler.update_model(weights)
+        
+        # Train model
         self.local_training_handler.data_handler.load_dataset(nb_points=50)
-
-        # Do local training
         model_update = self.local_training_handler.train({})
-
-        # The node parameters part of model_update needs to be encoded to a string before being returned
-        encoded_params_compressed = self.encode_model(model_update)
-
-        # Reference to database
-        ref = db.reference('node_model_updates')
-
-        # Create the data entry
-        data_entry = {
+        
+        # Save and return new weights
+        encoded_params = self.encode_model(model_update)
+        data_pushed = db.reference('node_model_updates').push({
             'replicaName': self.replicaName,
-            'model_update': encoded_params_compressed
-        }
-
-        # Push the data
-        data_pushed = ref.push(data_entry)
-
-        # Get the link to the stored object
-        object_url = f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
-
-        return object_url
+            'model_update': encoded_params
+        })
+        
+        return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)

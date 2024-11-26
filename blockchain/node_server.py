@@ -34,6 +34,7 @@ stop_listening_thread = False
     - Gets config file and intializes node instance
     - Starts 2 threads listening for start training and for update node
 '''
+
 '''
 SAMPLE CURL REQUEST COMING FROM AGGREGATOR SERVER:
 
@@ -71,24 +72,20 @@ def init_node():
         # # Get the contract address from the request body
         # contract_address = request.json.get('contractAddress')
 
-        # print(f"Received contract address: {contract_address}")
-
         config = request.json.get('config')
 
         if not config:
             return jsonify({'status': 'error', 'message': 'No config provided'}), 400
-        print("config received")
         if listener_thread and listener_thread.is_alive():
             stop_listening_thread = True
             listener_thread.join(timeout=1)
-        print("listener thread stopped")
 
         # Reset the stop flag
         stop_listening_thread = False
 
         # Instantiate the Node class
-        node_instance = Node(config, "replica1")
-        node_instance.currentRound = 1  # Initialize currentRound
+        node_instance = Node(config, "node1")
+        node_instance.currentRound = 1
 
         print("replica 1 successfully initialized")
 
@@ -111,8 +108,6 @@ def init_node():
 /receive_data [POST] (data)
     - Endpoint to receive data block from the simulated data stream
 '''
-
-
 @app.route('/receive_data', methods=['POST'])
 def receive_data():
     data = request.json.get('data')
@@ -123,30 +118,32 @@ def receive_data():
 
 
 
-def listen_for_start_round(node_instance, stop_event):
-    print("Listening for start round")
-    
-    while not stop_event():
+def listen_for_start_round(node_instance, stop_event):    
+    while True:
         try:
-            # Build the complete URL with port
             external_ip = os.getenv("EXTERNAL_IP")
-            url = f'http://{external_ip}:32049'
+            url = f'{external_ip}:32049'
+            # next_round = node_instance.currentRound + 1  
+
+            print(f"listening for start round {node_instance.currentRound}") 
             
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'blockchain get *'
+                'command': f'blockchain get r{node_instance.currentRound}'
             }
-
-            print("Node is listening for start round")
-            response = requests.get(url, headers=headers)            
-            # if response.status_code == 200:
-            #     data = response.json()
-            #     if data:
-            #         paramsLink = data.get("paramsLink")
-            #         if paramsLink:
-            #             modelUpdate = node_instance.train_model_params(paramsLink, node_instance.currentRound)
-            #             node_instance.add_node_params(node_instance.currentRound, modelUpdate)
-            #             node_instance.currentRound += 1
+            response = requests.get(f'http://{url}', headers=headers)
+       
+            if response.status_code == 200:
+                data = response.json()
+                if data:
+                    for item in data:
+                        round_data = item[f'r{node_instance.currentRound}']
+                        if round_data and round_data.get('node') == node_instance.replicaName:
+                            paramsLink = round_data.get('initParams', '')
+                            modelUpdate = node_instance.train_model_params(paramsLink, node_instance.currentRound)
+                            node_instance.add_node_params(node_instance.currentRound, modelUpdate)
+                            node_instance.currentRound += 1
+                            break
                     
             time.sleep(2)  # Poll every 2 seconds
             
