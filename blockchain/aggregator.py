@@ -41,7 +41,7 @@ class Aggregator:
         try:
             # Build the complete URL with port
             external_ip = os.getenv("EXTERNAL_IP")
-            url = f'{external_ip}:32049'
+            url = f'http://{external_ip}:32049'
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
@@ -57,7 +57,7 @@ class Aggregator:
 
             print(f"Training initialized with {roundNumber} rounds")
 
-            response = requests.post(f'http://{url}', headers=headers, data=data)
+            response = requests.post(url, headers=headers, data=data)
             if response.status_code == 200:
                 return {
                     'status': 'success',
