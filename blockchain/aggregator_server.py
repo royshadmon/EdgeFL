@@ -130,6 +130,7 @@ async def init_training():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
 # async def listen_for_update_agg(min_params, roundNumber):
 #     """Asynchronously poll for the 'updateAggregatorWithParamsFromNodes' event from the blockchain."""
 #     print("Aggregator listening for updates...")
@@ -218,6 +219,8 @@ async def listen_for_update_agg(min_params, roundNumber):
             print(f"Error in aggregator listener: {e}")
         
         await asyncio.sleep(2)
+
+
 if __name__ == '__main__':
     # Add argument parsing to make the port configurable
     parser = argparse.ArgumentParser(description="Run the Aggregator Server.")

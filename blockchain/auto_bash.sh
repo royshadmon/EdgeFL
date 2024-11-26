@@ -4,7 +4,7 @@
 AGGREGATOR_SCRIPT="/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/aggregator_server.py"
 NODE_SCRIPT="/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/node_server.py"
 LOG_FILE="node_servers.log"
-BASE_ADDRESS="0xFEe882466e0804831746336A3eb2c6727CC35d63"
+NODE_ADDRESS="0x6e2ED2E11bA3c38402C2fFE9b6Ff4Bf1296d016A"
 
 # Check if the required number of nodes is provided
 if [ $# -ne 1 ]; then
@@ -32,32 +32,31 @@ AGGREGATOR_PORT=$(find_available_port 8080)
 # Start the aggregator in a new terminal window
 echo "Starting aggregator server on port $AGGREGATOR_PORT..."
 osascript -e "tell application \"Terminal\" to do script \"python3 $AGGREGATOR_SCRIPT --port $AGGREGATOR_PORT\"" &
-sleep 2  # Allow the aggregator to start
+sleep 5  # Allow the aggregator to start
 echo "Aggregator URL: http://localhost:$AGGREGATOR_PORT" >> "$LOG_FILE"
 
 # Start nodes
-NODE_ADDRESSES=()
 NODE_URLS=()
 for ((i=1; i<=NUM_NODES; i++)); do
     NODE_PORT=$(find_available_port $((AGGREGATOR_PORT + i)))  # Start nodes after aggregator port
-    NODE_ADDRESS="${BASE_ADDRESS}_$i"
 
     echo "Starting Node $i on port $NODE_PORT with address $NODE_ADDRESS..."
     osascript -e "tell application \"Terminal\" to do script \"python3 $NODE_SCRIPT --port $NODE_PORT\"" &
     sleep 1  # Allow the node to start
 
     # Log details
-    NODE_ADDRESSES+=("$NODE_ADDRESS")
     NODE_URLS+=("http://localhost:$NODE_PORT")
     echo "Node $i: URL=http://localhost:$NODE_PORT, Address=$NODE_ADDRESS" >> "$LOG_FILE"
 done
+
+sleep 5  # Allow the node to start
 
 # Register nodes with the aggregator
 echo "Registering nodes with aggregator..."
 curl -X POST http://localhost:$AGGREGATOR_PORT/deploy-contract \
 -H "Content-Type: application/json" \
 -d '{
-  "nodeAddresses": '"$(jq -n --argjson arr "$(printf '%s\n' "${NODE_ADDRESSES[@]}" | jq -R . | jq -s .)" '$arr')"',
+  "nodeAddresses": '"$(jq -n --argjson arr "$(printf '%s\n' "${NODE_ADDRESSES}" | jq -R . | jq -s .)" '$arr')"',
   "nodeUrls": '"$(jq -n --argjson arr "$(printf '%s\n' "${NODE_URLS[@]}" | jq -R . | jq -s .)" '$arr')"',
   "config": { "model": { "path": "/path/to/model" }, "data": { "path": "/path/to/data" } }
 }'
