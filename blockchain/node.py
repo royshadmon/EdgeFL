@@ -46,6 +46,7 @@ class Node:
             "npz_file": str(data_path)
         }
 
+        # model_def == 1: PytorchFLModel
         if model_def == 1:
             model_path = os.path.join(current_dir, "configs", "node", "pytorch", "pytorch_sequence.pt")
 
@@ -60,6 +61,7 @@ class Node:
             data_handler = MnistPytorchDataHandler(data_config=data_config)
             self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
+        # model_def == 2: Sklearn and so on
 
     '''
     add_data_batch(data)
