@@ -10,41 +10,26 @@ from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 import requests
+# import pathlib
 
 from dotenv import load_dotenv
 load_dotenv()
 
 class Node:
-    def __init__(self, contract_address, provider_url, private_key, config, replica_name):
+    def __init__(self, config, replica_name):
+
+        print("Node initializing")
 
         self.database_url = os.getenv('DATABASE_URL')
 
-        cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': self.database_url
-        })
-
-        # Initialize Web3 connection to the Ethereum node
-        self.w3 = Web3(Web3.HTTPProvider(provider_url, {"timeout": 100000}))
+        # Initialize Firebase
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': self.database_url
+            })
 
         self.replicaName = replica_name
-
-        self.contract_address = contract_address
-
-        # Set the node's private key and address
-        self.private_key = private_key
-        self.node_account = self.w3.eth.account.from_key(private_key)
-        self.node_address = self.w3.to_checksum_address(self.node_account.address)
-
-        balance = self.w3.eth.get_balance(self.node_address)
-        print(f"Deployer Address Balance: {self.w3.from_wei(balance, 'ether')} ETH")
-
-        # Load the ABI
-        base_path = os.path.join(os.path.dirname(__file__), 'smart_contract')
-        with open(os.path.join(base_path, 'ModelParametersABI.json'), 'r') as abi_file:
-            self.contract_abi = json.load(abi_file)
-
-        self.contract_instance = self.w3.eth.contract(address=self.contract_address, abi=self.contract_abi)
 
         # Node local data batches
         self.data_batches = []
@@ -52,22 +37,32 @@ class Node:
         # IBM FL LocalTrainingHandler
         self.config = config
 
+        self.currentRound = 1
+        # current_dir = pathlib.Path(__file__).parent.resolve()
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+
+        data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
+        model_path = os.path.join(current_dir, "configs", "node", "pytorch", "pytorch_sequence.pt")
+        
+
+
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
         # hard code for now for testing
         model_spec = {
             "loss_criterion": "nn.NLLLoss",
-            "model_definition": "/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/configs/node/pytorch/pytorch_sequence.pt",
+            "model_definition": str(model_path),
             "model_name": "pytorch-nn",
             "optimizer": "optim.Adadelta"
         }
         data_config = {
-            "npz_file": "/Users/camillegandotra/Desktop/Anylog-Edgelake-CSE115D/blockchain/data/mnist/data_party0.npz"
+            "npz_file": str(data_path)
         }
 
         fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
         data_handler = MnistPytorchDataHandler(data_config=data_config)
         self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
 
+        
     '''
     add_data_batch(data)
         - Adds passed in data to local storage
@@ -84,35 +79,32 @@ class Node:
     '''
 
     def add_node_params(self, round_number, newly_trained_params_db_link):
-
-        if not self.contract_instance:
-            return {
-                'status': 'error',
-                'message': 'Contract not found'
-            }
+        print("in add_node_params") 
 
         try:
-            # Build the transaction to call addNodeParams 
-            # new_node_model_params = self.local_training_handler.fl_model  # I think this would get the fl_model?
-            tx = self.contract_instance.functions.addNodeParams(round_number, newly_trained_params_db_link,
-                                                                self.replicaName).build_transaction({
-                'from': self.node_address,
-                'nonce': self.w3.eth.get_transaction_count(self.node_address),
-                'chainId': 11155420
-            })
+            external_ip = os.getenv("EXTERNAL_IP")
+            url = f'http://{external_ip}:32049'
+            
+            headers = {
+                'User-Agent': 'AnyLog/1.23',
+                'Content-Type': 'text/plain',
+                'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
+            }
 
-            # Sign and send the transaction for production environment
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            data = f'''<my_policy = {{"a{round_number}" : {{
+                    "node" : "{self.replicaName}",
+                    "trained_params": "{newly_trained_params_db_link}"
+}} }}>'''
 
-            # Wait for the transaction receipt
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            # print(f"Submitting results for round {round_number}")
+            response = requests.post(url, headers=headers, data=data)
+            print(f"Results submitted for round {round_number} to {self.replicaName}")
 
             return {
                 'status': 'success',
-                'message': 'node model parameters added successfully',
-                'transactionHash': tx_hash.hex()
+                'message': 'node model parameters added successfully'
             }
+
         except Exception as e:
             return {
                 'status': 'error',
@@ -124,59 +116,37 @@ class Node:
         - Uses updated aggreagtor model params and updates local model
         - Gets local data and runs training on updated model
     '''
-
-
     def train_model_params(self, aggregator_model_params_db_link, round_number):
-        # if it's the first round,
+        print(f"in train_model_params for round {round_number}")
+        
+        # First round initialization
         if round_number == 1:
-            initial_model_update = self.local_training_handler.fl_model.get_model_update()
-            # Update local model with sent model params
-            self.local_training_handler.update_model(initial_model_update)
+            weights = self.local_training_handler.fl_model.get_model_update()
         else:
-            # Use the provided database link to fetch the aggregated model update
             try:
-                response = requests.get(aggregator_model_params_db_link)
-                response.raise_for_status()  # Raise an error for bad HTTP response
-                data = response.json()  # Parse the JSON response
-            except requests.exceptions.RequestException as e:
-                raise ValueError(f"Error fetching model update from {aggregator_model_params_db_link}: {str(e)}")
+                # Get model weights from Firebase
+                model_updates_key = aggregator_model_params_db_link.split('/')[-1].replace('.json', '')
+                data = db.reference(f'node_model_updates/{model_updates_key}').get()
+                weights = self.decode_params(data['model_update'])
+            except Exception as e:
+                print(f"Error getting weights: {str(e)}")
+                raise
 
-            # Assuming 'newUpdates' is the key for the model update in the JSON response
-            model_update_encoded = data.get('newUpdates')
-            if not model_update_encoded:
-                raise ValueError(f"Missing 'newUpdates' in the response from {aggregator_model_params_db_link}")
-
-            # Decode the model
-            decoded_weights = self.decode_params(model_update_encoded)
-
-            # Update model
-            self.local_training_handler.update_model(decoded_weights)
-
-        # Load local data
+        # Update model with weights
+        self.local_training_handler.update_model(weights)
+        
+        # Train model
         self.local_training_handler.data_handler.load_dataset(nb_points=50)
-
-        # Do local training
         model_update = self.local_training_handler.train({})
-
-        # The node parameters part of model_update needs to be encoded to a string before being returned
-        encoded_params_compressed = self.encode_model(model_update)
-
-        # Reference to database
-        ref = db.reference('node_model_updates')
-
-        # Create the data entry
-        data_entry = {
+        
+        # Save and return new weights
+        encoded_params = self.encode_model(model_update)
+        data_pushed = db.reference('node_model_updates').push({
             'replicaName': self.replicaName,
-            'model_update': encoded_params_compressed
-        }
-
-        # Push the data
-        data_pushed = ref.push(data_entry)
-
-        # Get the link to the stored object
-        object_url = f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
-
-        return object_url
+            'model_update': encoded_params
+        })
+        
+        return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)

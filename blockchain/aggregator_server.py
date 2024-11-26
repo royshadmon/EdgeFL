@@ -1,6 +1,6 @@
 import argparse
 from dotenv import load_dotenv
-
+import asyncio
 from flask import Flask, jsonify, request
 from aggregator import Aggregator
 import threading
@@ -28,8 +28,7 @@ curl -X POST http://localhost:8080/deploy-contract \
     "0xFEe882466e0804831746336A3eb2c6727CC35d63"
   ],
   "nodeUrls": [
-    "http://localhost:8081", 
-    "http://localhost:8082"
+    "http://localhost:8081"
   ],
   "config": {  
     "model": {
@@ -38,12 +37,11 @@ curl -X POST http://localhost:8080/deploy-contract \
     "data": {
       "path": "/path/to/data"
     }
-  }
+  },
+  "contractAddress": "0xE9bdFc2788D52A904a01cC58c611D354c292d42f"
 }'
 '''
-# CALL THIS ONLY IF I HAVE MADE UPDATES TO THE CONTRACT, IF I DO THEN CHANGE THE "CONTRACT_ADDRESS" GLOBAL VAR IN THE
-# AGGREGATOR.PY FILE AND THE NODE_SERVER.PY FILE. IF NO UPDATES MADE, CALL THE INIT_NODE METHOD TO START THE NODE AND
-# THEN CALL THE START ROUND ENDPOINT
+
 @app.route('/deploy-contract', methods=['POST'])
 def deploy_contract():
     """Deploy the smart contract with predefined nodes."""
@@ -52,37 +50,39 @@ def deploy_contract():
         node_addresses = data.get('nodeAddresses', [])
         node_urls = data.get('nodeUrls', [])
         config = data.get('config', {})
+        contract_address = data.get('contractAddress')
 
         if not node_addresses:
             return jsonify({'status': 'error', 'message': 'No nodes provided'}), 400
-
-        # Deploy the contract and return the result
-        result = aggregator.deploy_contract()
-        if result['status'] == 'success':
-            contract_address = result['contractAddress']
-            print(f"Contract deployed at address: {contract_address}")
-
-            # Send the contract address to each node
-            initialize_nodes(contract_address, node_urls, config)
-
-        return jsonify(result)
+        
+        # Initialize the nodes and send the contract address
+        print(f"Deploying contract with nodes: {node_addresses}")
+        initialize_nodes(contract_address, node_urls, config)
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify(contract_address), 200
+    
 
 
 def initialize_nodes(contract_address, node_urls, config):
     """Send the deployed contract address to multiple node servers."""
     for url in node_urls:
         try:
+            print(f"Sending contract address to node at {url}")
             response = requests.post(f'{url}/init-node', json={
                 'contractAddress': contract_address,
                 'config': config
             })
-            if response.status_code == 200:
-                print(f"Contract address successfully sent to node at {url}")
-            else:
-                print(f"Failed to send contract address to {url}: {response.text}")
+
+            #TODO: figure out how to handle response
+            # I am assuming that the node initialization above will be successful without actually checking
+
+            # if response.status_code == 200:
+            #     print(f"Contract address successfully sent to node at {url}")
+            # else:
+            #     print(f"Failed to send contract address to {url}: {response.text}")
+
         except Exception as e:
             print(f"Error sending contract address to {url}: {str(e)}")
 
@@ -115,10 +115,10 @@ async def init_training():
 
         for r in range(1, num_rounds + 1):
             print(f"Starting round {r}")
-            aggregator.start_round(initialParams, r, min_params)
-
+            aggregator.start_round(initialParams, r)
+            print("Sent initial parameters to nodes")
             # Listen for updates from nodes
-            newAggregatorParams = await listen_for_update_agg()
+            newAggregatorParams = await listen_for_update_agg(min_params, r)
             print("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
@@ -130,50 +130,97 @@ async def init_training():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-async def listen_for_update_agg():
-    """Asynchronously poll for the 'updateAggregatorWithParamsFromNodes' event from the blockchain."""
-    print("Starting async polling for 'updateAggregatorWithParamsFromNodes' events...")
+# async def listen_for_update_agg(min_params, roundNumber):
+#     """Asynchronously poll for the 'updateAggregatorWithParamsFromNodes' event from the blockchain."""
+#     print("Aggregator listening for updates...")
 
-    # Define the event signature for 'updateAggregatorWithParamsFromNodes(uint256,string[])' and ensure it starts with '0x'
-    event_signature = "0x" + aggregator.w3.keccak(text="updateAggregatorWithParamsFromNodes(uint256,string[])").hex()
+#     while True:
+#         # Get the URL properly formatted
+#         external_ip = os.getenv("EXTERNAL_IP")
+#         url = f'{external_ip}:32049'
 
-    lastest_block = aggregator.w3.eth.block_number
+#         # curl: listen for enough params to be added
+#         headers = {
+#             'User-Agent': 'AnyLog/1.23',
+#             "command": f"blockchain get a{roundNumber} count",
+#         }
+
+#         print("Polling for count...")
+#         response = requests.get(f'http://{url}', headers=headers)
+#         print("got the count response")
+#         if response.status_code == 200:
+#             try:
+#                 count_data = response.json()
+#                 print(f"count_data: {count_data}")
+#                 if isinstance(count_data, (int, str)):
+#                     count = int(count_data)
+#                 else:
+#                     count = 0
+#                 print(f"Current count: {count}")
+#             except (ValueError, TypeError) as e:
+#                 print(f"Error parsing count response: {e}")
+#                 count = 0
+#         else:
+#             print(f"Failed to get count: {response.text}")
+#             count = 0
+
+#         if count >= min_params:
+#             headers = {
+#                 'User-Agent': 'AnyLog/1.23',
+#                 "command": f"blockchain get a{roundNumber}",
+#             }
+
+#             response = requests.get(f'http://{url}', headers=headers)
+#             if response.status_code == 200:
+#                 try:
+#                     result_data = response.json()
+#                     if result_data and len(result_data) > 0:
+#                         # Extract just the URL
+#                         trained_params_url = result_data[0][f'a{roundNumber}']['trained_params']
+#                         return trained_params_url
+#                 except Exception as e:
+#                     print(f"Error parsing result data: {e}")
+#                     time.sleep(2)
+#                     continue
+        
+#         # Asynchronously sleep to avoid excessive polling
+#         time.sleep(2)  # Poll every 2 seconds
+async def listen_for_update_agg(min_params, roundNumber):
+    """Asynchronously poll for aggregated parameters from the blockchain."""
+    print("Aggregator listening for updates...")
+    url = f'http://{os.getenv("EXTERNAL_IP")}:32049'
 
     while True:
         try:
-            # Define filter parameters for polling
-            filter_params = {
-                "fromBlock": lastest_block + 1,
-                "toBlock": "latest",
-                "address": aggregator.deployed_contract_address,
-                "topics": [event_signature]
-            }
+            # Check parameter count
+            count_response = requests.get(url, headers={
+                'User-Agent': 'AnyLog/1.23',
+                "command": f"blockchain get a{roundNumber} count"
+            })
+            
+            if count_response.status_code == 200:
+                count_data = count_response.json()
+                count = len(count_data) if isinstance(count_data, list) else int(count_data)
 
-            # Poll for logs
-            logs = aggregator.w3.eth.get_logs(filter_params)
-            for log in logs:
-                # Decode event data
-                decoded_event = aggregator.deployed_contract.events.updateAggregatorWithParamsFromNodes.process_log(log)
-                number_of_params = decoded_event['args']['numberOfParams']
-                params_from_nodes_db_links = decoded_event['args']['paramsFromNodes']
-
-                print(f"Received 'updateAgg' event with params: {params_from_nodes_db_links}. Number of params: {number_of_params}")
-
-                # Aggregate parameters
-                newAggregatorParams = aggregator.aggregate_model_params(params_from_nodes_db_links)
-
-                # Return the updated aggregator parameters and exit the function
-                return newAggregatorParams
-
-            # Update latest_block to avoid re-processing old events
-            if logs:
-                latest_block = logs[-1]['blockNumber']
+                # If enough parameters, get the URL
+                if count >= min_params:
+                    params_response = requests.get(url, headers={
+                        'User-Agent': 'AnyLog/1.23',
+                        "command": f"blockchain get a{roundNumber}"
+                    })
+                    
+                    if params_response.status_code == 200:
+                        result = params_response.json()
+                        if result and len(result) > 0:
+                            node_params_links = result[0][f'a{roundNumber}']['trained_params']
+                            # aggregate the parameters
+                            aggregated_params_link = aggregator.aggregate_model_params(node_param_download_links=node_params_links)
+                            return aggregated_params_link
 
         except Exception as e:
-            print(f"Error polling for 'updateAgg' event: {str(e)}")
-
-        # Asynchronously sleep to avoid excessive polling
-        time.sleep(2)  # Poll every 2 seconds
+            print(f"Error in aggregator listener: {e}")
+        
+        await asyncio.sleep(2)
 
 
 if __name__ == '__main__':

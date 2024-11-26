@@ -9,6 +9,8 @@ import time
 from web3 import Web3
 import os
 import argparse
+import requests
+
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
 '''
@@ -22,6 +24,9 @@ PRIVATE_KEY = os.getenv('PRIVATE_KEY')
 
 # Initialize the Node instance 
 node_instance = None
+listener_thread = None
+stop_listening_thread = False
+
 
 '''
 /set-contract-address [POST]
@@ -29,6 +34,7 @@ node_instance = None
     - Gets config file and intializes node instance
     - Starts 2 threads listening for start training and for update node
 '''
+
 '''
 SAMPLE CURL REQUEST COMING FROM AGGREGATOR SERVER:
 
@@ -61,24 +67,37 @@ curl -X POST http://localhost:8081/init-node \
 @app.route('/init-node', methods=['POST'])
 def init_node():
     """Receive the contract address from the aggregator server."""
-    global node_instance
+    global node_instance, listener_thread, stop_listening_thread
     try:
-        # Get the contract address from the request body
-        contract_address = request.json.get('contractAddress')
-
-        # print(f"Received contract address: {contract_address}")
+        # # Get the contract address from the request body
+        # contract_address = request.json.get('contractAddress')
 
         config = request.json.get('config')
 
         if not config:
             return jsonify({'status': 'error', 'message': 'No config provided'}), 400
+        if listener_thread and listener_thread.is_alive():
+            stop_listening_thread = True
+            listener_thread.join(timeout=1)
+
+        # Reset the stop flag
+        stop_listening_thread = False
 
         # Instantiate the Node class
-        node_instance = Node(contract_address, PROVIDER_URL, PRIVATE_KEY, config, "replica1")
+        node_instance = Node(config, "node1")
+        node_instance.currentRound = 1
+
+        print("replica 1 successfully initialized")
 
         # Start event listener for start round
-        threading.Thread(target=listen_for_start_round).start()
+        listener_thread = threading.Thread(
+            target=listen_for_start_round,
+            args=(node_instance, lambda: stop_listening_thread)
+        )
+        listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
+        listener_thread.start()
 
+        
         return jsonify({'status': 'success', 'message': 'Contract address set and Node initialized successfully'}), 200
 
     except Exception as e:
@@ -89,8 +108,6 @@ def init_node():
 /receive_data [POST] (data)
     - Endpoint to receive data block from the simulated data stream
 '''
-
-
 @app.route('/receive_data', methods=['POST'])
 def receive_data():
     data = request.json.get('data')
@@ -101,51 +118,36 @@ def receive_data():
 
 
 
-def listen_for_start_round():
-    """Listen for the 'newRound' event from the blockchain."""
-    print("Listening for 'newRound' events...")
-
-    # Generate the event signature for the 'newRound' event
-    event_signature = "0x" + Web3.keccak(text="newRound(uint256,string)").hex()
-    
-    # Get the latest block to start listening from
-    latest_block = node_instance.w3.eth.block_number
-
+def listen_for_start_round(node_instance, stop_event):    
     while True:
         try:
-            # Fetch new logs for the `newRound` event
-            logs = node_instance.w3.eth.get_logs({
-                'fromBlock': latest_block + 1,  # Start from the latest processed block
-                'toBlock': 'latest',
-                'address': node_instance.contract_address,
-                'topics': [event_signature]  # Filter for the `newRound` event signature
-            })
+            external_ip = os.getenv("EXTERNAL_IP")
+            url = f'{external_ip}:32049'
+            # next_round = node_instance.currentRound + 1  
 
-            for log in logs:
-                # Decode log data for the `newRound` event
-                decoded_event = node_instance.contract_instance.events.newRound().process_log(log)
-                init_params = decoded_event['args']['initParamsDownloadLink']
-                round_number = decoded_event['args']['roundNumber']
-
-                print(f"Received 'newRound' event with initParams: {init_params}, roundNumber: {round_number}")
-
-                # Train model parameters updated from aggregator with local node data
-                model_update = node_instance.train_model_params(init_params, round_number)
-                # print(f"Model update: {model_update}")
-
-                # Add node parameters to the blockchain
-                result = node_instance.add_node_params(round_number, model_update)
-                print(f"add_node_params result: {result}")
-
-            # Update the latest processed block to avoid reprocessing
-            if logs:
-                latest_block = logs[-1]['blockNumber']
-
+            print(f"listening for start round {node_instance.currentRound}") 
+            
+            headers = {
+                'User-Agent': 'AnyLog/1.23',
+                'command': f'blockchain get r{node_instance.currentRound}'
+            }
+            response = requests.get(f'http://{url}', headers=headers)
+       
+            if response.status_code == 200:
+                data = response.json()
+                if data:
+                    round_data = data[f'r{node_instance.currentRound}']
+                    if round_data:
+                        paramsLink = round_data.get('initParams', '')
+                        modelUpdate = node_instance.train_model_params(paramsLink, node_instance.currentRound)
+                        node_instance.add_node_params(node_instance.currentRound, modelUpdate)
+                        node_instance.currentRound += 1
+                    
+            time.sleep(2)  # Poll every 2 seconds
+            
         except Exception as e:
-            print(f"Error listening for 'newRound' event: {str(e)}")
-
-        # Sleep to avoid excessive polling
-        time.sleep(2)  # Poll every 2 seconds
+            print(f"Error in listener thread: {str(e)}")
+            time.sleep(2)
 
 
 
