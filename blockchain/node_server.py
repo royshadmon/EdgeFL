@@ -65,11 +65,10 @@ def init_node():
     """Receive the contract address from the aggregator server."""
     global node_instance, listener_thread, stop_listening_thread
     try:
-        model_def = request.json.get('model_def', 1)
         replica_name = request.json.get('replica_name')
+        firebase_model_path = request.json.get('firebase_model_path')
+        firebase_datahandler_path = request.json.get('firebase_datahandler_path')
 
-        if not model_def:
-            return jsonify({'status': 'error', 'message': 'No config provided'}), 400
         if listener_thread and listener_thread.is_alive():
             stop_listening_thread = True
             listener_thread.join(timeout=1)
@@ -78,7 +77,7 @@ def init_node():
         stop_listening_thread = False
 
         # Instantiate the Node class
-        node_instance = Node(model_def, replica_name)
+        node_instance = Node(firebase_model_path, firebase_datahandler_path, replica_name)
         node_instance.currentRound = 1
 
         print(f"{replica_name} successfully initialized")
@@ -119,14 +118,15 @@ def listen_for_start_round(nodeInstance, stop_event):
             url = f'{external_ip}:32049'
             # next_round = nodeInstance.currentRound + 1
 
-            print(f"listening for start round {nodeInstance.currentRound}")
+            print(f"Listening for start of round {nodeInstance.currentRound}")
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'blockchain get r{nodeInstance.currentRound}'
+                'command': f'blockchain get a{nodeInstance.currentRound}'
             }
             response = requests.get(f'http://{url}', headers=headers)
 
+            # check if aggregator's params have been posted
             if response.status_code == 200:
                 data = response.json()
                 print(f"Response Data: {data}")  # Debugging line to inspect the structure
@@ -134,18 +134,20 @@ def listen_for_start_round(nodeInstance, stop_event):
                 round_data = None
                 for item in data:
                     # Check if the key exists in the current dictionary
-                    if f'r{nodeInstance.currentRound}' in item:
-                        round_data = item[f'r{nodeInstance.currentRound}']
+                    if f'a{nodeInstance.currentRound}' in item:
+                        round_data = item[f'a{nodeInstance.currentRound}']
                         break  # Stop searching once the current round's data is found
 
                 if round_data:
                     print(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
+                    # error here at modelUpdate = line
                     modelUpdate = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound)
+                    print(modelUpdate);
                     nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate)
                     nodeInstance.currentRound += 1
                 else:
-                    print(f"No data found for round r{nodeInstance.currentRound}")
+                    print(f"No aggregator parameters found for round {nodeInstance.currentRound}")
 
             time.sleep(2)  # Poll every 2 seconds
 

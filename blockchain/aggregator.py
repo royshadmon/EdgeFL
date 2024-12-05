@@ -11,8 +11,6 @@ import firebase_admin
 from firebase_admin import credentials, db
 from ibmfl.model.model_update import ModelUpdate
 
-CONTRACT_ADDRESS = "0x4ae311B85B017bf7EAa7a96D3109f58795F5F4BF"
-
 load_dotenv()
 
 
@@ -43,6 +41,7 @@ class Aggregator:
             external_ip = os.getenv("EXTERNAL_IP")
             url = f'http://{external_ip}:32049'
 
+            # in khaled's: for node_num in range(1, int(minParams) + 1)
             headers = {
                 'User-Agent': 'AnyLog/1.23',
                 'Content-Type': 'text/plain',
@@ -50,14 +49,13 @@ class Aggregator:
             }
 
             # Format data exactly like the example curl command but with your values
-            # NOTE: ask why are we adding the node num from agg
-            data = f'''<my_policy = {{"r{roundNumber}" : {{
+            # denote aggregator's params with a 
+            data = f'''<my_policy = {{"a{roundNumber}" : {{
                                         "initParams": "{initParamsLink}"
                               }} }}>'''
 
-            print(f"Training initialized with {roundNumber} rounds")
-
             response = requests.post(url, headers=headers, data=data)
+            print(response.status_code)
             if response.status_code == 200:
                 return {
                     'status': 'success',
@@ -96,11 +94,15 @@ class Aggregator:
                 raise ValueError(f"Error retrieving data from link {link}: {str(e)}")
 
         # do aggregation function here (doesn't return anything)
+        print("params to aggregate: ", decoded_params)
         self.fusion_model.update_weights(decoded_params)
 
         aggregate_params_weights = self.fusion_model.current_model_weights
 
         aggregate_model_update = ModelUpdate(weights=aggregate_params_weights)
+
+        if hasattr(aggregate_model_update, '__dict__'):
+            print("Attributes of aggregate_model_update:", vars(aggregate_model_update))  # Prints attributes in a dictionary form
 
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)

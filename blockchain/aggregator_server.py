@@ -8,6 +8,15 @@ import time
 import requests
 import os
 
+import torch
+
+import firebase_admin
+from firebase_admin import credentials, db
+
+import base64
+
+from ibmfl.model.pytorch_fl_model import PytorchFLModel
+
 app = Flask(__name__)
 load_dotenv()
 
@@ -25,10 +34,15 @@ curl -X POST http://localhost:8080/init \
 -H "Content-Type: application/json" \
 -d '{
   "nodeUrls": [
-    "http://localhost:8081", 
-    "http://localhost:8082"
+    "http://localhost:8081"
   ],
-  "model_def": 1
+  "model_path": "C:\\Users\\nehab\\cse115d\\testmodel.py",
+  "model_init_params": { "module__input_dim": 14 },
+  "model_name": "custom_test",
+  "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
+  "data_handler_path": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\custom_data_handler.py",
+  "data_config": {"data": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\heart_data\\party_data\\party_0.csv"}
+
 }'
 '''
 
@@ -39,17 +53,115 @@ def deploy_contract():
     try:
         data = request.json
         node_urls = data.get('nodeUrls', [])
-        model_def = data.get('model_def', 1)
+
+        model_path = data.get('model_path', os.getenv('MODEL_PYTHON'))
+        model_init_params = data.get('model_init_params', None)
+        model_name = data.get('model_name', 'custom_test')
+        model_weights_path = data.get('model_weights_path')
+
+        # upload model to firebase
+        firebase_model_path = f"/models/{model_name}" 
+        pytorch_upload(model_path, model_init_params, model_name, firebase_model_path, model_weights_path)
+
+        
+        data_handler_path = data.get('data_handler_path')
+        data_config = data.get('data_config')
+
+        # upload datahandler to firebase
+        firebase_datahandler_path = f"/datahandlers/datahandler"
+        datahandler_upload(data_handler_path, data_config, firebase_datahandler_path)
 
         # Initialize the nodes and send the contract address
-        initialize_nodes(model_def, node_urls)
+        initialize_nodes(firebase_model_path, firebase_datahandler_path, node_urls)
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    return f"Initialized nodes with model definition: {model_def}", 200
+    return f"Initialized nodes with model definition: {model_path}", 200
+
+# creates and uploads a model to firebase for the nodes to download
+def pytorch_upload(model_file_path, model_init_params, model_name, firebase_model_path, model_weights_path):
+    
+    # Read the model class source code
+    with open(model_file_path, "r") as f:
+        model_source_code = f.read()
+
+    # Dynamically load the model class
+    namespace = {}
+    exec(model_source_code, namespace)
+
+    # Identify the model class dynamically-- this searches for all classes that are a subset of nn.Module
+    model_class = None
+    for obj_name, obj in namespace.items():
+        if isinstance(obj, type) and issubclass(obj, torch.nn.Module) and obj != torch.nn.Module:
+            model_class = obj
+            break
+
+    if model_class is None:
+        raise ValueError("No PyTorch model class found in the specified file.")
+    else:
+        print("Identified model class:", model_class)
+
+    # initialize model
+    fl_model = PytorchFLModel(
+        model_name=model_name,
+        pytorch_module=model_class,
+        module_init_params=model_init_params,
+    )
+
+    # save current model weights (empty for now)
+    fl_model.save_model(filename=model_weights_path)
+
+    # Encode the source code and model weights
+    encoded_source_code = encode_to_base64(model_source_code)
+    with open(model_weights_path, "rb") as f:
+        encoded_weights = encode_to_base64(f.read())
+
+    # define model info to upload
+    model_data = {
+        "source_code": encoded_source_code,
+        "weights": encoded_weights,
+        "init_params": model_init_params,
+    }
+
+    firebase_model_ref = db.reference(firebase_model_path)
+    firebase_model_ref.set(model_data)
+    print(f"PytorchFLModel uploaded to Firebase Realtime Database at {firebase_model_path}.")
+
+# creates and uploads a datahandler for nodes to download
+def datahandler_upload(datahandler_file_path, data_config, firebase_datahandler_path):
+
+    # read source code
+    with open(datahandler_file_path, "r") as f:
+        datahandler_source_code = f.read()
+    
+    # Encode the source code and configuration
+    encoded_source_code = encode_to_base64(datahandler_source_code)
+    encoded_data_config = encode_to_base64(str(data_config))
+
+    # Prepare the data to upload
+    datahandler_data = {
+        "source_code": encoded_source_code,
+        "data_config": encoded_data_config,
+    }
+
+    # upload to firebase
+    datahandler_firebase_ref = db.reference(firebase_datahandler_path)
+    datahandler_firebase_ref.set(datahandler_data)
+    print(f"DataHandler uploaded to Firebase Realtime Database at {firebase_datahandler_path}")
 
 
-def initialize_nodes(model_def, node_urls):
+def encode_to_base64(data):
+    """Encode binary or text data to Base64."""
+    if isinstance(data, bytes):
+        return base64.b64encode(data).decode("utf-8")
+    return base64.b64encode(data.encode("utf-8")).decode("utf-8")
+
+def decode_from_base64(data):
+    """Decode Base64 data to binary or text."""
+    return base64.b64decode(data)
+
+
+def initialize_nodes(firebase_model_path, firebase_datahandler_path, node_urls):
     """Send the deployed contract address to multiple node servers."""
     for urlCount in range(len(node_urls)):
         try:
@@ -58,7 +170,8 @@ def initialize_nodes(model_def, node_urls):
 
             response = requests.post(f'{url}/init-node', json={
                 'replica_name': f"node{urlCount}",
-                'model_def': model_def
+                'firebase_model_path': firebase_model_path,
+                'firebase_datahandler_path': firebase_datahandler_path
             })
 
             # TODO: figure out how to handle response
@@ -88,6 +201,7 @@ curl -X POST http://localhost:8080/start-training \
 @app.route('/start-training', methods=['POST'])
 async def init_training():
     """Start the training process by setting the number of rounds."""
+    print('entered start_training endpoint')
     try:
         data = request.json
         num_rounds = data.get('totalRounds', 1)
@@ -124,10 +238,10 @@ async def listen_for_update_agg(min_params, roundNumber):
 
     while True:
         try:
-            # Check parameter count
+            # Check parameter count for node responses
             count_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"blockchain get a{roundNumber} count"
+                "command": f"blockchain get r{roundNumber} count"
             })
 
             if count_response.status_code == 200:
@@ -138,7 +252,7 @@ async def listen_for_update_agg(min_params, roundNumber):
                 if count >= min_params:
                     params_response = requests.get(url, headers={
                         'User-Agent': 'AnyLog/1.23',
-                        "command": f"blockchain get a{roundNumber}"
+                        "command": f"blockchain get r{roundNumber}"
                     })
 
                     if params_response.status_code == 200:
@@ -146,9 +260,9 @@ async def listen_for_update_agg(min_params, roundNumber):
                         if result and len(result) > 0:
                             # Extract all trained_params into a list
                             node_params_links = [
-                                item[f'a{roundNumber}']['trained_params']
+                                item[f'r{roundNumber}']['trained_params']
                                 for item in result
-                                if f'a{roundNumber}' in item
+                                if f'r{roundNumber}' in item
                             ]
 
                             print(f"Collected trained_params links: {node_params_links}")  # Debugging line

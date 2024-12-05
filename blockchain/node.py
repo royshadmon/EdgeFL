@@ -10,15 +10,21 @@ from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 import requests
+import torch
+import time
 # import pathlib
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+def decode_from_base64(data):
+        """Decode Base64 data to binary or text."""
+        return base64.b64decode(data)
+
 
 class Node:
-    def __init__(self, model_def, replica_name):
+    def __init__(self, firebase_model_path, firebase_datahandler_path, replica_name):
 
         print("Node initializing")
 
@@ -38,31 +44,124 @@ class Node:
 
         self.currentRound = 1
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # download model from firebase
+        fl_model = self.load_firebase_model(firebase_model_path);
+        # download datahandler from firebase
+        data_handler = self.load_firebase_datahandler(firebase_datahandler_path);
+    
+        # create the local training handler
+        self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
 
-        # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
-        data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
-        data_config = {
-            "npz_file": str(data_path)
-        }
 
         # model_def == 1: PytorchFLModel
-        if model_def == 1:
-            model_path = os.path.join(current_dir, "configs", "node", "pytorch", "pytorch_sequence.pt")
+        # if model_def == 1:
+        #     model_path = os.path.join(current_dir, "configs", "node", "pytorch", "pytorch_sequence.pt")
 
-            model_spec = {
-                "loss_criterion": "nn.NLLLoss",
-                "model_definition": str(model_path),
-                "model_name": "pytorch-nn",
-                "optimizer": "optim.Adadelta"
-            }
+        #     model_spec = {
+        #         "loss_criterion": "nn.NLLLoss",
+        #         "model_definition": str(model_path),
+        #         "model_name": "pytorch-nn",
+        #         "optimizer": "optim.Adadelta"
+        #     }
 
-            fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-            data_handler = MnistPytorchDataHandler(data_config=data_config)
-            self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
+        #     fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
+        #     data_handler = MnistPytorchDataHandler(data_config=data_config)
+        #     self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
         # model_def == 2: Sklearn and so on
 
+    def load_firebase_model(self, firebase_model_path): 
+ 
+        # get model_data from firebase
+        firebase_model_ref = db.reference(firebase_model_path)
+        model_data = firebase_model_ref.get()
+        if model_data is None:
+            print("Error: No model data found in Firebase.")
+            return
+
+        print('downloaded model_data')
+
+        # derive fields, then code source code and weights 
+        model_source_code = decode_from_base64(model_data["source_code"]).decode("utf-8")
+        model_weights = decode_from_base64(model_data["weights"])
+        init_params = model_data["init_params"]
+
+        print('derived fields')
+
+        # Save the downloaded weights to a file-- necessary to load the model later 
+        downloaded_weights_path = "downloaded_model_weights.pt"
+        with open(downloaded_weights_path, "wb") as f:
+            f.write(model_weights)
+
+        print('saved weights to file')
+
+        # Dynamically recreate the model class
+        downloaded_namespace = {}
+        exec(model_source_code, downloaded_namespace)
+
+        # Identify the model class in the downloaded namespace
+        downloaded_model_class = None
+        for obj_name, obj in downloaded_namespace.items():
+            if isinstance(obj, type) and issubclass(obj, torch.nn.Module) and obj != torch.nn.Module:
+                downloaded_model_class = obj
+                break
+
+        if downloaded_model_class is None:
+            raise ValueError("No PyTorch model class found in the downloaded source code.")
+        else:
+            print("Recreated model class:", downloaded_model_class)
+
+        # recreate the PytorchFLModel and load weights
+        fl_model = PytorchFLModel(
+            model_name="Pytorch_NN",
+            pytorch_module=downloaded_model_class,
+            module_init_params=init_params,
+        )
+        fl_model.load_model(
+            pytorch_module=downloaded_model_class,
+            model_filename=downloaded_weights_path,
+            module_init_params=init_params,
+        )
+        print("PytorchFLModel successfully reconstructed and loaded.")
+        return fl_model
+
+
+    def load_firebase_datahandler(self, firebase_datahandler_path):
+
+        # get datahandler data from firebase
+        firebase_datahandler_ref = db.reference(firebase_datahandler_path)
+        datahandler_data = firebase_datahandler_ref.get()
+        if datahandler_data is None:
+            print("Error: No DataHandler data found in Firebase.")
+            return
+        
+        print('got datahandler data from firebase')
+
+        # decode the source code and configuration
+        datahandler_source_code = decode_from_base64(datahandler_data["source_code"]).decode("utf-8")
+        data_config = eval(decode_from_base64(datahandler_data["data_config"]).decode("utf-8"))
+
+        # dynamically recreate the DataHandler class
+        namespace = {}
+        exec(datahandler_source_code, namespace)
+
+        # find the datahandler class, which must be a subclass of DataHandler
+        datahandler_class = None
+        for obj_name, obj in namespace.items():
+            if isinstance(obj, type) and issubclass(obj, namespace.get('DataHandler', object)) and obj != namespace['DataHandler']:
+                datahandler_class = obj
+                break
+
+        if datahandler_class is None:
+            raise ValueError("No DataHandler subclass found in the downloaded source code.")
+        else:
+            print("Recreated DataHandler class:", datahandler_class)
+
+        # initialize the datahandler with the configuration
+        data_handler = datahandler_class(data_config=data_config)
+        print("DataHandler successfully reconstructed and initialized.")
+        return data_handler
+            
     '''
     add_data_batch(data)
         - Adds passed in data to local storage
@@ -79,8 +178,6 @@ class Node:
     '''
 
     def add_node_params(self, round_number, newly_trained_params_db_link):
-        print("in add_node_params")
-
         try:
             external_ip = os.getenv("EXTERNAL_IP")
             url = f'http://{external_ip}:32049'
@@ -91,14 +188,14 @@ class Node:
                 'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
             }
 
-            data = f'''<my_policy = {{"a{round_number}" : {{
+            # denote node's parameters on blockchain with r
+            data = f'''<my_policy = {{"r{round_number}" : {{
                     "node" : "{self.replicaName}",
                     "trained_params": "{newly_trained_params_db_link}"
-}} }}>'''
+            }} }}>'''
 
-            # print(f"Submitting results for round {round_number}")
             response = requests.post(url, headers=headers, data=data)
-            print(f"Results submitted for round {round_number} to {self.replicaName}")
+            print(f"{self.replicaName} has submitted results for round {round_number}")
 
             return {
                 'status': 'success',
@@ -118,13 +215,18 @@ class Node:
     '''
 
     def train_model_params(self, aggregator_model_params_db_link, round_number):
-        print(f"in train_model_params for round {round_number}")
+        print(f"Training for round {round_number}")
+        
+        weights = ''
 
         # First round initialization
         if round_number == 1:
+            print('initializing weights, round1')
             weights = self.local_training_handler.fl_model.get_model_update()
+            print("round 1 weights", weights)
         else:
             try:
+                print('round1+, getting weights from aggregator')
                 # Extract the key from the URL
                 model_updates_key = aggregator_model_params_db_link.split('/')[-1].replace('.json', '')
 
@@ -145,7 +247,8 @@ class Node:
         self.local_training_handler.update_model(weights)
 
         # Train model
-        self.local_training_handler.data_handler.load_dataset(nb_points=50)
+        # self.local_training_handler.data_handler.load_dataset(nb_points=50)
+        self.local_training_handler.data_handler.load_dataset()
         model_update = self.local_training_handler.train({})
 
         # Save and return new weights
@@ -154,6 +257,8 @@ class Node:
             'replicaName': self.replicaName,
             'model_update': encoded_params
         })
+
+        print('pushed weights to db')
 
         return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
 
