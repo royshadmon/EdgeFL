@@ -59,7 +59,7 @@ class Node:
             }
 
             fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-            data_handler = CustomMnistPytorchDataHandler(data_config=data_config)
+            data_handler = CustomMnistPytorchDataHandler(self.replicaName)
             self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
         # model_def == 2: Sklearn and so on
@@ -146,7 +146,8 @@ class Node:
         self.local_training_handler.update_model(weights)
 
         # load new data
-        (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(nb_points=50)
+        (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(
+            node_name=self.replicaName, round_number=round_number)
         self.local_training_handler.data_handler.x_train = x_train
         self.local_training_handler.data_handler.y_train = y_train
         self.local_training_handler.data_handler.x_test = x_test

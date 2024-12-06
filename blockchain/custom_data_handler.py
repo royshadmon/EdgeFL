@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class CustomMnistPytorchDataHandler(DataHandler):
-    def __init__(self):
+    def __init__(self, node_name):
         super().__init__()
 
         # load the datasets from SQL
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset()
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
 
         # pre-process the datasets
         self.preprocess()
@@ -83,6 +83,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
         query_train = f"SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
         query_test = f"SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+
 
         try:
             train_data = fetch_data_from_db(query_train)
