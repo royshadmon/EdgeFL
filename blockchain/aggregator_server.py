@@ -117,6 +117,30 @@ async def init_training():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@app.route('/inference', methods=['POST'])
+def inference():
+    """Inference on current model w/ data passed in."""
+    try:
+        # data = request.json
+        # test_data = data.get('data', {})
+
+        # hard coding tht test data right now: test_data = (x_test, y_test)
+        (_), test_data = aggregator.fusion_model.data_handler.get_data()
+
+        # test data should be in the form of np.array
+        # test_data[0] = x_test, test_data[1] = y_test
+        results = aggregator.inference(test_data)
+        response = {
+            'status': 'success',
+            'message': 'Inference completed successfully',
+            'model_accuracy': results['acc'] * 100,
+            'classification_report': results['classificatio_report']
+        }
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 async def listen_for_update_agg(min_params, roundNumber):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     print("Aggregator listening for updates...")

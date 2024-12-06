@@ -10,6 +10,8 @@ from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
 import firebase_admin
 from firebase_admin import credentials, db
 from ibmfl.model.model_update import ModelUpdate
+from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
+
 
 CONTRACT_ADDRESS = "0x4ae311B85B017bf7EAa7a96D3109f58795F5F4BF"
 
@@ -26,15 +28,21 @@ class Aggregator:
             'databaseURL': self.database_url
         })
 
-        # Load the ABI and bytecode
-
         # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
         # Define or obtain hyperparameters and protocol handler for the fusion model
         hyperparams = {}  # Replace with actual hyperparameters as required
         protocol_handler = None  # Replace with an appropriate protocol handler instance or object
 
+        # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        data_path = os.path.join(current_dir, "mnist.npz")
+        data_config = {
+            "npz_file": str(data_path)
+        }
+        data_handler = MnistPytorchDataHandler(data_config=data_config)
+
         # Correctly instantiate the Fusion model with required arguments
-        self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler)
+        self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=data_handler)
 
     # function to call the start round function from the smart contract
     def start_round(self, initParamsLink, roundNumber):
@@ -136,3 +144,7 @@ class Aggregator:
         serialized_data = zlib.decompress(compressed_data)
         model_weights = pickle.loads(serialized_data)
         return model_weights
+
+    def inference(self, data):
+        results = self.fusion_model.fl_model.predict(data)
+        return results

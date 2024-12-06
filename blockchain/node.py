@@ -144,8 +144,14 @@ class Node:
         # Update model with weights
         self.local_training_handler.update_model(weights)
 
+        # load new data
+        (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(nb_points=50)
+        self.local_training_handler.data_handler.x_train = x_train
+        self.local_training_handler.data_handler.y_train = y_train
+        self.local_training_handler.data_handler.x_test = x_test
+        self.local_training_handler.data_handler.y_test = y_test
+
         # Train model
-        self.local_training_handler.data_handler.load_dataset(nb_points=50)
         model_update = self.local_training_handler.train({})
 
         # Save and return new weights
@@ -168,3 +174,7 @@ class Node:
         serialized_data = zlib.decompress(compressed_data)
         model_weights = pickle.loads(serialized_data)
         return model_weights
+
+    def inference(self, data):
+        results = self.local_training_handler.fl_model.predict(data)
+        return results

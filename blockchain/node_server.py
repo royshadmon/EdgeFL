@@ -6,7 +6,6 @@ from node import Node
 import numpy as np
 import threading
 import time
-from web3 import Web3
 import os
 import argparse
 import requests
@@ -152,6 +151,30 @@ def listen_for_start_round(nodeInstance, stop_event):
         except Exception as e:
             print(f"Error in listener thread: {str(e)}")
             time.sleep(2)
+
+
+@app.route('/inference', methods=['POST'])
+def inference():
+    """Inference on current model w/ data passed in."""
+    try:
+        # data = request.json
+        # test_data = data.get('data', {})
+
+        # hard coding tht test data right now: test_data = (x_test, y_test)
+        (_), test_data = node_instance.local_training_handler.data_handler.get_data()
+
+        # test data should be in the form of np.array
+        # test_data[0] = x_test, test_data[1] = y_test
+        results = node_instance.inference(test_data[0])  # could also try test_data[1]
+        response = {
+            'status': 'success',
+            'message': 'Inference completed successfully',
+            'model_accuracy': results['acc'] * 100,
+            'classification_report': results['classificatio_report']
+        }
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':
