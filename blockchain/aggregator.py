@@ -11,6 +11,8 @@ import firebase_admin
 from firebase_admin import credentials, db
 from ibmfl.model.model_update import ModelUpdate
 
+import time
+
 load_dotenv()
 
 
@@ -54,18 +56,38 @@ class Aggregator:
                                         "initParams": "{initParamsLink}"
                               }} }}>'''
 
-            response = requests.post(url, headers=headers, data=data)
-            print(response.status_code)
-            if response.status_code == 200:
-                return {
-                    'status': 'success',
-                    'message': 'initTraining called successfully'
-                }
-            else:
-                return {
-                    'status': 'error',
-                    'message': f'Request failed with status code: {response.status_code}'
-                }
+            retries = 0;
+            max_retries = 5;
+            while retries < max_retries:
+                response = requests.post(url, headers=headers, data=data)
+                if response.status_code == 200:
+                    print(f"Aggregator has submitted parameters for round {roundNumber} to the blockchain.")
+                    return {
+                        'status': 'success',
+                        'message': 'Aggregator model parameters added successfully'
+                    }
+                else:
+                    print(f"Failed to add aggregator params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
+                    retries += 1;
+                    time.sleep(15);
+        
+            return {
+                'status': 'error',
+                'message': 'aggregator was unable to add to blockchain'
+            }
+            
+            # response = requests.post(url, headers=headers, data=data)
+            # print(response.status_code)
+            # if response.status_code == 200:
+            #     return {
+            #         'status': 'success',
+            #         'message': 'initTraining called successfully'
+            #     }
+            # else:
+            #     return {
+            #         'status': 'error',
+            #         'message': f'Request failed with status code: {response.status_code}'
+            #     }
 
         except Exception as e:
             return {
@@ -94,15 +116,11 @@ class Aggregator:
                 raise ValueError(f"Error retrieving data from link {link}: {str(e)}")
 
         # do aggregation function here (doesn't return anything)
-        print("params to aggregate: ", decoded_params)
         self.fusion_model.update_weights(decoded_params)
 
         aggregate_params_weights = self.fusion_model.current_model_weights
 
         aggregate_model_update = ModelUpdate(weights=aggregate_params_weights)
-
-        if hasattr(aggregate_model_update, '__dict__'):
-            print("Attributes of aggregate_model_update:", vars(aggregate_model_update))  # Prints attributes in a dictionary form
 
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)
@@ -138,3 +156,7 @@ class Aggregator:
         serialized_data = zlib.decompress(compressed_data)
         model_weights = pickle.loads(serialized_data)
         return model_weights
+
+    def inference(self, model, data):
+        results = model.evaluate(data)
+        return results

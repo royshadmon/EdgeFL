@@ -45,12 +45,12 @@ class Node:
         self.currentRound = 1
 
         # download model from firebase
-        fl_model = self.load_firebase_model(firebase_model_path);
+        self.fl_model = self.load_firebase_model(firebase_model_path);
         # download datahandler from firebase
-        data_handler = self.load_firebase_datahandler(firebase_datahandler_path);
+        self.data_handler = self.load_firebase_datahandler(firebase_datahandler_path);
     
         # create the local training handler
-        self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
+        self.local_training_handler = LocalTrainingHandler(fl_model=self.fl_model, data_handler=self.data_handler)
 
 
         # model_def == 1: PytorchFLModel
@@ -79,21 +79,19 @@ class Node:
             print("Error: No model data found in Firebase.")
             return
 
-        print('downloaded model_data')
+        print('Downloaded model_data from Firebase')
 
         # derive fields, then code source code and weights 
         model_source_code = decode_from_base64(model_data["source_code"]).decode("utf-8")
         model_weights = decode_from_base64(model_data["weights"])
         init_params = model_data["init_params"]
 
-        print('derived fields')
-
         # Save the downloaded weights to a file-- necessary to load the model later 
         downloaded_weights_path = "downloaded_model_weights.pt"
         with open(downloaded_weights_path, "wb") as f:
             f.write(model_weights)
 
-        print('saved weights to file')
+        print('Saved weights to local file')
 
         # Dynamically recreate the model class
         downloaded_namespace = {}
@@ -135,7 +133,7 @@ class Node:
             print("Error: No DataHandler data found in Firebase.")
             return
         
-        print('got datahandler data from firebase')
+        print('Datahandler data acquired from firebase')
 
         # decode the source code and configuration
         datahandler_source_code = decode_from_base64(datahandler_data["source_code"]).decode("utf-8")
@@ -157,8 +155,15 @@ class Node:
         else:
             print("Recreated DataHandler class:", datahandler_class)
 
+        # data config contains the data paths for all nodes
+        # usually, i think it'd make more sense for the nodes to set this in their local .env files
+        # but for now, data config contains all paths-- we can access this specific node's from the replica name
+        replicaNumber = int(self.replicaName[-1])
+        personal_data_config = {next(iter(data_config)): data_config["data"][replicaNumber]}
+
+
         # initialize the datahandler with the configuration
-        data_handler = datahandler_class(data_config=data_config)
+        data_handler = datahandler_class(data_config=personal_data_config)
         print("DataHandler successfully reconstructed and initialized.")
         return data_handler
             
@@ -194,13 +199,35 @@ class Node:
                     "trained_params": "{newly_trained_params_db_link}"
             }} }}>'''
 
-            response = requests.post(url, headers=headers, data=data)
-            print(f"{self.replicaName} has submitted results for round {round_number}")
-
+            retries = 0;
+            max_retries = 5;
+            while retries < max_retries:
+                response = requests.post(url, headers=headers, data=data)
+                if response.status_code == 200:
+                    print(f"{self.replicaName} has submitted results for round {round_number}")
+                    return {
+                        'status': 'success',
+                        'message': 'node model parameters added successfully'
+                    }
+                else:
+                    print(f"Failed to add node {self.replicaName} params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
+                    retries += 1;
+                    time.sleep(15);
+            
             return {
-                'status': 'success',
-                'message': 'node model parameters added successfully'
-            }
+                        'status': 'error',
+                        'message': 'node was unable to add to blockchain'
+                    }
+
+            # response = requests.post(url, headers=headers, data=data)
+            # print("response after addding node data to blockchain ", response);
+
+            # print(f"{self.replicaName} has submitted results for round {round_number}")
+
+            # return {
+            #     'status': 'success',
+            #     'message': 'node model parameters added successfully'
+            # }
 
         except Exception as e:
             return {
@@ -221,12 +248,12 @@ class Node:
 
         # First round initialization
         if round_number == 1:
-            print('initializing weights, round1')
+            #print('initializing weights, round1')
             weights = self.local_training_handler.fl_model.get_model_update()
-            print("round 1 weights", weights)
+            #print("round 1 weights", weights)
         else:
             try:
-                print('round1+, getting weights from aggregator')
+                #print('round1+, getting weights from aggregator')
                 # Extract the key from the URL
                 model_updates_key = aggregator_model_params_db_link.split('/')[-1].replace('.json', '')
 
@@ -258,7 +285,7 @@ class Node:
             'model_update': encoded_params
         })
 
-        print('pushed weights to db')
+        print('Pushed weights to Firebase')
 
         return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
 
@@ -273,3 +300,12 @@ class Node:
         serialized_data = zlib.decompress(compressed_data)
         model_weights = pickle.loads(serialized_data)
         return model_weights
+    
+    # modified to get test data from datahandler
+    def inference(self, data):
+        data1 = self.data_handler.get_data()
+        print("got data from inference handler")
+        data_test = data1[1];
+        results = self.fl_model.evaluate(data_test)
+        print("results ", results);
+        return results

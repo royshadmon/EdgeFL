@@ -28,7 +28,7 @@ PRIVATE_KEY = os.getenv('PRIVATE_KEY')
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
 
 '''
-CURL REQUEST FOR DEPLOYING CONTRACT
+CURL REQUEST FOR DEPLOYING CONTRACT-- custom dataset and model, 1 node 
 
 curl -X POST http://localhost:8080/init \
 -H "Content-Type: application/json" \
@@ -41,10 +41,68 @@ curl -X POST http://localhost:8080/init \
   "model_name": "custom_test",
   "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
   "data_handler_path": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\custom_data_handler.py",
+  "data_config": {"data": ["C:\\Users\\nehab\\cse115d_anylog_edgelake\\heart_data\\party_data\\party_0.csv"]}
+
+}'
+'''
+
+'''
+CURL REQUEST FOR DEPLOYING CONTRACT-- custom dataset and model, 2 nodes
+
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [
+    "http://localhost:8081",
+    "http://localhost:8082"
+  ],
+  "model_path": "C:\\Users\\nehab\\cse115d\\testmodel.py",
+  "model_init_params": { "module__input_dim": 14 },
+  "model_name": "custom_test",
+  "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
+  "data_handler_path": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\custom_data_handler.py",
+  "data_config": {"data": ["C:\\Users\\nehab\\cse115d_anylog_edgelake\\heart_data\\party_data\\party_0.csv",
+                           "C:\\Users\\nehab\\cse115d_anylog_edgelake\\heart_data\\party_data\\party_1.csv"]}
+}'
+'''
+
+'''
+CURL REQUEST FOR DEPLOYING CONTRACT-- mnist built in dataset and model, 2 nodes
+
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [
+    "http://localhost:8081",
+    "http://localhost:8082"
+  ],
+  "model_path": "C:\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\federated-learning-lib-main\\examples\\iter_avg\\model_pytorch.py",
+  "model_init_params": { "module__input_dim": 14 },
+  "model_name": "mnist_test",
+  "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
+  "data_handler_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\venv38\\Lib\\site-packages\\ibmfl\\util\\data_handlers\\mnist_pytorch_data_handler.py",
+  "data_config": {"npz_file": ["C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",
+                           "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party1.npz"]}
+}'
+'''
+
+
+'''
+CURL REQUEST FOR DEPLOYING CONTRACT-- MNIST built-in dataset and model
+
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [
+    "http://localhost:8081"
+  ],
+  "model_weights_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\configs\\node\\pytorch\\pytorch_sequence.pt",
+  "data_handler_path": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\custom_data_handler.py",
   "data_config": {"data": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\heart_data\\party_data\\party_0.csv"}
 
 }'
 '''
+# with MNIST, we already have a pytorch 
 
 
 @app.route('/init', methods=['POST'])
@@ -56,7 +114,7 @@ def deploy_contract():
 
         model_path = data.get('model_path', os.getenv('MODEL_PYTHON'))
         model_init_params = data.get('model_init_params', None)
-        model_name = data.get('model_name', 'custom_test')
+        model_name = data.get('model_name', 'model')
         model_weights_path = data.get('model_weights_path')
 
         # upload model to firebase
@@ -193,7 +251,7 @@ curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
 -d '{
   "totalRounds": 5, 
-  "minParams": 1
+  "minParams": 2
 }'
 '''
 
@@ -217,7 +275,7 @@ async def init_training():
         for r in range(1, num_rounds + 1):
             print(f"Starting round {r}")
             aggregator.start_round(initialParams, r)
-            print("Sent initial parameters to nodes")
+            print("Finished start_round function")
             # Listen for updates from nodes
             newAggregatorParams = await listen_for_update_agg(min_params, r)
             print("Received aggregated parameters")
@@ -257,6 +315,8 @@ async def listen_for_update_agg(min_params, roundNumber):
 
                     if params_response.status_code == 200:
                         result = params_response.json()
+                        # print(f"blockchain get r{roundNumber} returns {result}")
+
                         if result and len(result) > 0:
                             # Extract all trained_params into a list
                             node_params_links = [
@@ -277,6 +337,28 @@ async def listen_for_update_agg(min_params, roundNumber):
             print(f"Error in aggregator listener: {e}")
 
         await asyncio.sleep(2)
+
+# added inference endpoint
+@app.route('/inference', methods=['POST'])
+def inference():
+    """Inference on current model w/ data passed in."""
+    try:
+        data = request.json
+        test_data = data.get('data', {})
+
+        results = aggregator.inference(aggregator.fusion_model.fl_model, test_data)
+
+        response = {
+            'status': 'success',
+            'message': 'Inference completed successfully',
+            'model_accuracy': results['acc'] * 100,
+            'classification_report': results['classificatio_report']
+        }
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':

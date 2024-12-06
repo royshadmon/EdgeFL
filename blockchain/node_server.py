@@ -129,7 +129,7 @@ def listen_for_start_round(nodeInstance, stop_event):
             # check if aggregator's params have been posted
             if response.status_code == 200:
                 data = response.json()
-                print(f"Response Data: {data}")  # Debugging line to inspect the structure
+                # print(f"Response Data: {data}")  # Debugging line to inspect the structure
 
                 round_data = None
                 for item in data:
@@ -141,9 +141,8 @@ def listen_for_start_round(nodeInstance, stop_event):
                 if round_data:
                     print(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
-                    # error here at modelUpdate = line
                     modelUpdate = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound)
-                    print(modelUpdate);
+                    # print(modelUpdate);
                     nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate)
                     nodeInstance.currentRound += 1
                 else:
@@ -155,6 +154,34 @@ def listen_for_start_round(nodeInstance, stop_event):
             print(f"Error in listener thread: {str(e)}")
             time.sleep(2)
 
+#inference untested
+'''
+curl -X POST http://localhost:8082/inference \
+-H "Content-Type: application/json" \
+-d '{
+}'
+'''
+@app.route('/inference', methods=['POST'])
+def inference():
+    """Inference on current model w/ data passed in."""
+    try:
+        data = request.json
+        test_data = data.get('data', {})
+
+        results = node_instance.inference(test_data)
+
+        print(results)
+
+        response = {
+            'status': 'success',
+            'message': 'Inference completed successfully',
+            'model_accuracy': results['accuracy_score'] * 100,
+        }
+
+        return jsonify(response)
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     # Set up argument parser
