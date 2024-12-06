@@ -57,7 +57,7 @@ def initialize_nodes(model_def, node_urls):
             print(f"Sending contract address to node at {url}")
 
             response = requests.post(f'{url}/init-node', json={
-                'replica_name': f"node{urlCount}",
+                'replica_name': f"node{urlCount+1}",
                 'model_def': model_def
             })
 

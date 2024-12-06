@@ -4,6 +4,7 @@ Restricted Materials of IBM
 20221069
 © Copyright IBM Corp. 2023 All Rights Reserved.
 """
+import ast
 import logging
 import os
 
@@ -48,7 +49,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
             """
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': 'sql mnist_fl SELECT * FROM node1'
+                'command': query,
             }
 
             try:
@@ -81,8 +82,8 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # query_train = f"SELECT * FROM {node_name}"
         # print(query_train)
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
-        query_train = f"SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+        query_train = f"sql mnist_fl SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"sql mnist_fl SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
 
 
         try:
@@ -90,15 +91,37 @@ class CustomMnistPytorchDataHandler(DataHandler):
             test_data = fetch_data_from_db(query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-            x_train = np.array(train_data["x"])
-            y_train = np.array(train_data["y"])
-            x_test = np.array(test_data["x"])
-            y_test = np.array(test_data["y"])
+            query_train_result = np.array(train_data["Query"])
+            x_train_images = []
+            y_train_labels = []
+            for i in range(len(query_train_result)):
+                x_train_image_np_array = np.array(ast.literal_eval(query_train_result[i]['image']))
+                y_train_label = query_train_result[i]['label']
+                x_train_images.append(x_train_image_np_array)
+                y_train_labels.append(y_train_label)
+
+            x_train_images_final = np.array(x_train_images, dtype=np.float32)
+
+            y_train_label_final = np.array(y_train_labels, dtype=np.float32)
+
+            query_test_result = np.array(test_data["Query"])
+            x_test_images = []
+            y_test_labels = []
+            for i in range(len(query_test_result)):
+                x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+                x_test_images.append(x_test_image_np_array)
+                y_test_label = query_test_result[i]['label']
+                y_test_labels.append(y_test_label)
+
+            x_test_images_final = np.array(x_test_images, dtype=object)
+
+            y_test_label_final = np.array(y_test_labels, dtype=object)
+
 
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
 
-        return (x_train, y_train), (x_test, y_test)
+        return (x_train_images_final,  y_train_label_final), (x_test_images_final, y_test_label_final)
 
         # SAMPLE SQL Edglake Commands:
         # FORMAT:
