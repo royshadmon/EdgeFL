@@ -1,0 +1,10 @@
+web3
+firebase_admin
+numpy
+tensorflow
+./federated-learning-lib-main/federated-learning-lib/federated_learning_lib-2.0.1-py3-none-any.whl
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=0.15.0
+-f https://download.pytorch.org/whl/cpu
+skorch>=0.12.0
