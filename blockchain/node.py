@@ -81,7 +81,7 @@ class Node:
 
         print('Downloaded model_data from Firebase')
 
-        # derive fields, then code source code and weights 
+        # derive fields, then decode source code and weights 
         model_source_code = decode_from_base64(model_data["source_code"]).decode("utf-8")
         model_weights = decode_from_base64(model_data["weights"])
         init_params = model_data.get("init_params", None)
@@ -212,35 +212,35 @@ class Node:
                     "trained_params": "{newly_trained_params_db_link}"
             }} }}>'''
 
-            retries = 0;
-            max_retries = 5;
-            while retries < max_retries:
-                response = requests.post(url, headers=headers, data=data)
-                if response.status_code == 200:
-                    print(f"{self.replicaName} has submitted results for round {round_number}")
-                    return {
-                        'status': 'success',
-                        'message': 'node model parameters added successfully'
-                    }
-                else:
-                    print(f"Failed to add node {self.replicaName} params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
-                    retries += 1;
-                    time.sleep(15);
+            # retries = 0;
+            # max_retries = 5;
+            # while retries < max_retries:
+            #     response = requests.post(url, headers=headers, data=data)
+            #     if response.status_code == 200:
+            #         print(f"{self.replicaName} has submitted results for round {round_number}")
+            #         return {
+            #             'status': 'success',
+            #             'message': 'node model parameters added successfully'
+            #         }
+            #     else:
+            #         print(f"Failed to add node {self.replicaName} params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
+            #         retries += 1;
+            #         time.sleep(15);
             
-            return {
-                        'status': 'error',
-                        'message': 'node was unable to add to blockchain'
-                    }
-
-            # response = requests.post(url, headers=headers, data=data)
-            # print("response after addding node data to blockchain ", response);
-
-            # print(f"{self.replicaName} has submitted results for round {round_number}")
-
             # return {
-            #     'status': 'success',
-            #     'message': 'node model parameters added successfully'
-            # }
+            #             'status': 'error',
+            #             'message': 'node was unable to add to blockchain'
+            #         }
+
+            response = requests.post(url, headers=headers, data=data)
+            print("response after addding node data to blockchain ", response);
+
+            print(f"{self.replicaName} has submitted results for round {round_number}")
+
+            return {
+                'status': 'success',
+                'message': 'node model parameters added successfully'
+            }
 
         except Exception as e:
             return {

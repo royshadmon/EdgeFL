@@ -66,26 +66,9 @@ curl -X POST http://localhost:8080/init \
 }'
 '''
 
-# '''
-# CURL REQUEST FOR DEPLOYING CONTRACT-- mnist built in dataset and model, 2 nodes
-
-# curl -X POST http://localhost:8080/init \
-# -H "Content-Type: application/json" \
-# -d '{
-#   "nodeUrls": [
-#     "http://localhost:8081",
-#     "http://localhost:8082"
-#   ],
-#   "model_path": "C:\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\federated-learning-lib-main\\examples\\iter_avg\\model_pytorch.py",
-#   "model_name": "mnist_test",
-#   "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
-#   "data_handler_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\venv38\\Lib\\site-packages\\ibmfl\\util\\data_handlers\\mnist_pytorch_data_handler.py",
-#   "data_config": {"npz_file": ["C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",
-#                            "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party1.npz"]}
-# }'
-# '''
-
 '''
+CURL REQUEST FOR DEPLOYING CONTRACT-- mnist built in dataset and model, 2 nodes
+
 curl -X POST http://localhost:8080/init \
 -H "Content-Type: application/json" \
 -d '{
@@ -97,6 +80,29 @@ curl -X POST http://localhost:8080/init \
   "model_name": "mnist_test",
   "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
   "data_handler_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\venv38\\Lib\\site-packages\\ibmfl\\util\\data_handlers\\mnist_pytorch_data_handler.py",
+  "data_config": {
+    "npz_file": [
+      "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",
+      "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party1.npz"
+    ]
+  }
+}'
+'''
+
+'''
+CURL REQUEST FOR DEPLOYING CONTRACT-- mnist dataset and sql model, 2 nodes
+
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [
+    "http://localhost:8081",
+    "http://localhost:8082"
+  ],
+  "model_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\federated-learning-lib-main\\examples\\iter_avg\\model_pytorch.py",
+  "model_name": "mnist_test",
+  "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
+  "data_handler_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\custom_sql_datahandler.py",
   "data_config": {
     "npz_file": [
       "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",

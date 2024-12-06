@@ -56,38 +56,38 @@ class Aggregator:
                                         "initParams": "{initParamsLink}"
                               }} }}>'''
 
-            retries = 0;
-            max_retries = 5;
-            while retries < max_retries:
-                response = requests.post(url, headers=headers, data=data)
-                if response.status_code == 200:
-                    print(f"Aggregator has submitted parameters for round {roundNumber} to the blockchain.")
-                    return {
-                        'status': 'success',
-                        'message': 'Aggregator model parameters added successfully'
-                    }
-                else:
-                    print(f"Failed to add aggregator params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
-                    retries += 1;
-                    time.sleep(15);
+            # retries = 0;
+            # max_retries = 5;
+            # while retries < max_retries:
+            #     response = requests.post(url, headers=headers, data=data)
+            #     if response.status_code == 200:
+            #         print(f"Aggregator has submitted parameters for round {roundNumber} to the blockchain.")
+            #         return {
+            #             'status': 'success',
+            #             'message': 'Aggregator model parameters added successfully'
+            #         }
+            #     else:
+            #         print(f"Failed to add aggregator params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
+            #         retries += 1;
+            #         time.sleep(15);
         
-            return {
-                'status': 'error',
-                'message': 'aggregator was unable to add to blockchain'
-            }
+            # return {
+            #     'status': 'error',
+            #     'message': 'aggregator was unable to add to blockchain'
+            # }
             
-            # response = requests.post(url, headers=headers, data=data)
-            # print(response.status_code)
-            # if response.status_code == 200:
-            #     return {
-            #         'status': 'success',
-            #         'message': 'initTraining called successfully'
-            #     }
-            # else:
-            #     return {
-            #         'status': 'error',
-            #         'message': f'Request failed with status code: {response.status_code}'
-            #     }
+            response = requests.post(url, headers=headers, data=data)
+            print(response.status_code)
+            if response.status_code == 200:
+                return {
+                    'status': 'success',
+                    'message': 'initTraining called successfully'
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Request failed with status code: {response.status_code}'
+                }
 
         except Exception as e:
             return {
