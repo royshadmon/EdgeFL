@@ -35,7 +35,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
         """
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
-    def load_dataset(self, nb_points=500):
+    def load_dataset(self, node_name, round_number):
 
         def fetch_data_from_db(query):
             """
@@ -76,9 +76,10 @@ class CustomMnistPytorchDataHandler(DataHandler):
         :rtype: tuple
         """
 
-        # these queries will depend on how we've uploaded mnist data
-        query_train = f"SELECT * FROM x_train_y_train ORDER BY timestamp LIMIT {nb_points}"
-        query_test = f"SELECT * FROM x_test_y_test ORDER BY timestamp LIMIT {nb_points}"
+        # these queries will depend on how we've uploaded mnist data and use round_number param in query
+        # we are pulling batched data for each round
+        query_train = f"SELECT * FROM train-{node_name}-{round_number}"
+        query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         try:
             train_data = fetch_data_from_db(query_train)
