@@ -47,8 +47,8 @@ class CustomMnistPytorchDataHandler(DataHandler):
             :rtype: dict
             """
             headers = {
-                "command": f"sql {os.getenv('PSQL_DB_NAME')} {query}",
-                "destination": "network",
+                'User-Agent': 'AnyLog/1.23',
+                'command': 'sql mnist_fl SELECT * FROM node1'
             }
 
             try:
@@ -78,8 +78,11 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
         # these queries will depend on how we've uploaded mnist data and use round_number param in query
         # we are pulling batched data for each round
-        query_train = f"SELECT * FROM train-{node_name}-{round_number}"
-        query_test = f"SELECT * FROM test-{node_name}-{round_number}"
+        # query_train = f"SELECT * FROM {node_name}"
+        # print(query_train)
+        # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
+        query_train = f"SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
 
         try:
             train_data = fetch_data_from_db(query_train)

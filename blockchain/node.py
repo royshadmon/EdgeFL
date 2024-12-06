@@ -9,6 +9,7 @@ from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from custom_data_handler import CustomMnistPytorchDataHandler
 import requests
 # import pathlib
 
@@ -58,7 +59,7 @@ class Node:
             }
 
             fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-            data_handler = MnistPytorchDataHandler(data_config=data_config)
+            data_handler = CustomMnistPytorchDataHandler(data_config=data_config)
             self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
         # model_def == 2: Sklearn and so on
