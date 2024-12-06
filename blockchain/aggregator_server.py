@@ -66,9 +66,26 @@ curl -X POST http://localhost:8080/init \
 }'
 '''
 
-'''
-CURL REQUEST FOR DEPLOYING CONTRACT-- mnist built in dataset and model, 2 nodes
+# '''
+# CURL REQUEST FOR DEPLOYING CONTRACT-- mnist built in dataset and model, 2 nodes
 
+# curl -X POST http://localhost:8080/init \
+# -H "Content-Type: application/json" \
+# -d '{
+#   "nodeUrls": [
+#     "http://localhost:8081",
+#     "http://localhost:8082"
+#   ],
+#   "model_path": "C:\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\federated-learning-lib-main\\examples\\iter_avg\\model_pytorch.py",
+#   "model_name": "mnist_test",
+#   "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
+#   "data_handler_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\venv38\\Lib\\site-packages\\ibmfl\\util\\data_handlers\\mnist_pytorch_data_handler.py",
+#   "data_config": {"npz_file": ["C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",
+#                            "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party1.npz"]}
+# }'
+# '''
+
+'''
 curl -X POST http://localhost:8080/init \
 -H "Content-Type: application/json" \
 -d '{
@@ -76,34 +93,18 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8081",
     "http://localhost:8082"
   ],
-  "model_path": "C:\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\federated-learning-lib-main\\examples\\iter_avg\\model_pytorch.py",
-  "model_init_params": { "module__input_dim": 14 },
+  "model_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\federated-learning-lib-main\\examples\\iter_avg\\model_pytorch.py",
   "model_name": "mnist_test",
   "model_weights_path": "C:\\Users\\nehab\\cse115d\\model_weights.pt",
   "data_handler_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\venv38\\Lib\\site-packages\\ibmfl\\util\\data_handlers\\mnist_pytorch_data_handler.py",
-  "data_config": {"npz_file": ["C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",
-                           "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party1.npz"]}
+  "data_config": {
+    "npz_file": [
+      "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party0.npz",
+      "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\data\\mnist\\data_party1.npz"
+    ]
+  }
 }'
 '''
-
-
-'''
-CURL REQUEST FOR DEPLOYING CONTRACT-- MNIST built-in dataset and model
-
-curl -X POST http://localhost:8080/init \
--H "Content-Type: application/json" \
--d '{
-  "nodeUrls": [
-    "http://localhost:8081"
-  ],
-  "model_weights_path": "C:\\Users\\nehab\\cse115d\\Anylog-Edgelake-CSE115D\\blockchain\\configs\\node\\pytorch\\pytorch_sequence.pt",
-  "data_handler_path": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\custom_data_handler.py",
-  "data_config": {"data": "C:\\Users\\nehab\\cse115d_anylog_edgelake\\heart_data\\party_data\\party_0.csv"}
-
-}'
-'''
-# with MNIST, we already have a pytorch 
-
 
 @app.route('/init', methods=['POST'])
 def deploy_contract():
@@ -155,19 +156,54 @@ def pytorch_upload(model_file_path, model_init_params, model_name, firebase_mode
             break
 
     if model_class is None:
-        raise ValueError("No PyTorch model class found in the specified file.")
+        print("No PyTorch model class found in the specified file.")
+
+        print("Searching for nn.Sequential object...")
+
+        # set up fields necessary for get_model_config
+        
+        # temporary folder for model serialization
+        folder_configs = os.path.join(os.getcwd(), "model");
+        model_weights_path = os.path.join(folder_configs, "pytorch_sequence.pt");
+        dataset = None; # this isn't even used in the model so let's skip for now
+        is_agg = False; # this is being uploaded for nodes to use, we want an actual model
+        party_id = None; # also isn't even used
+
+        get_model_config = namespace['get_model_config']
+        model_config = get_model_config(folder_configs, dataset, is_agg, party_id)
+
+        if model_config is None or "spec" not in model_config:
+            raise ValueError("Failed to retrieve a valid model configuration.")
+        
+        #print("Model Config: ", model_config)
+
+        # build model_specs
+        model_specs = model_config['spec']
+        print("model specs: ", model_specs)
+
+        # Initialize PytorchFLModel
+        fl_model = PytorchFLModel(
+            model_name="Pytorch_NN",
+            model_spec=model_specs
+        )
+        
+
     else:
         print("Identified model class:", model_class)
 
-    # initialize model
-    fl_model = PytorchFLModel(
-        model_name=model_name,
-        pytorch_module=model_class,
-        module_init_params=model_init_params,
-    )
+        # Initialize PytorchFLModel
+        fl_model = PytorchFLModel(
+            model_name="Pytorch_NN",
+            pytorch_module=model_class,
+            module_init_params=model_init_params,
+        )
 
-    # save current model weights (empty for now)
-    fl_model.save_model(filename=model_weights_path)
+        # Save model weights
+        model_weights_path = os.path.join(os.getcwd(), "model\\pytorch_sequence.pt");
+        fl_model.save_model(filename=model_weights_path)
+
+        model_specs = None
+
 
     # Encode the source code and model weights
     encoded_source_code = encode_to_base64(model_source_code)
@@ -179,6 +215,7 @@ def pytorch_upload(model_file_path, model_init_params, model_name, firebase_mode
         "source_code": encoded_source_code,
         "weights": encoded_weights,
         "init_params": model_init_params,
+        "model_spec": model_specs
     }
 
     firebase_model_ref = db.reference(firebase_model_path)

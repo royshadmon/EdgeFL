@@ -84,7 +84,8 @@ class Node:
         # derive fields, then code source code and weights 
         model_source_code = decode_from_base64(model_data["source_code"]).decode("utf-8")
         model_weights = decode_from_base64(model_data["weights"])
-        init_params = model_data["init_params"]
+        init_params = model_data.get("init_params", None)
+        model_specs = model_data.get("model_spec", None)
 
         # Save the downloaded weights to a file-- necessary to load the model later 
         downloaded_weights_path = "downloaded_model_weights.pt"
@@ -105,21 +106,32 @@ class Node:
                 break
 
         if downloaded_model_class is None:
-            raise ValueError("No PyTorch model class found in the downloaded source code.")
+            print("No PyTorch model class found in the downloaded source code.")
+        
+            print("Creating nn.Sequential version...")
+
+            # set up fields necessary for get_model_config
+
+            fl_model = PytorchFLModel(
+                model_name="Pytorch_NN",
+                model_spec=model_specs
+            )
         else:
             print("Recreated model class:", downloaded_model_class)
 
-        # recreate the PytorchFLModel and load weights
-        fl_model = PytorchFLModel(
-            model_name="Pytorch_NN",
-            pytorch_module=downloaded_model_class,
-            module_init_params=init_params,
-        )
-        fl_model.load_model(
-            pytorch_module=downloaded_model_class,
-            model_filename=downloaded_weights_path,
-            module_init_params=init_params,
-        )
+            # Reinitialize the PytorchFLModel and load the weights
+            fl_model = PytorchFLModel(
+                model_name="Pytorch_NN",
+                pytorch_module=downloaded_model_class,
+                module_init_params=init_params,
+            )
+        
+            fl_model.load_model(
+                pytorch_module=downloaded_model_class,
+                model_filename=downloaded_weights_path,
+                module_init_params=init_params,
+            )
+
         print("PytorchFLModel successfully reconstructed and loaded.")
         return fl_model
 
@@ -159,7 +171,8 @@ class Node:
         # usually, i think it'd make more sense for the nodes to set this in their local .env files
         # but for now, data config contains all paths-- we can access this specific node's from the replica name
         replicaNumber = int(self.replicaName[-1])
-        personal_data_config = {next(iter(data_config)): data_config["data"][replicaNumber]}
+        key = next(iter(data_config))
+        personal_data_config = {key: data_config[key][replicaNumber]}
 
 
         # initialize the datahandler with the configuration
