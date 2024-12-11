@@ -9,6 +9,7 @@ from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from custom_data_handler import CustomMnistPytorchDataHandler
 import requests
 import torch
 import time
@@ -53,22 +54,7 @@ class Node:
         self.local_training_handler = LocalTrainingHandler(fl_model=self.fl_model, data_handler=self.data_handler)
 
 
-        # model_def == 1: PytorchFLModel
-        # if model_def == 1:
-        #     model_path = os.path.join(current_dir, "configs", "node", "pytorch", "pytorch_sequence.pt")
-
-        #     model_spec = {
-        #         "loss_criterion": "nn.NLLLoss",
-        #         "model_definition": str(model_path),
-        #         "model_name": "pytorch-nn",
-        #         "optimizer": "optim.Adadelta"
-        #     }
-
-        #     fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-        #     data_handler = MnistPytorchDataHandler(data_config=data_config)
-        #     self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
-        # add more model defs in elifs below
-        # model_def == 2: Sklearn and so on
+   
 
     def load_firebase_model(self, firebase_model_path): 
  
@@ -286,9 +272,19 @@ class Node:
         # Update model with weights
         self.local_training_handler.update_model(weights)
 
+        print("about to load data")
+
+        # load new data
+        (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(
+            node_name=self.replicaName, round_number=round_number)
+        self.local_training_handler.data_handler.x_train = x_train
+        self.local_training_handler.data_handler.y_train = y_train
+        self.local_training_handler.data_handler.x_test = x_test
+        self.local_training_handler.data_handler.y_test = y_test
+
+
+
         # Train model
-        # self.local_training_handler.data_handler.load_dataset(nb_points=50)
-        self.local_training_handler.data_handler.load_dataset()
         model_update = self.local_training_handler.train({})
 
         # Save and return new weights
@@ -313,6 +309,7 @@ class Node:
         serialized_data = zlib.decompress(compressed_data)
         model_weights = pickle.loads(serialized_data)
         return model_weights
+
     
     # modified to get test data from datahandler
     def inference(self, data):

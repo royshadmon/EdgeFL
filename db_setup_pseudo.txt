@@ -1,0 +1,11 @@
+SET UP PSUEDO CODE
+
+THIS WILL POPULATE PSQL DATA BEFORE TRAINING
+
+for ROUND in range(number of rounds of data we want):
+    for NODE in [list of nodes name]:
+        (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(nb_points=50)
+        save [ROUND,(x_train, y_train)] to table "<NODE>-train"
+        save [ROUND,(x_test, y_test)] to table "<NODE>-test"
+
+

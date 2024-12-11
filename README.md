@@ -1,5 +1,6 @@
 # Federated Learning -- AnyLog EdgeLake
 
+
 <!-- To Do
 
 - Need to add different commands for Mac & Windows
@@ -16,6 +17,7 @@
 
 ## Prerequisites
 <!-- we need specifiy more stuff here -->
+
 - pip install -r requirements.txt
 ### Software Requirements
 - Python 3.7+ installed.
@@ -64,6 +66,7 @@ git clone https://github.com/EdgeLake/EdgeLake
 
 ### Step 5: Testing with CURL Commands
 <!-- Example curl commands here -->
+
 
 '''
 CURL REQUEST FOR DEPLOYING CONTRACT-- General Form
@@ -171,7 +174,6 @@ curl -X POST http://localhost:8080/init \
 }'
 '''
 
----
 
 ## Automating CURL Commands
 <!-- write a script at the end when all the code is ready -->
@@ -195,7 +197,7 @@ for cmd in curl_commands:
         print(f"Error executing command: {cmd}\nError:\n{e.stderr}")
 ```
 
-<!-- ### Instructions for Script
+### Instructions for Script
 
 
 
@@ -203,7 +205,7 @@ for cmd in curl_commands:
 
 ## Troubleshooting
 
-### CLI Issues -->
+### CLI Issues
 
 
 ### CURL Issues
@@ -211,4 +213,3 @@ for cmd in curl_commands:
   - Verify the EdgeLake service is running.
   - Check network connectivity and server status.
 
----

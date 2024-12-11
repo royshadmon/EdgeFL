@@ -6,7 +6,6 @@ from node import Node
 import numpy as np
 import threading
 import time
-from web3 import Web3
 import os
 import argparse
 import requests
@@ -129,7 +128,6 @@ def listen_for_start_round(nodeInstance, stop_event):
             # check if aggregator's params have been posted
             if response.status_code == 200:
                 data = response.json()
-                # print(f"Response Data: {data}")  # Debugging line to inspect the structure
 
                 round_data = None
                 for item in data:
@@ -145,6 +143,7 @@ def listen_for_start_round(nodeInstance, stop_event):
                     # print(modelUpdate);
                     nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate)
                     nodeInstance.currentRound += 1
+
                 else:
                     print(f"No aggregator parameters found for round {nodeInstance.currentRound}")
 
@@ -182,6 +181,30 @@ def inference():
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/inference', methods=['POST'])
+def inference():
+    """Inference on current model w/ data passed in."""
+    try:
+        # data = request.json
+        # test_data = data.get('data', {})
+
+        # hard coding tht test data right now: test_data = (x_test, y_test)
+        (_), test_data = node_instance.local_training_handler.data_handler.get_data()
+
+        # test data should be in the form of np.array
+        # test_data[0] = x_test, test_data[1] = y_test
+        results = node_instance.inference(test_data[0])  # could also try test_data[1]
+        response = {
+            'status': 'success',
+            'message': 'Inference completed successfully',
+            'model_accuracy': results['acc'] * 100,
+            'classification_report': results['classificatio_report']
+        }
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 if __name__ == '__main__':
     # Set up argument parser
