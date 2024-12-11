@@ -13,7 +13,7 @@ from ibmfl.model.model_update import ModelUpdate
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 
 
-CONTRACT_ADDRESS = "0x4ae311B85B017bf7EAa7a96D3109f58795F5F4BF"
+import time
 
 load_dotenv()
 
@@ -51,6 +51,7 @@ class Aggregator:
             external_ip = os.getenv("EXTERNAL_IP")
             url = f'http://{external_ip}:32049'
 
+            # in khaled's: for node_num in range(1, int(minParams) + 1)
             headers = {
                 'User-Agent': 'AnyLog/1.23',
                 'Content-Type': 'text/plain',
@@ -58,14 +59,33 @@ class Aggregator:
             }
 
             # Format data exactly like the example curl command but with your values
-            # NOTE: ask why are we adding the node num from agg
-            data = f'''<my_policy = {{"r{roundNumber}" : {{
+            # denote aggregator's params with a 
+            data = f'''<my_policy = {{"a{roundNumber}" : {{
                                         "initParams": "{initParamsLink}"
                               }} }}>'''
 
-            print(f"Training initialized with {roundNumber} rounds")
-
+            # retries = 0;
+            # max_retries = 5;
+            # while retries < max_retries:
+            #     response = requests.post(url, headers=headers, data=data)
+            #     if response.status_code == 200:
+            #         print(f"Aggregator has submitted parameters for round {roundNumber} to the blockchain.")
+            #         return {
+            #             'status': 'success',
+            #             'message': 'Aggregator model parameters added successfully'
+            #         }
+            #     else:
+            #         print(f"Failed to add aggregator params to blockchain. Response: {response}. Retrying ({retries + 1}/{max_retries})...")
+            #         retries += 1;
+            #         time.sleep(15);
+        
+            # return {
+            #     'status': 'error',
+            #     'message': 'aggregator was unable to add to blockchain'
+            # }
+            
             response = requests.post(url, headers=headers, data=data)
+            print(response.status_code)
             if response.status_code == 200:
                 return {
                     'status': 'success',
@@ -145,6 +165,7 @@ class Aggregator:
         model_weights = pickle.loads(serialized_data)
         return model_weights
 
-    def inference(self, data):
-        results = self.fusion_model.fl_model.predict(data)
+
+    def inference(self, model, data):
+        results = model.evaluate(data)
         return results
