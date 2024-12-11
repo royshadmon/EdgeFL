@@ -128,7 +128,7 @@ def listen_for_start_round(nodeInstance, stop_event):
 
             if response.status_code == 200:
                 data = response.json()
-                print(f"Response Data: {data}")  # Debugging line to inspect the structure
+                # print(f"Response Data: {data}")  # Debugging line 
 
                 round_data = None
                 for item in data:
@@ -143,8 +143,8 @@ def listen_for_start_round(nodeInstance, stop_event):
                     modelUpdate = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound)
                     nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate)
                     nodeInstance.currentRound += 1
-                else:
-                    print(f"No data found for round r{nodeInstance.currentRound}")
+                # else: # Debugging line
+                #     print(f"No data found for round r{nodeInstance.currentRound}")
 
             time.sleep(2)  # Poll every 2 seconds
 

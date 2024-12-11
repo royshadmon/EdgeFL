@@ -103,10 +103,10 @@ async def init_training():
         for r in range(1, num_rounds + 1):
             print(f"Starting round {r}")
             aggregator.start_round(initialParams, r)
-            print("Sent initial parameters to nodes")
+            # print("Sent initial parameters to nodes")
             # Listen for updates from nodes
             newAggregatorParams = await listen_for_update_agg(min_params, r)
-            print("Received aggregated parameters")
+            # print("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
             initialParams = newAggregatorParams
@@ -175,7 +175,7 @@ async def listen_for_update_agg(min_params, roundNumber):
                                 if f'a{roundNumber}' in item
                             ]
 
-                            print(f"Collected trained_params links: {node_params_links}")  # Debugging line
+                            # print(f"Collected trained_params links: {node_params_links}")  # Debugging line
 
                             # Aggregate the parameters
                             aggregated_params_link = aggregator.aggregate_model_params(

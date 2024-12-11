@@ -145,6 +145,8 @@ class Node:
         # Update model with weights
         self.local_training_handler.update_model(weights)
 
+        print("about to load data")
+
         # load new data
         (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(
             node_name=self.replicaName, round_number=round_number)
@@ -152,6 +154,8 @@ class Node:
         self.local_training_handler.data_handler.y_train = y_train
         self.local_training_handler.data_handler.x_test = x_test
         self.local_training_handler.data_handler.y_test = y_test
+
+
 
         # Train model
         model_update = self.local_training_handler.train({})

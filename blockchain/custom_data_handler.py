@@ -26,6 +26,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
         # pre-process the datasets
         self.preprocess()
+        print(self.x_test)
 
     def get_data(self):
         """
@@ -34,6 +35,8 @@ class CustomMnistPytorchDataHandler(DataHandler):
         :return: training data
         :rtype: `tuple`
         """
+        print("Train data shape in get_data:", self.x_train.shape)
+        print("Test data shape in get_data:", self.x_test.shape)
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
     def load_dataset(self, node_name, round_number):
@@ -102,7 +105,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
             x_train_images_final = np.array(x_train_images, dtype=np.float32)
 
-            y_train_label_final = np.array(y_train_labels, dtype=np.float32)
+            y_train_label_final = np.array(y_train_labels, dtype=np.int64)
 
             query_test_result = np.array(test_data["Query"])
             x_test_images = []
@@ -113,9 +116,15 @@ class CustomMnistPytorchDataHandler(DataHandler):
                 y_test_label = query_test_result[i]['label']
                 y_test_labels.append(y_test_label)
 
-            x_test_images_final = np.array(x_test_images, dtype=object)
+            img_rows, img_cols = 28, 28
+            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
+            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
+            
+            print("Train data shape after loading and reshaping:", x_train_images_final.shape)
 
-            y_test_label_final = np.array(y_test_labels, dtype=object)
+            y_test_label_final = np.array(y_test_labels, dtype=np.int64)
+            print("Test data shape after loading:", x_test_images_final.shape)
+
 
 
         except Exception as e:
@@ -134,20 +143,20 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
     def preprocess(self):
         """
-        Preprocesses the training and testing dataset, \
-        e.g., reshape the images according to self.channels_first; \
-        convert the labels to binary class matrices.
-
+        Preprocesses the training and testing datasets.
         :return: None
         """
+        print("Train data shape before preprocessing:", self.x_train.shape)
+        print("Test data shape before preprocessing:", self.x_test.shape)
         img_rows, img_cols = 28, 28
-        self.x_train = self.x_train.astype("float32").reshape(self.x_train.shape[0], 1, img_rows, img_cols)
-        self.x_test = self.x_test.astype("float32").reshape(self.x_test.shape[0], 1, img_rows, img_cols)
-        # print(self.x_train.shape[0], 'train samples')
-        # print(self.x_test.shape[0], 'test samples')
-
+        print("Train data shape before preprocessing:", self.x_train.shape)
+        
+        # Force reshape to 4D format [batch_size, channels, height, width]
+        self.x_train = self.x_train.reshape(-1, 1, img_rows, img_cols)
+        self.x_test = self.x_test.reshape(-1, 1, img_rows, img_cols)
+        
+        print("Train data shape after preprocessing:", self.x_train.shape)
+        
+        # Convert labels to correct type
         self.y_train = self.y_train.astype("int64")
         self.y_test = self.y_test.astype("int64")
-        # print('y_train shape:', self.y_train.shape)
-        # print(self.y_train.shape[0], 'train samples')
-        # print(self.y_test.shape[0], 'test samples')
