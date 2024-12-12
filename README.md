@@ -76,6 +76,10 @@ curl -X POST http://localhost:8080/init \
 }'
 ```
 
+## Custom Data Handler
+Documentation for creating custom data handler:
+- 
+
 ## Starting the Training Process
 
 To begin the training process, use this curl command:

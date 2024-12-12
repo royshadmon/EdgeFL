@@ -160,3 +160,9 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # Convert labels to correct type
         self.y_train = self.y_train.astype("int64")
         self.y_test = self.y_test.astype("int64")
+
+    def get_all_test_data(self):
+        # 1. run sql to get all test data for x and y
+        # 2. check if number returned equals number in db
+        # 3. return test data
+        pass

@@ -80,7 +80,7 @@ curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
 -d '{
   "totalRounds": 5, 
-  "minParams": 1
+  "minParams": 2
 }'
 '''
 
@@ -134,7 +134,7 @@ def inference():
             'status': 'success',
             'message': 'Inference completed successfully',
             'model_accuracy': results['acc'] * 100,
-            'classification_report': results['classificatio_report']
+            'classification_report': results['classification_report']
         }
         return jsonify(response)
     except Exception as e:

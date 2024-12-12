@@ -16,7 +16,7 @@ def create_database():
     """Create PostgreSQL database if it doesn't exist."""
     conn = psycopg2.connect(
         user="postgres",
-        password="postgres",
+        password="Soccer101701!",
         host="localhost",
         port="5432"
     )
@@ -39,7 +39,7 @@ def get_db_connection():
     return psycopg2.connect(
         dbname="mnist_fl",
         user="postgres",
-        password="postgres",
+        password="Soccer101701!",
         host="localhost",
         port="5432"
     )
@@ -134,8 +134,8 @@ def verify_round_data(conn, table_name, round_num):
 
 def main():
     # Configuration
-    NUM_NODES = 2
-    NUM_ROUNDS = 5
+    NUM_NODES = 1
+    NUM_ROUNDS = 12
     TRAIN_SAMPLES_PER_ROUND = 50
     TEST_SAMPLES_PER_ROUND = 10
 

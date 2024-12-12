@@ -42,7 +42,8 @@ class Node:
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
-        data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
+        # data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
+        data_path = os.path.join(current_dir, "mnist.npz")
         data_config = {
             "npz_file": str(data_path)
         }
@@ -60,6 +61,7 @@ class Node:
 
             fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
             data_handler = CustomMnistPytorchDataHandler(self.replicaName)
+            # data_handler = MnistPytorchDataHandler(data_config=data_config)
             self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
         # model_def == 2: Sklearn and so on
@@ -146,6 +148,7 @@ class Node:
         self.local_training_handler.update_model(weights)
 
         print("about to load data")
+        # self.local_training_handler.data_handler.load_dataset(nb_points=5)
 
         # load new data
         (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(
@@ -181,6 +184,16 @@ class Node:
         model_weights = pickle.loads(serialized_data)
         return model_weights
 
-    def inference(self, data):
-        results = self.local_training_handler.fl_model.predict(data)
+    def inference(self):
+        test_data = self.local_training_handler.data_handler.get_all_test_data()
+
+        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
+        # y_pred = np.array([])
+        # for i_samples in range(sample_count):
+        #     pred = party.fl_model.predict(
+        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
+        #     y_pred = np.append(y_pred, pred.argmax())
+        # acc = accuracy_score(y_true, y_pred) * 100
+
+        results = self.local_training_handler.fl_model.evaluate(test_data)
         return results

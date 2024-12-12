@@ -160,17 +160,15 @@ def inference():
         # data = request.json
         # test_data = data.get('data', {})
 
-        # hard coding tht test data right now: test_data = (x_test, y_test)
-        (_), test_data = node_instance.local_training_handler.data_handler.get_data()
 
         # test data should be in the form of np.array
         # test_data[0] = x_test, test_data[1] = y_test
-        results = node_instance.inference(test_data[0])  # could also try test_data[1]
+        results = node_instance.inference()
         response = {
             'status': 'success',
             'message': 'Inference completed successfully',
             'model_accuracy': results['acc'] * 100,
-            'classification_report': results['classificatio_report']
+            'classification_report': results['classification_report']
         }
         return jsonify(response)
     except Exception as e:

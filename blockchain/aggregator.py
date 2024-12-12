@@ -146,5 +146,5 @@ class Aggregator:
         return model_weights
 
     def inference(self, data):
-        results = self.fusion_model.fl_model.predict(data)
+        results = self.fusion_model.fl_model.evaluate(data)
         return results
