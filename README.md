@@ -14,92 +14,103 @@
 - **Privacy:** Keeps data on nodes, minimizing exposure risks and enhancing security with privacy-preserving technologies such as blockchain.
 
 
-## Prerequisites
+<!-- ## Prerequisites -->
 <!-- we need specifiy more stuff here -->
 ### Software Requirements
 - Python 3.7+ installed.
+# AnyLog-Edgelake Setup Guide
 
-### Repository Access
-Clone the EdgeLake repository:
+This guide will walk you through setting up and running the AnyLog-Edgelake system.
+
+## Prerequisites
+
+- Git
+- Python (with pip)
+- Ability to run shell scripts
+- cURL (for API requests)
+
+## Installation Steps
+
+1. Clone the repository and switch to the merge branch:
+   ```bash
+   git clone https://github.com/isba1/Anylog-Edgelake-CSE115D.git
+   cd Anylog-Edgelake-CSE115D
+   git checkout merge-branch
+   ```
+
+2. Configure Environment Variables:
+   - Navigate to `AnyLog/blockchain` directory
+   - Locate the `.env` file
+   - Modify the file with your required variables
+
+3. Set up the Database:
+   - Navigate to `AnyLog/blockchain`
+   - Run the database setup script:
+     ```bash
+     ./db_script
+     ```
+
+4. Install Dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. Start the Servers:
+   ```bash
+   ./start_servers.sh
+   ```
+
+## System Initialization
+
+After starting the servers, you need to initialize the nodes. Use the following curl command:
+
 ```bash
-git clone https://github.com/EdgeLake/EdgeLake
+curl -X POST http://localhost:8080/init \          
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [    
+    "http://localhost:8081", 
+    "http://localhost:8082"
+  ],
+  "model_def": 1
+}'
 ```
 
-### Files to Prepare
-<!-- TODO: could prepare one and have users just update keys or write a script for this-->
-- **master.env**: Ensure this file is available for configuration.                   
-- **start-script.al**: This script is necessary for proper configuration.  
-- **Example CURL commands file**: Keep this handy for testing and reference.
+## Starting the Training Process
 
----
-<!-- I don't think we should do py charm -->
-## Setup Instructions
+To begin the training process, use this curl command:
 
-### Step 1: Open the Project
-- Open PyCharm and load the cloned EdgeLake repository.
-
-### Step 2: Run Initial Setup
-- Locate the file `edgelake.py` within the `edge_lake` directory in PyCharm.
-- Click on the file and press **Run**. Allow the file to execute and then stop the run.
-
-### Step 3: Edit Configuration
-- Navigate to **Run > Edit Configurations** in PyCharm.
-- Perform the following edits:
-  
-  #### 1. Paths to .env files:
-  - Add the path to the `master.env` file in the appropriate section.
-  - Open `master.env` and modify the `IP address` and `RPC provider` to match your environment.
-
-  #### 2. Script Parameters:
-  - Add the command below to the `Script parameters` section:
-    ```bash
-    process [path_to]/CSE-115D-start-script.al
-    ```
-    Replace `[path_to]` with the actual file path to `start-script.al`.
-
-### Step 4: Run EdgeLake
-
-
-### Step 5: Testing with CURL Commands
-<!-- Example curl commands here -->
-
----
-
-## Automating CURL Commands
-<!-- write a script at the end when all the code is ready -->
-
-```python
-import subprocess
-
-# Define CURL commands
-curl_commands = [
-    "curl -X POST -H 'Content-Type: application/json' -d '{\"key\": \"value\"}' http://127.0.0.1:5000/api",
-    "curl -X GET http://127.0.0.1:5000/api/status",
-    # Add more commands here...
-]
-
-# Execute each command
-for cmd in curl_commands:
-    try:
-        result = subprocess.run(cmd, shell=True, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(f"Command: {cmd}\nOutput:\n{result.stdout}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {cmd}\nError:\n{e.stderr}")
+```bash
+curl -X POST http://localhost:8080/start-training \
+-H "Content-Type: application/json" \
+-d '{
+  "totalRounds": 5,
+  "minParams": 1
+}'
 ```
 
-### Instructions for Script
+## Shutting Down the Servers
 
+When you're done, you can stop all running servers using:
+```bash
+./kill_servers.sh
+```
 
----
+## Parameters Explained
+
+### Initialization Parameters
+- `nodeUrls`: Array of URLs for the participating nodes
+- `model_def`: Model definition parameter (default: 1)
+
+### Training Parameters
+- `totalRounds`: Number of training rounds to perform
+- `minParams`: Minimum number of parameters required (default: 1)
 
 ## Troubleshooting
 
-### CLI Issues
-
-
-### CURL Issues
-- If CURL commands fail:
-  - Verify the EdgeLake service is running.
-  - Check network connectivity and server status.
-
----
+If you encounter any issues:
+1. Ensure all servers are running properly
+2. Check that the `.env` file is configured correctly
+3. Verify all ports (8080, 8081, 8082) are available
+4. Make sure all prerequisites are installed
+5. If servers aren't responding, try killing them with `./kill_servers.sh` and restart
