@@ -4,6 +4,8 @@ import json
 import pickle
 import zlib
 import firebase_admin
+import numpy as np
+import torch
 from firebase_admin import credentials, db
 from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
@@ -11,6 +13,7 @@ from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchData
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 from custom_data_handler import CustomMnistPytorchDataHandler
 import requests
+from sklearn.metrics import accuracy_score
 # import pathlib
 
 from dotenv import load_dotenv
@@ -159,7 +162,6 @@ class Node:
         self.local_training_handler.data_handler.y_test = y_test
 
 
-
         # Train model
         model_update = self.local_training_handler.train({})
 
@@ -184,8 +186,11 @@ class Node:
         model_weights = pickle.loads(serialized_data)
         return model_weights
 
+    # NOTE:
+    # - training with one node for 12 rounds resulted in accuracy of ~44.75%
+    # - training with two nodes for 12 rounds resulted in accuracy of ~55.17%
     def inference(self):
-        test_data = self.local_training_handler.data_handler.get_all_test_data()
+        x_test_images, y_test_labels = self.local_training_handler.data_handler.get_all_test_data(self.replicaName)
 
         # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
         # y_pred = np.array([])
@@ -195,5 +200,18 @@ class Node:
         #     y_pred = np.append(y_pred, pred.argmax())
         # acc = accuracy_score(y_true, y_pred) * 100
 
-        results = self.local_training_handler.fl_model.evaluate(test_data)
-        return results
+        y_pred = np.array([])
+        sample_count = x_test_images.shape[0] # number of test samples
+
+        for i_samples in range(sample_count):
+            # Get prediction for a single test sample
+            pred = self.local_training_handler.fl_model.predict(
+                torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
+            )
+
+            # Append the predicted class (argmax) to y_pred
+            y_pred = np.append(y_pred, pred.argmax())
+
+        acc = accuracy_score(y_test_labels, y_pred) * 100
+
+        return acc

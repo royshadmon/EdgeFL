@@ -39,37 +39,39 @@ class CustomMnistPytorchDataHandler(DataHandler):
         print("Test data shape in get_data:", self.x_test.shape)
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
+
+    def fetch_data_from_db(self, query):
+        """
+        Fetch data from the database using an HTTP request with the provided SQL query.
+
+        :param query: The SQL query to fetch the data.
+        :type query: str
+        :return: Parsed JSON response containing the fetched data.
+        :rtype: dict
+        """
+        headers = {
+            'User-Agent': 'AnyLog/1.23',
+            'command': query,
+        }
+
+        try:
+            # Send the GET request
+            external_ip = os.getenv("EXTERNAL_IP")
+            url = f'http://{external_ip}:32049'
+            response = requests.get(url, headers=headers)
+
+            # Raise an HTTPError if the response code indicates failure
+            response.raise_for_status()
+
+            # Parse the response JSON
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise IOError(f"Failed to execute SQL query: {e}")
+        except json.JSONDecodeError:
+            raise ValueError("The response from the request is not valid JSON.")
+
+
     def load_dataset(self, node_name, round_number):
-
-        def fetch_data_from_db(query):
-            """
-            Fetch data from the database using an HTTP request with the provided SQL query.
-
-            :param query: The SQL query to fetch the data.
-            :type query: str
-            :return: Parsed JSON response containing the fetched data.
-            :rtype: dict
-            """
-            headers = {
-                'User-Agent': 'AnyLog/1.23',
-                'command': query,
-            }
-
-            try:
-                # Send the GET request
-                external_ip = os.getenv("EXTERNAL_IP")
-                url = f'http://{external_ip}:32049'
-                response = requests.get(url, headers=headers)
-
-                # Raise an HTTPError if the response code indicates failure
-                response.raise_for_status()
-
-                # Parse the response JSON
-                return response.json()
-            except requests.exceptions.RequestException as e:
-                raise IOError(f"Failed to execute SQL query: {e}")
-            except json.JSONDecodeError:
-                raise ValueError("The response from the request is not valid JSON.")
 
         """
         Loads the training and testing datasets by running SQL queries to fetch data.
@@ -90,8 +92,8 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
 
         try:
-            train_data = fetch_data_from_db(query_train)
-            test_data = fetch_data_from_db(query_test)
+            train_data = self.fetch_data_from_db(query_train)
+            test_data = self.fetch_data_from_db(query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
             query_train_result = np.array(train_data["Query"])
@@ -102,8 +104,6 @@ class CustomMnistPytorchDataHandler(DataHandler):
                 y_train_label = query_train_result[i]['label']
                 x_train_images.append(x_train_image_np_array)
                 y_train_labels.append(y_train_label)
-
-            x_train_images_final = np.array(x_train_images, dtype=np.float32)
 
             y_train_label_final = np.array(y_train_labels, dtype=np.int64)
 
@@ -124,8 +124,6 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
             y_test_label_final = np.array(y_test_labels, dtype=np.int64)
             print("Test data shape after loading:", x_test_images_final.shape)
-
-
 
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
@@ -161,8 +159,28 @@ class CustomMnistPytorchDataHandler(DataHandler):
         self.y_train = self.y_train.astype("int64")
         self.y_test = self.y_test.astype("int64")
 
-    def get_all_test_data(self):
+    def get_all_test_data(self, node_name):
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
-        pass
+
+        query_test = f"sql mnist_fl SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+
+        test_data = self.fetch_data_from_db(query_test)
+
+        # Assuming the data is returned as dictionaries with keys 'x' and 'y'
+        query_test_result = np.array(test_data["Query"])
+        x_test_images = []
+        y_test_labels = []
+        for i in range(len(query_test_result)):
+            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+            y_test_label = query_test_result[i]['label']
+            x_test_images.append(x_test_image_np_array)
+            y_test_labels.append(y_test_label)
+
+        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
+
+        img_rows, img_cols = 28, 28
+        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
+
+        return x_test_images_final, y_test_labels_final

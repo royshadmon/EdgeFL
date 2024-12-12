@@ -167,10 +167,9 @@ def inference():
         response = {
             'status': 'success',
             'message': 'Inference completed successfully',
-            'model_accuracy': results['acc'] * 100,
-            'classification_report': results['classification_report']
+            'model_accuracy': results,
         }
-        return jsonify(response)
+        return response
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
