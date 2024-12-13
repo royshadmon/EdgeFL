@@ -93,6 +93,11 @@ curl -X POST http://localhost:8080/start-training \
 }'
 ```
 
+## Running inference once the model is trained
+```
+curl -X POST http://localhost:8081/inference
+```
+
 ## Shutting Down the Servers
 
 When you're done, you can stop all running servers using:
