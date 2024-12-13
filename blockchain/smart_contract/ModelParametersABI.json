@@ -1,0 +1,86 @@
+[
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "roundNumber",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "initParamsDownloadLink",
+				"type": "string"
+			}
+		],
+		"name": "newRound",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "numberOfParams",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string[]",
+				"name": "paramsFromNodes",
+				"type": "string[]"
+			}
+		],
+		"name": "updateAggregatorWithParamsFromNodes",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "roundNumber",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "newNodeParams",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "replicaName",
+				"type": "string"
+			}
+		],
+		"name": "addNodeParams",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "initParamsDownloadLink",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "roundNumber",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "minNumParams",
+				"type": "uint256"
+			}
+		],
+		"name": "startRound",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+]
