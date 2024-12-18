@@ -15,9 +15,11 @@
 
 
 <!-- ## Prerequisites -->
-<!-- we need specifiy more stuff here -->
+<!-- we need specify more stuff here -->
 ### Software Requirements
-- Python 3.7+ installed.
+- Python 3.9+ installed.
+## Install ibmfl from the repo (does not work on python3.12)
+ pip install "federated_learning_lib-2.0.1-py3-none-any.whl[pytorch]"
 # AnyLog-Edgelake Setup Guide
 
 This guide will walk you through setting up and running the AnyLog-Edgelake system.
@@ -64,6 +66,7 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 
 After starting the servers, you need to initialize the nodes. Use the following curl command:
 
+To train on 1 node
 ```bash
 curl -X POST http://localhost:8080/init \          
 -H "Content-Type: application/json" \
@@ -73,6 +76,18 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8082"
   ],
   "model_def": 1
+}'
+```
+To train on 2 nodes
+```bash
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [    
+    "http://localhost:8081", 
+    "http://localhost:8082"
+  ],
+  "model_def": 2
 }'
 ```
 
