@@ -7,23 +7,30 @@ import numpy as np
 from torchvision import datasets
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 import time
 
-load_dotenv()
+# load_dotenv()
+
+conn = psycopg2.connect(
+        database=os.getenv("PSQL_DB_NAME"),
+        user=os.getenv("PSQL_DB_USER"),
+        password=os.getenv("PSQL_DB_PASSWORD"),
+        host=os.getenv("PSQL_HOST"),
+        port=os.getenv("PSQL_PORT"),
+    )
+conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+cur = conn.cursor()
+
 
 def create_database():
     """Create PostgreSQL database if it doesn't exist."""
-    conn = psycopg2.connect(
-        user="postgres",
-        password="postgres",
-        host="localhost",
-        port="5432"
-    )
-    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-    cur = conn.cursor()
+
+    # conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    # cur = conn.cursor()
     
-    cur.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'mnist_fl'")
+    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", ('mnist_fl',))
+
     exists = cur.fetchone()
     if not exists:
         cur.execute('CREATE DATABASE mnist_fl')
@@ -31,22 +38,22 @@ def create_database():
     else:
         print("Database 'mnist_fl' already exists")
     
-    cur.close()
-    conn.close()
+    # cur.close()
+    # conn.close()
 
-def get_db_connection():
-    """Get connection to MNIST database."""
-    return psycopg2.connect(
-        dbname="mnist_fl",
-        user="postgres",
-        password="postgres!",
-        host="localhost",
-        port="5432"
-    )
+# def get_db_connection():
+#     """Get connection to MNIST database."""
+#     return psycopg2.connect(
+#         dbname="postgres",
+#         user="postgres",
+#         password="",
+#         host="localhost",
+#         port="5432"
+#     )
 
 def create_node_table(conn, node_name):
     """Create a single table for a node that will contain all rounds of data."""
-    cur = conn.cursor()
+    # cur = conn.cursor()
     
     table_name = f"node_{node_name}"
     cur.execute(f"""
@@ -66,13 +73,13 @@ def create_node_table(conn, node_name):
         ON {table_name}(round_number)
     """)
     
-    conn.commit()
-    cur.close()
+    # conn.commit()
+    # cur.close()
     return table_name
 
 def insert_round_data(conn, table_name, round_num, images, labels, data_type):
     """Insert data for a specific round into node's table."""
-    cur = conn.cursor()
+    # cur = conn.cursor()
     
     try:
         # Process in batches
@@ -105,8 +112,8 @@ def insert_round_data(conn, table_name, round_num, images, labels, data_type):
         print(f"Error inserting data: {str(e)}")
         conn.rollback()
         raise
-    finally:
-        cur.close()
+    # finally:
+    #     cur.close()
 
 def verify_round_data(conn, table_name, round_num):
     """Verify data counts for a specific round."""
@@ -128,9 +135,10 @@ def verify_round_data(conn, table_name, round_num):
         test_count = cur.fetchone()[0]
         
         return train_count, test_count
-    
-    finally:
-        cur.close()
+    except Exception as e:
+        print("Excection in verify_round_data")
+    # finally:
+    #     cur.close()
 
 def main():
     # Configuration
@@ -146,7 +154,7 @@ def main():
     train_dataset = datasets.MNIST('data', train=True, download=True)
     test_dataset = datasets.MNIST('data', train=False, download=True)
     
-    conn = get_db_connection()
+    # conn = get_db_connection()
     print("Connected to database")
     
     train_idx = 0
@@ -184,6 +192,7 @@ def main():
                 print(f"Verification for {node_name} Round {round_num}:")
                 print(f"Training samples: {train_count}")
                 print(f"Test samples: {test_count}")
+
     
     finally:
         conn.close()

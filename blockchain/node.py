@@ -2,6 +2,8 @@ import base64
 import os
 import json
 import pickle
+from asyncio import sleep
+import ast
 import zlib
 import firebase_admin
 import numpy as np
@@ -11,6 +13,9 @@ from web3 import Web3
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from mongo_file_store import read_file, write_file
+from blockchain.blockchain_EL_functions import insert_policy
+from blockchain.mongo_file_store import write_file
 from custom_data_handler import CustomMnistPytorchDataHandler
 import requests
 from sklearn.metrics import accuracy_score
@@ -22,15 +27,18 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, model_def, replica_name):
-
+    def __init__(self, model_def, replica_name, ip, port):
+        self.node_ip = ip
+        self.node_port = port
         print("Node initializing")
 
-        self.database_url = os.getenv('DATABASE_URL')
+        self.database_url = os.getenv("DATABASE_URL")
+        self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+        self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 
         # Initialize Firebase
         if not firebase_admin._apps:
-            cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
+            cred = credentials.Certificate(os.getenv("FIREBASE_CREDENTIALS"))
             firebase_admin.initialize_app(cred, {
                 'databaseURL': self.database_url
             })
@@ -46,7 +54,8 @@ class Node:
 
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
         # data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
-        data_path = os.path.join(current_dir, "mnist.npz")
+        # data_path = os.path.join(current_dir, "mnist.npz")
+        data_path = os.getenv("DATASET_PATH")
         data_config = {
             "npz_file": str(data_path)
         }
@@ -84,26 +93,36 @@ class Node:
         - Returns current node nodel parameters to blockchain via event listener
     '''
 
-    def add_node_params(self, round_number, newly_trained_params_db_link):
+    def add_node_params(self, round_number, model_metadata):
         print("in add_node_params")
 
-        try:
-            external_ip = os.getenv("EXTERNAL_IP")
-            url = f'http://{external_ip}:32049'
+        dbms_name = model_metadata[0]
+        table_name = model_metadata[1]
+        filename = model_metadata
 
-            headers = {
-                'User-Agent': 'AnyLog/1.23',
-                'Content-Type': 'text/plain',
-                'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
-            }
+        try:
 
             data = f'''<my_policy = {{"a{round_number}" : {{
-                    "node" : "{self.replicaName}",
-                    "trained_params": "{newly_trained_params_db_link}"
-}} }}>'''
+                                "node" : "{self.replicaName}",
+                                "ip_port": "{self.edgelake_tcp_node_ip_port}",
+                                "trained_params_dbms": "{dbms_name}",
+                                "trained_params_table": "{table_name}",
+                                "trained_params_filename": "{filename}"
+            }} }}>'''
+
+            success = False
+            while not success:
+                print("Attempting insert")
+                response = insert_policy(self.edgelake_node_url, data)
+                if response.status_code == 200:
+                    success = True
+                else:
+                    sleep(1)
+
 
             # print(f"Submitting results for round {round_number}")
-            response = requests.post(url, headers=headers, data=data)
+            # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
+            # TODO: add error check here
             print(f"Results submitted for round {round_number} to {self.replicaName}")
 
             return {
@@ -123,7 +142,7 @@ class Node:
         - Gets local data and runs training on updated model
     '''
 
-    def train_model_params(self, aggregator_model_params_db_link, round_number):
+    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
         print(f"in train_model_params for round {round_number}")
 
         # First round initialization
@@ -132,11 +151,22 @@ class Node:
         else:
             try:
                 # Extract the key from the URL
-                model_updates_key = aggregator_model_params_db_link.split('/')[-1].replace('.json', '')
+
+                model_updates_key = ast.literal_eval(aggregator_model_params_db_link.split('/')[-1])
+
+                response = read_file(self.edgelake_node_url, model_updates_key[0], model_updates_key[1], model_updates_key[2],
+                                     f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{model_updates_key[2]}',
+                                     ip_ports)
+                # response = requests.get(link)
+                if response.status_code == 200:
+                    with open(
+                            f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{model_updates_key[2]}',
+                            'rb') as f:
+                        data = pickle.load(f)
 
                 # Reference the database path and retrieve the data
-                agg_data_ref = db.reference(f'agg_model_updates/{model_updates_key}')
-                data = agg_data_ref.get()
+                # agg_data_ref = db.reference(f'agg_model_updates/{model_updates_key}')
+                # data = agg_data_ref.get()
 
                 # Ensure the data is valid and decode the parameters
                 if data and 'newUpdates' in data:
@@ -167,23 +197,35 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_update)
-        data_pushed = db.reference('node_model_updates').push({
-            'replicaName': self.replicaName,
-            'model_update': encoded_params
-        })
+        file = f"{round_number}-replica-{self.replicaName}.pkl"
+        # make sure directory exists
+        os.makedirs(os.path.dirname(f"/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/"), exist_ok=True)
+        file_name = f"/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{file}"
+        with open(f"{file_name}", "wb") as f:
+            f.write(encoded_params)
 
-        return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
+
+        response = write_file(self.edgelake_node_url, 'blobs_admin', 'node_model_updates', file_name)
+
+        # data_pushed = db.reference('node_model_updates').push({
+        #     'replicaName': self.replicaName,
+        #     'model_update': encoded_params
+        # })
+
+        # return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
+        return "blobs_admin", "node_model_updates", file
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
-        compressed_data = zlib.compress(serialized_data)
-        encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
-        return encoded_model_update
+        # compressed_data = zlib.compress(serialized_data)
+        # encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
+        return serialized_data
 
     def decode_params(self, encoded_model_update):
-        compressed_data = base64.b64decode(encoded_model_update)
-        serialized_data = zlib.decompress(compressed_data)
-        model_weights = pickle.loads(serialized_data)
+        # compressed_data = base64.b64decode(encoded_model_update)
+        # serialized_data = zlib.decompress(compressed_data)
+        # model_weights = pickle.loads(serialized_data)
+        model_weights = pickle.loads(encoded_model_update)
         return model_weights
 
     # NOTE:

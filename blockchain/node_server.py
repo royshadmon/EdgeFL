@@ -1,7 +1,9 @@
 import argparse
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 from flask import Flask, request, jsonify
+
+from blockchain.blockchain_EL_functions import get_local_ip
 from node import Node
 import numpy as np
 import threading
@@ -9,17 +11,18 @@ import time
 import os
 import argparse
 import requests
+import socket
 
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
 '''
 
 app = Flask(__name__)
-load_dotenv()
+# load_dotenv()
 
 # Configuration
 PROVIDER_URL = os.getenv('PROVIDER_URL')
-PRIVATE_KEY = os.getenv('PRIVATE_KEY')
+PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 
 # Initialize the Node instance 
 node_instance = None
@@ -58,12 +61,15 @@ curl -X POST http://localhost:8081/init-node \
 }'
 '''
 
+edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
 @app.route('/init-node', methods=['POST'])
 def init_node():
     """Receive the contract address from the aggregator server."""
     global node_instance, listener_thread, stop_listening_thread
     try:
+        ip = get_local_ip()
+        port = app.config.get("SERVER_PORT")
         model_def = request.json.get('model_def', 1)
         replica_name = request.json.get('replica_name')
 
@@ -77,7 +83,7 @@ def init_node():
         stop_listening_thread = False
 
         # Instantiate the Node class
-        node_instance = Node(model_def, replica_name)
+        node_instance = Node(model_def, replica_name, ip, port)
         node_instance.currentRound = 1
 
         print(f"{replica_name} successfully initialized")
@@ -114,8 +120,6 @@ def receive_data():
 def listen_for_start_round(nodeInstance, stop_event):
     while True:
         try:
-            external_ip = os.getenv("EXTERNAL_IP")
-            url = f'{external_ip}:32049'
             # next_round = nodeInstance.currentRound + 1
 
             print(f"listening for start round {nodeInstance.currentRound}")
@@ -124,7 +128,7 @@ def listen_for_start_round(nodeInstance, stop_event):
                 'User-Agent': 'AnyLog/1.23',
                 'command': f'blockchain get r{nodeInstance.currentRound}'
             }
-            response = requests.get(f'http://{url}', headers=headers)
+            response = requests.get(edgelake_node_url, headers=headers)
 
             if response.status_code == 200:
                 data = response.json()
@@ -140,8 +144,9 @@ def listen_for_start_round(nodeInstance, stop_event):
                 if round_data:
                     print(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
-                    modelUpdate = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound)
-                    nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate)
+                    ip_port = round_data.get('ip_port', '')
+                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound, ip_port)
+                    nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate_metadata)
                     nodeInstance.currentRound += 1
                 # else: # Debugging line
                 #     print(f"No data found for round r{nodeInstance.currentRound}")
@@ -174,11 +179,12 @@ def inference():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+
 if __name__ == '__main__':
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Start the Flask server.')
     parser.add_argument('--port', type=int, default=8081, help='Port to run the Flask server on.')
     args = parser.parse_args()
-
+    app.config["SERVER_PORT"] = args.port
     # Run the Flask server on the specified port
     app.run(host='0.0.0.0', port=args.port)

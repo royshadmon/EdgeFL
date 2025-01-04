@@ -8,15 +8,19 @@ import time
 import requests
 import os
 
+from blockchain.blockchain_EL_functions import get_local_ip
+
 app = Flask(__name__)
 load_dotenv()
 
 # Use environment variables for sensitive data
-PROVIDER_URL = os.getenv('PROVIDER_URL')
-PRIVATE_KEY = os.getenv('PRIVATE_KEY')
+PROVIDER_URL = os.getenv("PROVIDER_URL")
+PRIVATE_KEY =  os.getenv("PRIVATE_KEY")
 
 # Initialize the Aggregator instance
-aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY)
+ip = get_local_ip()
+port = app.config.get("SERVER_PORT", "8080")
+aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY, ip, port)
 
 '''
 CURL REQUEST FOR DEPLOYING CONTRACT
@@ -144,7 +148,7 @@ def inference():
 async def listen_for_update_agg(min_params, roundNumber):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     print("Aggregator listening for updates...")
-    url = f'http://{os.getenv("EXTERNAL_IP")}:32049'
+    url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     while True:
         try:
@@ -170,7 +174,13 @@ async def listen_for_update_agg(min_params, roundNumber):
                         if result and len(result) > 0:
                             # Extract all trained_params into a list
                             node_params_links = [
-                                item[f'a{roundNumber}']['trained_params']
+                                item[f'a{roundNumber}']['trained_params_filename']
+                                for item in result
+                                if f'a{roundNumber}' in item
+                            ]
+
+                            ip_ports = [
+                                item[f'a{roundNumber}']['ip_port']
                                 for item in result
                                 if f'a{roundNumber}' in item
                             ]
@@ -179,7 +189,9 @@ async def listen_for_update_agg(min_params, roundNumber):
 
                             # Aggregate the parameters
                             aggregated_params_link = aggregator.aggregate_model_params(
-                                node_param_download_links=node_params_links
+                                node_param_download_links=node_params_links,
+                                ip_ports=ip_ports,
+                                round_number=roundNumber
                             )
                             return aggregated_params_link
 
@@ -194,6 +206,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the Aggregator Server.")
     parser.add_argument('--port', type=int, default=8080, help="Port to run the server on")
     args = parser.parse_args()
-
+    app.config["SERVER_PORT"] = args.port
     # Run the Flask server on the provided port
     app.run(host='0.0.0.0', port=args.port)

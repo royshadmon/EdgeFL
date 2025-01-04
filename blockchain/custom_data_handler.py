@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class CustomMnistPytorchDataHandler(DataHandler):
     def __init__(self, node_name):
         super().__init__()
-
+        self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         # load the datasets from SQL
         (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
 
@@ -56,9 +56,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
         try:
             # Send the GET request
-            external_ip = os.getenv("EXTERNAL_IP")
-            url = f'http://{external_ip}:32049'
-            response = requests.get(url, headers=headers)
+            response = requests.get(self.edgelake_node_url, headers=headers)
 
             # Raise an HTTPError if the response code indicates failure
             response.raise_for_status()
@@ -87,8 +85,10 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # query_train = f"SELECT * FROM {node_name}"
         # print(query_train)
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
-        query_train = f"sql mnist_fl SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"sql mnist_fl SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+
+        db_name = os.getenv("PSQL_DB_NAME")
+        query_train = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
 
 
         try:
@@ -163,8 +163,8 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
-
-        query_test = f"sql mnist_fl SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+        db_name = os.getenv("PSQL_DB_NAME")
+        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
 
         test_data = self.fetch_data_from_db(query_test)
 

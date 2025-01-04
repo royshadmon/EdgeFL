@@ -20,6 +20,25 @@
 - Python 3.9+ installed.
 ## Install ibmfl from the repo (does not work on python3.12)
  pip install "federated_learning_lib-2.0.1-py3-none-any.whl[pytorch]"
+## MongoDB (for file handling)
+### Install / setup
+```bash
+brew tap mongodb/brew  
+brew install mongodb-community # requires Xcode 16.0+
+brew install mongosh # (Optional) allows access through mongo-cli
+sudo mkdir -p /usr/local/bin/mongodb/var/mongodb
+sudo mkdir -p /usr/local/bin/mongodb/log/mongodb
+sudo chown $USER /usr/local/bin/mongodb/
+sudo chown $USER /usr/local/bin/mongodb/log/mongodb
+```
+[Mongo information](https://www.prisma.io/dataguide/mongodb/connecting-to-mongodb)
+[Mongo Install](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-os-x/)
+[Mongo Shell](https://www.mongodb.com/docs/mongodb-shell/)
+### Start
+```bash
+brew services start mongodb-community
+mongod --dbpath /usr/local/bin/mongodb/var/mongodb --logpath /usr/local/bin/mongodb/log/mongodb/mongo.log
+```
 # AnyLog-Edgelake Setup Guide
 
 This guide will walk you through setting up and running the AnyLog-Edgelake system.
