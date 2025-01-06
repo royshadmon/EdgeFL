@@ -116,6 +116,9 @@ class Node:
                 response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
+                elif response.status_code == 400:
+                    if response.content.decode().__contains__("Duplicate blockchain object id"):
+                        success = True
                 else:
                     sleep(1)
 
@@ -159,6 +162,7 @@ class Node:
                                      ip_ports)
                 # response = requests.get(link)
                 if response.status_code == 200:
+                    sleep(1)
                     with open(
                             f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{model_updates_key[2]}',
                             'rb') as f:

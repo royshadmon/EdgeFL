@@ -95,6 +95,9 @@ class Aggregator:
                 response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
+                elif response.status_code == 400:
+                    if response.content.decode().__contains__("Duplicate blockchain object id"):
+                        success = True
                 else:
                     sleep(1)
 
@@ -135,6 +138,7 @@ class Aggregator:
                 response = read_file(self.edgelake_node_url, link[0], link[1], link[2], f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{link[2]}', ip_ports[i])
                 # response = requests.get(link)
                 if response.status_code == 200:
+                    sleep(1)
                     with open(f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{link[2]}', 'rb') as f:
                         data = pickle.load(f)
 
