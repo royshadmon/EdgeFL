@@ -102,10 +102,8 @@ def run_rounds():
                                                    images=test_images, labels=test_labels, data_type='test')
             test_idx = test_end
 
-
-            # print(train_images_output)
             publish_data(data=train_images_output)
-            # print(test_images_output)
+            publish_data(data=test_images_output)
 
 
 if __name__ == '__main__':

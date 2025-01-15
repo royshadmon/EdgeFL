@@ -20,5 +20,5 @@ as follows:
 
 **Query**: 
 ```anylog 
-sql mnist_fl info = (dest_type = rest) and extend=(+node_name, @ip, @port, @dbms_name, @table_name) and format = json and timezone=Europe/Dublin  select  timestamp, file, round_number, data_type, label  from train_node1  order by timestamp desc --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and file using file)
+sql mnist_fl info = (dest_type = rest) and and incldue=(teset_node1) and extend=(+node_name, @ip, @port, @dbms_name, @table_name) and format = json and timezone=Europe/Dublin  select  timestamp, file, round_number, data_type, label  from train_node1  order by timestamp desc --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and file using file)
 ```
