@@ -5,40 +5,53 @@
 #   3. declare policy
 #   4. `run msg client` to accept policies via REST POST
 # :sample policy:
-# {'mapping' : {'id' : 'ai-mnist-fl',
-#              'dbms' : 'bring [dbms]',
-#              'table' : 'bring [table]',
-#              'timestamp' : 'bring [timestamp]',
-#              'readings' : 'data',
-#              'schema' : {'file' : {'root' : False,
-#                                    'blob' : True,
-#                                    'bring' : '[image]',
-#                                    'apply' : 'base64decoding',
-#                                    'type' : 'varchar'},
-#                          'round_number' : {'root' : False,
-#                                            'type' : 'int',
-#                                            'bring' : '[round_number]'},
-#                          'data_type' : {'root' : False,
-#                                         'type' : 'string',
-#                                         'bring' : '[data_type]'},
-#                          'label' : {'root' : False,
-#                                     'type' : 'int',
-#                                     'bring' : '[data_type]'}}}}
+# {'mapping': {
+#    'id' : 'ai-mnist-fl',
+#    'dbms' : 'bring [dbms]',
+#    'table' : 'bring [table]',
+#    'schema' : {
+#       'timestamp' : {
+#           'type' : 'timestamp',
+#           'default' : 'now()',
+#           'bring' : '[timestamp]'},
+#       'round_number' : {
+#           'type' : 'int',
+#           'default' : -1,
+#           'bring' : '[round_number]'
+#       },
+#       'data_type' : {
+#           'type' : 'string',
+#           'default' : 'train',
+#           'bring' : '[data_type]'},
+#           'label' : {
+#               'type' : 'int',
+#               'default' : 1,
+#               'bring' : '[label]'
+#       },
+#       'file' : {
+#           'blob' : True,
+#           'bring' : '[image]',
+#           'extension' : 'png',
+#           'apply' : 'opencv',
+#           'hash' : 'md5',
+#           'type' : 'varchar'
+#       }
+#   },
+#   'date' : '2025-01-15T03:55:00.280413Z',
+#   'ledger' : 'global'
+# }}
+#
 # :sample data:
 # {
 #    'dbms': 'mnist_fl',
 #    'table': 'train_node1',
 #    'timestamp': '2025-01-13T19:03:17.780102',
-#    'data': {
-#        'round_number': 1,
-#        'data_type': 'train',
-#        'image': '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoK
-#                 CgoKBggLDAsKDAkKCgr/wAALCAAcABwBAREA/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFB
-#                 AQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1h
-#                 ZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5
-#                 ufo6erx8vP09fb3+Pn6/9oACAEBAAA/APwCtra4vLiO0tIHlllcJFFGpZnYnAAA5JJ7V9mfB7/g3m/4LMfHC0a+8I/sGeLNPiEbOG8
-#                 XXFnoRYAgcLqM0DE/MCOORkjIBrd+K3/Bv3+1P+z7eeLtP/aL/aV/Z+8BXPg3w5Fq2o2fiT4oAXNy0iyutlBbwQSzSXJjjWTaUCb',
-#        'label': 5
+#    'round_number': 1,
+#    'data_type': 'train',
+#    'image': [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+#               ...
+#               0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+#    'label': 5
 #    }
 # }
 #----------------------------------------------------------------------------------------------------------------------#

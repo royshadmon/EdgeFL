@@ -69,14 +69,12 @@ def publish_data(data):
     }
     for result in data:
         try:
-                r = requests.post(url=f"http://{CONN}", headers=headers, data=result)
+            r = requests.post(url=f"http://{CONN}", headers=headers, data=result)
         except Exception as error:
             raise Exception(f"Failed to POST data against {CONN} (Error: {error})")
         else:
             if not 200 <= int(r.status_code) < 300:
                 raise ConnectionError(f"Failed to POST data against {CONN} (Error: {r.status_code})")
-    print("test")
-
 
 
 def run_rounds():
