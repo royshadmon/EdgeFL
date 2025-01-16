@@ -16,7 +16,7 @@ if not os.path.isdir(LOCAL_DIR):
     os.makedirs(LOCAL_DIR)
 
 # "sql mnist_fl extend=(+node_name, @ip, @port, @dbms_name, @table_name) and include=(test_node1) format = json and stat=false and timezone=Europe/Dublin  select  timestamp, file, round_number, data_type, label  from train_node1 order by timestamp desc limit 1 --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and file using file)"
-QUERY = "sql mnist_fl extend=(+node_name, @ip, @port, @dbms_name, @table_name) and format = json and stat=false and timezone=Europe/Dublin  select  timestamp, file, round_number, data_type, label  from train_node1 order by timestamp desc limit 1 --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and file using file)"
+QUERY = "sql mnist_fl extend=(+node_name, @ip, @port, @dbms_name, @table_name) and format = json and stat=false and timezone=Europe/Dublin  select  timestamp, file, round_number, data_type, label  from train_node1 order by timestamp desc --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and file using file)"
 URL = "10.0.0.131:32149"
 
 MONGODB_IP = "10.0.0.131"
