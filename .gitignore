@@ -2,3 +2,4 @@
 venv/
 blockchain/.env
 */data/
+blobs/
