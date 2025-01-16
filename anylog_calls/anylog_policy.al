@@ -106,7 +106,14 @@ if not !policy_id and !create_policy == true then goto policy-error
 
 
 :publish-policy:
-process !local_scripts/policies/publish_policy.al
+blockchain prepare policy !new_policy
+
+# when using a master node
+blockchain insert where policy=!new_policy and local=true and master=!ledger_conn
+
+# when using a real blockchain (ex. optimism)
+# blockchain insert where policy=!new_policy and local=true and blockchain=optimism
+
 if !error_code == 1 then goto sign-policy-error
 if !error_code == 2 then goto prepare-policy-error
 if !error_code == 3 then goto declare-policy-error
