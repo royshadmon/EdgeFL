@@ -3,11 +3,15 @@ import pickle
 from asyncio import sleep
 import ast
 import firebase_admin
+import keras
 import numpy as np
 import torch
 from firebase_admin import credentials
 from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
+# from tensorflow.python.keras import optimizers
+from keras import layers, optimizers, models
+
 from EdgeLake_functions.mongo_file_store import read_file, write_file
 from blockchain.platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
 from blockchain.platform_components.EdgeLake_functions.mongo_file_store import write_file
@@ -30,13 +34,6 @@ class Node:
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 
-        # # Initialize Firebase
-        # if not firebase_admin._apps:
-        #     cred = credentials.Certificate(os.getenv("FIREBASE_CREDENTIALS"))
-        #     firebase_admin.initialize_app(cred, {
-        #         'databaseURL': self.database_url
-        #     })
-
         self.replicaName = replica_name
 
         # Node local data batches
@@ -44,15 +41,12 @@ class Node:
 
         self.currentRound = 1
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
 
-        # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
-        # data_path = os.path.join(current_dir, "data", "mnist", "data_party0.npz")
-        # data_path = os.path.join(current_dir, "mnist.npz")
-        data_path = os.getenv("DATASET_PATH")
-        data_config = {
-            "npz_file": str(data_path)
-        }
+        # data_path = os.getenv("DATASET_PATH")
+        # data_config = {
+        #     "npz_file": str(data_path)
+        # }
 
         # model_def == 1: PytorchFLModel
         if model_def == 1:
@@ -70,6 +64,21 @@ class Node:
             # data_handler = MnistPytorchDataHandler(data_config=data_config)
             self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
+        elif model_def == 2:
+            pass
+            # input = layers.Input(shape=(time_steps, 10))
+            # hidden_layer = layers.LSTM(256, activation='relu')(input)
+            # output = layers.Dense(1)(hidden_layer)
+            # model = models.Model(input, output)
+            #
+            # rmse = keras.metrics.RootMeanSquaredError(name='rmse')
+            # model.compile(
+            #     loss= 'mse',
+            #     optimizer= optimizers.Adam(learning_rate=0.0002),
+            #     metrics= ['mse', 'mae', rmse]
+            # )
+            #
+            # data_handlers = win
         # model_def == 2: Sklearn and so on
 
     '''

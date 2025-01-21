@@ -1,2 +1,3 @@
-blockchain/.env
+blockchain/env_files/mnist.env
 blockchain/file_write/
+.idea/

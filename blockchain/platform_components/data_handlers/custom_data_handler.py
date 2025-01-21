@@ -14,6 +14,8 @@ from ibmfl.data.data_handler import DataHandler
 import requests
 import json
 
+from blockchain_EL_functions import fetch_data_from_db
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,35 +42,6 @@ class CustomMnistPytorchDataHandler(DataHandler):
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
 
-    def fetch_data_from_db(self, query):
-        """
-        Fetch data from the database using an HTTP request with the provided SQL query.
-
-        :param query: The SQL query to fetch the data.
-        :type query: str
-        :return: Parsed JSON response containing the fetched data.
-        :rtype: dict
-        """
-        headers = {
-            'User-Agent': 'AnyLog/1.23',
-            'command': query,
-        }
-
-        try:
-            # Send the GET request
-            response = requests.get(self.edgelake_node_url, headers=headers)
-
-            # Raise an HTTPError if the response code indicates failure
-            response.raise_for_status()
-
-            # Parse the response JSON
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            raise IOError(f"Failed to execute SQL query: {e}")
-        except json.JSONDecodeError:
-            raise ValueError("The response from the request is not valid JSON.")
-
-
     def load_dataset(self, node_name, round_number):
 
         """
@@ -92,8 +65,8 @@ class CustomMnistPytorchDataHandler(DataHandler):
 
 
         try:
-            train_data = self.fetch_data_from_db(query_train)
-            test_data = self.fetch_data_from_db(query_test)
+            train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
+            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
             query_train_result = np.array(train_data["Query"])
@@ -166,7 +139,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
         db_name = os.getenv("PSQL_DB_NAME")
         query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
 
-        test_data = self.fetch_data_from_db(query_test)
+        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
         # Assuming the data is returned as dictionaries with keys 'x' and 'y'
         query_test_result = np.array(test_data["Query"])

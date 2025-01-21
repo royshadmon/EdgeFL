@@ -56,6 +56,34 @@ def force_insert_policy(el_url, policy):
 
     return response
 
+def fetch_data_from_db(edgelake_node_url, query):
+    """
+    Fetch data from the database using an HTTP request with the provided SQL query.
+
+    :param query: The SQL query to fetch the data.
+    :type query: str
+    :return: Parsed JSON response containing the fetched data.
+    :rtype: dict
+    """
+    headers = {
+        'User-Agent': 'AnyLog/1.23',
+        'command': query,
+    }
+
+    try:
+        # Send the GET request
+        response = requests.get(edgelake_node_url, headers=headers)
+
+        # Raise an HTTPError if the response code indicates failure
+        response.raise_for_status()
+
+        # Parse the response JSON
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        raise IOError(f"Failed to execute SQL query: {e}")
+    except json.JSONDecodeError:
+        raise ValueError("The response from the request is not valid JSON.")
+
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
