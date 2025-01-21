@@ -151,8 +151,8 @@ def main():
     create_database()
     
     print("Downloading MNIST dataset...")
-    train_dataset = datasets.MNIST('data', train=True, download=True)
-    test_dataset = datasets.MNIST('data', train=False, download=True)
+    train_dataset = datasets.MNIST('..', train=True, download=True)
+    test_dataset = datasets.MNIST('..', train=False, download=True)
     
     # conn = get_db_connection()
     print("Connected to database")
