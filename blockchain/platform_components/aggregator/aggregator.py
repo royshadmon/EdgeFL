@@ -14,6 +14,7 @@ from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchData
 
 from EdgeLake_functions.blockchain_EL_functions import force_insert_policy
 from EdgeLake_functions.mongo_file_store import read_file, write_file
+# from custom_data_handler import CustomMnistPytorchDataHandler
 
 CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
 
@@ -44,13 +45,13 @@ class Aggregator:
         # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
         # current_dir = os.path.dirname(os.path.abspath(__file__))
         # data_path = os.path.join(current_dir, "mnist.npz")
-        data_config = {
-            "npz_file": str("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/mnist.npz")
-        }
-        data_handler = MnistPytorchDataHandler(data_config=data_config)
+        # data_config = {
+        #     "npz_file": str("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/mnist.npz")
+        # }
+        # data_handler = MnistPytorchDataHandler(data_config=data_config)
 
         # Correctly instantiate the Fusion model with required arguments
-        self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=data_handler)
+        self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=None)
 
     def get_contract_address(self):
 
