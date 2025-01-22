@@ -9,10 +9,15 @@ import logging
 import os
 
 import numpy as np
+import torch
 
 from ibmfl.data.data_handler import DataHandler
 import requests
 import json
+
+from ibmfl.model.model_update import ModelUpdate
+from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from sklearn.metrics import accuracy_score
 
 from blockchain_EL_functions import fetch_data_from_db
 
@@ -20,12 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 class CustomMnistPytorchDataHandler(DataHandler):
-    def __init__(self, node_name):
+    def __init__(self, node_name, fl_model:PytorchFLModel):
         super().__init__()
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         # load the datasets from SQL
         (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-
+        self.fl_model = fl_model
+        self.node_name = node_name
         # pre-process the datasets
         self.preprocess()
         print(self.x_test)
@@ -157,3 +163,56 @@ class CustomMnistPytorchDataHandler(DataHandler):
         x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
 
         return x_test_images_final, y_test_labels_final
+
+    def train(self, round_number):
+        (x_train, y_train), (x_test, y_test) = self.load_dataset(
+            node_name=self.node_name, round_number=round_number)
+
+        self.fl_model.fit_model(train_data=(x_train,y_train))
+        return self.get_weights()
+
+    def update_model(self, weights):
+        if not isinstance(weights, ModelUpdate):
+            model_update = ModelUpdate(weights=weights)
+        else:
+            model_update = ModelUpdate(weights=np.array(weights.get("weights")))
+        self.fl_model.update_model(model_update)
+
+
+    # def update_model(self, weights):
+    #     for p1, p2 in zip(self.fl_model.get_weights(), weights):
+    #         p1.data = torch.from_numpy(p2)
+    #         p1.data.requires_grad = True
+
+    def get_model_update(self):
+        return self.fl_model.get_model_update()
+
+    def get_weights(self):
+        return self.fl_model.get_weights(to_numpy=True)
+
+    def run_inference(self):
+        x_test_images, y_test_labels = self.data_handler.get_all_test_data(self.replicaName)
+
+        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
+        # y_pred = np.array([])
+        # for i_samples in range(sample_count):
+        #     pred = party.fl_model.predict(
+        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
+        #     y_pred = np.append(y_pred, pred.argmax())
+        # acc = accuracy_score(y_true, y_pred) * 100
+
+        y_pred = np.array([])
+        sample_count = x_test_images.shape[0]  # number of test samples
+
+        for i_samples in range(sample_count):
+            # Get prediction for a single test sample
+            pred = self.fl_model.predict(
+                torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
+            )
+
+            # Append the predicted class (argmax) to y_pred
+            y_pred = np.append(y_pred, pred.argmax())
+
+        acc = accuracy_score(y_test_labels, y_pred) * 100
+
+        return acc

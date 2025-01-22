@@ -60,9 +60,9 @@ class Node:
             }
 
             fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-            data_handler = CustomMnistPytorchDataHandler(self.replicaName)
+            self.data_handler = CustomMnistPytorchDataHandler(self.replicaName,fl_model)
             # data_handler = MnistPytorchDataHandler(data_config=data_config)
-            self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
+            # self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
         elif model_def == 2:
             pass
@@ -153,7 +153,9 @@ class Node:
 
         # First round initialization
         if round_number == 1:
-            weights = self.local_training_handler.fl_model.get_model_update()
+            # weights = self.local_training_handler.fl_model.get_model_update()
+            weights = self.data_handler.get_weights()
+            # model_update = self.data_handler.get_model_update()
         else:
             try:
                 # Extract the key from the URL
@@ -185,25 +187,26 @@ class Node:
                 raise
 
         # Update model with weights
-        self.local_training_handler.update_model(weights)
+        self.data_handler.update_model(weights)
 
         print("about to load data")
         # self.local_training_handler.data_handler.load_dataset(nb_points=5)
 
         # load new data
-        (x_train, y_train), (x_test, y_test) = self.local_training_handler.data_handler.load_dataset(
-            node_name=self.replicaName, round_number=round_number)
-        self.local_training_handler.data_handler.x_train = x_train
-        self.local_training_handler.data_handler.y_train = y_train
-        self.local_training_handler.data_handler.x_test = x_test
-        self.local_training_handler.data_handler.y_test = y_test
+        # (x_train, y_train), (x_test, y_test) = self.data_handler.load_dataset(
+        #     node_name=self.replicaName, round_number=round_number)
+        # self.local_training_handler.data_handler.x_train = x_train
+        # self.local_training_handler.data_handler.y_train = y_train
+        # self.local_training_handler.data_handler.x_test = x_test
+        # self.local_training_handler.data_handler.y_test = y_test
 
 
         # Train model
-        model_update = self.local_training_handler.train({})
+        # model_update = self.local_training_handler.train({})
+        model_params = self.data_handler.train(round_number)
 
         # Save and return new weights
-        encoded_params = self.encode_model(model_update)
+        encoded_params = self.encode_model(model_params)
         file = f"{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
         os.makedirs(os.path.dirname(f"/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/"), exist_ok=True)
@@ -239,28 +242,4 @@ class Node:
     # - training with one node for 12 rounds resulted in accuracy of ~44.75%
     # - training with two nodes for 12 rounds resulted in accuracy of ~55.17%
     def inference(self):
-        x_test_images, y_test_labels = self.local_training_handler.data_handler.get_all_test_data(self.replicaName)
-
-        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
-        # y_pred = np.array([])
-        # for i_samples in range(sample_count):
-        #     pred = party.fl_model.predict(
-        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
-        #     y_pred = np.append(y_pred, pred.argmax())
-        # acc = accuracy_score(y_true, y_pred) * 100
-
-        y_pred = np.array([])
-        sample_count = x_test_images.shape[0] # number of test samples
-
-        for i_samples in range(sample_count):
-            # Get prediction for a single test sample
-            pred = self.local_training_handler.fl_model.predict(
-                torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
-            )
-
-            # Append the predicted class (argmax) to y_pred
-            y_pred = np.append(y_pred, pred.argmax())
-
-        acc = accuracy_score(y_test_labels, y_pred) * 100
-
-        return acc
+        return self.data_handler.run_inference()

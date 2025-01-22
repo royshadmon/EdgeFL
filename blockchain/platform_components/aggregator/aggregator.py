@@ -2,6 +2,7 @@ import os
 from asyncio import sleep
 import ast
 
+import numpy as np
 import requests
 import pickle
 from dotenv import load_dotenv
@@ -140,7 +141,9 @@ class Aggregator:
 
                     if not data:
                         raise ValueError(f"Missing model_weights in data from link: {link}")
-                    decoded_params.append(data)
+                    # decoded_params.append(data)
+                    decoded_params.append(ModelUpdate(weights=data))
+                    # decoded_params.append(ModelUpdate(weights=data[0].detach().numpy()))
                 else:
                     raise ValueError(
                         f"Failed to retrieve node params from link: {link}. HTTP Status: {response.status_code}")
@@ -152,10 +155,12 @@ class Aggregator:
 
         aggregate_params_weights = self.fusion_model.current_model_weights
 
+        # aggregate_model_update = ModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
         aggregate_model_update = ModelUpdate(weights=aggregate_params_weights)
 
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)
+
 
         # agg_ref = db.reference('agg_model_updates')
 
