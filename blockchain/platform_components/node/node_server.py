@@ -71,6 +71,8 @@ def init_node():
         model_def = request.json.get('model_def', 1)
         replica_name = request.json.get('replica_name')
 
+        print(f"Replica name " + replica_name)
+
         if not model_def:
             return jsonify({'status': 'error', 'message': 'No config provided'}), 400
         if listener_thread and listener_thread.is_alive():

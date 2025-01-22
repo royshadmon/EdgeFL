@@ -41,13 +41,6 @@ class Node:
 
         self.currentRound = 1
 
-        # current_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # data_path = os.getenv("DATASET_PATH")
-        # data_config = {
-        #     "npz_file": str(data_path)
-        # }
-
         # model_def == 1: PytorchFLModel
         if model_def == 1:
             model_path = os.path.join("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain", "configs", "node", "pytorch", "pytorch_sequence.pt")
@@ -61,8 +54,6 @@ class Node:
 
             fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
             self.data_handler = CustomMnistPytorchDataHandler(self.replicaName,fl_model)
-            # data_handler = MnistPytorchDataHandler(data_config=data_config)
-            # self.local_training_handler = LocalTrainingHandler(fl_model=fl_model, data_handler=data_handler)
         # add more model defs in elifs below
         elif model_def == 2:
             pass
@@ -173,9 +164,6 @@ class Node:
                             'rb') as f:
                         data = pickle.load(f)
 
-                # Reference the database path and retrieve the data
-                # agg_data_ref = db.reference(f'agg_model_updates/{model_updates_key}')
-                # data = agg_data_ref.get()
 
                 # Ensure the data is valid and decode the parameters
                 if data and 'newUpdates' in data:
@@ -188,18 +176,6 @@ class Node:
 
         # Update model with weights
         self.data_handler.update_model(weights)
-
-        print("about to load data")
-        # self.local_training_handler.data_handler.load_dataset(nb_points=5)
-
-        # load new data
-        # (x_train, y_train), (x_test, y_test) = self.data_handler.load_dataset(
-        #     node_name=self.replicaName, round_number=round_number)
-        # self.local_training_handler.data_handler.x_train = x_train
-        # self.local_training_handler.data_handler.y_train = y_train
-        # self.local_training_handler.data_handler.x_test = x_test
-        # self.local_training_handler.data_handler.y_test = y_test
-
 
         # Train model
         # model_update = self.local_training_handler.train({})
@@ -217,10 +193,6 @@ class Node:
 
         response = write_file(self.edgelake_node_url, 'blobs_admin', 'node_model_updates', file_name)
 
-        # data_pushed = db.reference('node_model_updates').push({
-        #     'replicaName': self.replicaName,
-        #     'model_update': encoded_params
-        # })
 
         # return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
         return "blobs_admin", "node_model_updates", file

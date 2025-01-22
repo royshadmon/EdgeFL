@@ -191,7 +191,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
         return self.fl_model.get_weights(to_numpy=True)
 
     def run_inference(self):
-        x_test_images, y_test_labels = self.data_handler.get_all_test_data(self.replicaName)
+        x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
 
         # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
         # y_pred = np.array([])
