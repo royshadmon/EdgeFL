@@ -91,8 +91,7 @@ curl -X POST http://localhost:8080/init \
 -H "Content-Type: application/json" \
 -d '{
   "nodeUrls": [    
-    "http://localhost:8081", 
-    "http://localhost:8082"
+    "http://localhost:8081"
   ],
   "model_def": 1
 }'
@@ -106,17 +105,23 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8081", 
     "http://localhost:8082"
   ],
-  "model_def": 2
+  "model_def": 1
 }'
 ```
+## Model definitions
+To train on the MNIST dataset, set "model_def: 1"
+To train on the Winniio dataset, set "model_def: 2"
+
+Note that you need to also update the `blockchain/env_files/mnist.env` or `blockchain/env_files/winniio.env` files + initialize them before starting the node/aggregator server.
 
 ## Custom Data Handler
-Documentation for creating custom data handler:
-- 
+Documentation for creating custom data handler (needs to be finished).
+Examples of working data handlers can be found in the directory `blockchain/data_handlers` 
+
 
 ## Starting the Training Process
 
-To begin the training process, use this curl command:
+To begin the training process for the MNIST Dataset, use this curl command:
 
 ```bash
 curl -X POST http://localhost:8080/start-training \
