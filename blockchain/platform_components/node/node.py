@@ -117,7 +117,7 @@ class Node:
                     if response.content.decode().__contains__("Duplicate blockchain object id"):
                         success = True
                 else:
-                    sleep(1)
+                    sleep(4)
 
 
             # print(f"Submitting results for round {round_number}")
