@@ -12,6 +12,7 @@ from ibmfl.model.pytorch_fl_model import PytorchFLModel
 # from tensorflow.python.keras import optimizers
 from keras import layers, optimizers, models
 
+import winniio_data_handler
 from EdgeLake_functions.mongo_file_store import read_file, write_file
 from blockchain.platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
 from blockchain.platform_components.EdgeLake_functions.mongo_file_store import write_file
@@ -56,21 +57,23 @@ class Node:
             self.data_handler = CustomMnistPytorchDataHandler(self.replicaName,fl_model)
         # add more model defs in elifs below
         elif model_def == 2:
-            pass
-            # input = layers.Input(shape=(time_steps, 10))
-            # hidden_layer = layers.LSTM(256, activation='relu')(input)
-            # output = layers.Dense(1)(hidden_layer)
-            # model = models.Model(input, output)
-            #
-            # rmse = keras.metrics.RootMeanSquaredError(name='rmse')
-            # model.compile(
-            #     loss= 'mse',
-            #     optimizer= optimizers.Adam(learning_rate=0.0002),
-            #     metrics= ['mse', 'mae', rmse]
-            # )
-            #
-            # data_handlers = win
-        # model_def == 2: Sklearn and so on
+            time_steps = 1
+
+            input = layers.Input(shape=(time_steps, 6))
+            hidden_layer = layers.LSTM(256, activation='relu')(input)
+            output = layers.Dense(1)(hidden_layer)
+            model = models.Model(input, output)
+
+            rmse = keras.metrics.RootMeanSquaredError(name='rmse')
+
+            model.compile(
+                loss='mse',
+                optimizer=optimizers.Adam(learning_rate=0.0002),
+                metrics=['mse', 'mae', rmse],
+            )
+            self.data_handler = winniio_data_handler.WinniioDataHandler(self.replicaName, model)
+
+
 
     '''
     add_data_batch(data)

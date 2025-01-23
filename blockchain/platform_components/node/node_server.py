@@ -172,7 +172,7 @@ def inference():
         response = {
             'status': 'success',
             'message': 'Inference completed successfully',
-            'model_accuracy': results,
+            'model_accuracy': str(results),
         }
         return response
     except Exception as e:
