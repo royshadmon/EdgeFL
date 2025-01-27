@@ -42,6 +42,8 @@ def force_insert_policy(el_url, policy):
             'Content-Type': 'text/plain',
             'command': 'get !my_policy'
         }
+        print(response.status_code)
+
         response = requests.get(el_url, headers=headers)
         retrieved_policy = json.loads(response.content.decode('utf-8'))
         policy_id = retrieved_policy.get(list(retrieved_policy.keys())[0]).get('id')
@@ -104,5 +106,20 @@ if __name__ == '__main__':
                                     "trained_params_table": "my_table",
                                     "trained_params_filename": "file.json"
                 }} }}>'''
-    response = force_insert_policy(el_url, data)
-    response2 = force_insert_policy(el_url, data)
+    # response = force_insert_policy(el_url, data)
+    # print(response.status_code)
+    # response = force_insert_policy(el_url, data)
+    # print(response.status_code)
+    # response = force_insert_policy(el_url, data)
+    # print(response.status_code)
+
+    response = insert_policy(el_url, data)
+    print(response.status_code)
+    response = delete_policy(el_url, "f6df879142f006e6e4fc8e14114b63e2")
+    print(response.status_code)
+    response = insert_policy(el_url, data)
+    print(response.status_code)
+    response = delete_policy(el_url, "f6df879142f006e6e4fc8e14114b63e2")
+    print(response.status_code)
+    response = insert_policy(el_url, data)
+    print(response.status_code)

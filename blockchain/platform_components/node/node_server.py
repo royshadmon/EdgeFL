@@ -2,7 +2,7 @@
 
 from flask import Flask, request, jsonify
 
-from blockchain.platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
+from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
 from node import Node
 import numpy as np
 import threading
@@ -10,7 +10,6 @@ import time
 import os
 import argparse
 import requests
-
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
 '''

@@ -2,20 +2,14 @@ import os
 import pickle
 from asyncio import sleep
 import ast
-import firebase_admin
 import keras
-import numpy as np
-import torch
-from firebase_admin import credentials
-from ibmfl.party.training.local_training_handler import LocalTrainingHandler
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
-# from tensorflow.python.keras import optimizers
 from keras import layers, optimizers, models
 
-import winniio_data_handler
+from data_handlers.winniio_data_handler import WinniioDataHandler
 from EdgeLake_functions.mongo_file_store import read_file, write_file
-from blockchain.platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
-from blockchain.platform_components.EdgeLake_functions.mongo_file_store import write_file
+from EdgeLake_functions.blockchain_EL_functions import force_insert_policy
+from EdgeLake_functions.mongo_file_store import write_file
 from data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
 from sklearn.metrics import accuracy_score
 # import pathlib
@@ -71,7 +65,7 @@ class Node:
                 optimizer=optimizers.Adam(learning_rate=0.0002),
                 metrics=['mse', 'mae', rmse],
             )
-            self.data_handler = winniio_data_handler.WinniioDataHandler(self.replicaName, model)
+            self.data_handler = WinniioDataHandler(self.replicaName, model)
 
 
 

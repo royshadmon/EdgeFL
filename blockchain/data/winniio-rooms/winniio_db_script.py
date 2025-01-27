@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from torchvision import datasets
+# from torchvision import datasets
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 # from dotenv import load_dotenv

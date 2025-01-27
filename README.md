@@ -19,9 +19,16 @@
 ### Software Requirements
 - Python 3.9+ installed.
 ## Install ibmfl from the repo (does not work on python3.12)
- pip install "federated_learning_lib-2.0.1-py3-none-any.whl[pytorch]"
+[whl file location](https://github.com/royshadmon/Anylog-Edgelake-CSE115D/blob/main/federated-learning-lib-main/federated-learning-lib/federated_learning_lib-2.0.1-py3-none-any.whl) 
+```bash
+[Ubuntu only] sudo apt install python3.9-dev
+[Ubuntu only] sudo apt install build-essential
+[Ubuntu only] pip install --use-pep517 gensim==3.8.0
+[Ubuntu only] pip install numpy==1.23.5
+pip install "federated_learning_lib-2.0.1-py3-none-any.whl[tf,pytorch]"
+```
 ## MongoDB (for file handling)
-### Install / setup
+### Install / setup (Mac)
 ```bash
 brew tap mongodb/brew  
 brew install mongodb-community # requires Xcode 16.0+
@@ -34,6 +41,15 @@ sudo chown $USER /usr/local/bin/mongodb/log/mongodb
 [Mongo information](https://www.prisma.io/dataguide/mongodb/connecting-to-mongodb)
 [Mongo Install](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-os-x/)
 [Mongo Shell](https://www.mongodb.com/docs/mongodb-shell/)
+### Install / setup (Ubuntu)
+```bash
+wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -  
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
+sudo apt-get update
+sudo apt-get install -y mongodb-mongosh
+mongosh --version
+```
+[Mongo Ubuntu Setup](https://www.slingacademy.com/article/how-to-install-mongodb-shell-mongosh-on-windows-mac-and-ubuntu/)
 ### Start
 ```bash
 brew services start mongodb-community
@@ -70,6 +86,12 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
      ```bash
      ./db_script
      ```
+
+3.1. Install pip on Ubuntu
+   ```
+   curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+   python3.9 get-pip.py
+   ```
 
 4. Install Dependencies:
    ```bash

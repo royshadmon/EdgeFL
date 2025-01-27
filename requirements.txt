@@ -1,15 +1,8 @@
 web3~=7.6.0
-firebase_admin
-numpy~=1.23.5
-tensorflow~=2.18.0
-./federated-learning-lib-main/federated-learning-lib/federated_learning_lib-2.0.1-py3-none-any.whl
-torch>=2.0.0
-torchvision>=0.15.0
-torchaudio>=0.15.0
--f https://download.pytorch.org/whl/cpu
+numpy==1.23.5
+./federated-learning-lib-main/federated-learning-lib/federated_learning_lib-2.0.1-py3-none-any.whl[tf,pytorch]
 skorch>=0.12.0
-psycopg2~=2.9.10
-firebase-admin~=6.6.0
+psycopg2-binary
 scikit-learn~=1.0.2
 python-dotenv~=1.0.1
 requests~=2.32.3
