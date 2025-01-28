@@ -31,7 +31,6 @@ def check_policy_inserted(el_url, policy):
         print(f'Successfully inserted policy {policy}')
         return response
     else:
-        print(f'Deleting inserted policy {policy}')
         headers = {
             'User-Agent': 'AnyLog/1.23',
             'Content-Type': 'text/plain',

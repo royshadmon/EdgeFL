@@ -9,12 +9,12 @@ from dotenv import load_dotenv
 
 from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
 from ibmfl.model.model_update import ModelUpdate
-from sympy.stats.sampling.sample_numpy import numpy
 
-from mongo_file_store import copy_to_container, create_directory_in_container
+
+from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, \
     check_policy_inserted
-from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_from_container
+from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 
 # from custom_data_handler import CustomMnistPytorchDataHandler
 
@@ -138,7 +138,7 @@ class Aggregator:
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, path,
                                          f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i])
-                    copy_from_container(self.docker_container_name,
+                    copy_file_from_container(self.docker_container_name,
                                         f'{self.docker_file_write_destination}/aggregator/{filename}',
                                         f'{self.file_write_destination}/aggregator/{filename}')
                 else:
@@ -189,7 +189,8 @@ class Aggregator:
             f.write(self.encode_params(data_entry))
 
         if self.docker_running:
-            copy_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
+            print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
+            copy_file_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
             return f'{self.docker_container_name}/aggregator/{round_number}-agg_update.json'
 
         return f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json'

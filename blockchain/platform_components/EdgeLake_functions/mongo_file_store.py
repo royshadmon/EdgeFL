@@ -42,41 +42,58 @@ def create_directory_in_container(container_name, directory_path):
     else:
         print(f"Failed to create directory. Error: {output.decode('utf-8')}")
 
-def copy_to_container(container_name, source_path, dest_path):
-    """
-    Copy a file from the host to a container.
 
-    Args:
-        container_name (str): Name or ID of the container.
-        source_path (str): Path of the file on the host.
-        dest_path (str): Destination path inside the container.
+def copy_file_to_container(container_name, src_path, dest_path):
+    """
+    Copies a file from the host to a container.
+
+    :param container_name: Name or ID of the container
+    :param src_path: Absolute path of the source file on the host
+    :param dest_path: Destination path in the container (directory or full path)
     """
     client = docker.from_env()
     container = client.containers.get(container_name)
 
-    # Open the source file
-    with open(source_path, 'rb') as file_data:
-        # Use the container's put_archive method to copy the file
-        container.put_archive(dest_path, file_data.read())
+    # Create a tar archive for the file
+    with tarfile.open("/tmp/temp.tar", mode="w") as tar:
+        tar.add(src_path, arcname=os.path.basename(src_path))
 
-    print(f"Copied {source_path} to {container_name}:{dest_path}")
+    # Open the tar file and send it to the container
+    with open("/tmp/temp.tar", "rb") as tar_file:
+        container.put_archive(os.path.dirname(dest_path), tar_file)
 
-def copy_from_container(container_name, source_path, destination_path):
+    # Clean up the temporary tar file
+    os.remove("/tmp/temp.tar")
+    print(f"Copied {src_path} to {container_name}:{dest_path}")
+
+def copy_file_from_container(container_name, src_path, dest_path):
+    """
+    Copies a file from a container to the host machine.
+
+    :param container_name: Name or ID of the container
+    :param src_path: Path of the source file inside the container
+    :param dest_path: Destination path on the host (directory or full path)
+    """
     client = docker.from_env()
     container = client.containers.get(container_name)
 
-    # Open the file or directory from the container
-    tar_stream, _ = container.get_archive(source_path)
+    # Get the file from the container as a tar stream
+    tar_stream, _ = container.get_archive(src_path)
 
-    # Save the tar stream to a local file
-    with open("temp.tar", "wb") as f:
+    # Extract the tar stream to the host
+    with open("/tmp/temp.tar", "wb") as temp_tar:
         for chunk in tar_stream:
-            f.write(chunk)
+            temp_tar.write(chunk)
 
-    # Extract the tar file to the destination path
-    import tarfile
-    with tarfile.open("temp.tar") as tar:
-        tar.extractall(path=destination_path)
+    with tarfile.open("/tmp/temp.tar", mode="r") as tar:
+        # Extract the file to the desired host location
+        tar.extractall(path=os.path.dirname(dest_path))
+        extracted_file = os.path.join(os.path.dirname(dest_path), os.path.basename(src_path))
+        os.rename(extracted_file, dest_path)
+
+    # Clean up the temporary tar file
+    os.remove("/tmp/temp.tar")
+    print(f"Copied {src_path} from {container_name} to {dest_path}")
 
 
 def read_file(edgelake_node_url, file_path, dest, ip_port):

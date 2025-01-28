@@ -9,11 +9,10 @@ import numpy as np
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 from keras import layers, optimizers, models
 
-from blockchain_EL_functions import insert_policy, check_policy_inserted
-from mongo_file_store import copy_to_container, create_directory_in_container
+from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted
+from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
-from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_from_container
-from platform_components.EdgeLake_functions.mongo_file_store import write_file
+from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 from platform_components.data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
 from sklearn.metrics import accuracy_score
 # import pathlib
@@ -164,7 +163,7 @@ class Node:
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
                                          f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-                    copy_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                    copy_file_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
                 else:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
 
@@ -203,7 +202,8 @@ class Node:
             f.write(encoded_params)
 
         if self.docker_running:
-            copy_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
+            print(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
+            copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_container_name}/{self.replicaName}/{file}'
         return file_name
 
