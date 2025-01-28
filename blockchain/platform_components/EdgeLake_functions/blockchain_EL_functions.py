@@ -1,3 +1,5 @@
+from asyncio import sleep
+
 import requests
 import socket
 import json
@@ -37,6 +39,9 @@ def force_insert_policy(el_url, policy):
         }
 
         response = requests.post(el_url, headers=headers, data=policy)
+
+        sleep(3)
+
         headers = {
             'User-Agent': 'AnyLog/1.23',
             'Content-Type': 'text/plain',
@@ -44,11 +49,15 @@ def force_insert_policy(el_url, policy):
         }
         print(response.status_code)
 
+
         response = requests.get(el_url, headers=headers)
         retrieved_policy = json.loads(response.content.decode('utf-8'))
         policy_id = retrieved_policy.get(list(retrieved_policy.keys())[0]).get('id')
 
         response = delete_policy(el_url, policy_id)
+
+        sleep(3)
+
         response = insert_policy(el_url, policy)
         if response.status_code == 200:
             print("SUCCESS INSERT AFTER DELETING")
