@@ -28,7 +28,7 @@ class Aggregator:
         self.server_port = port
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
-
+        self.mongo_db_name = os.getenv('MONGO_DB_NAME')
         # cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
         # firebase_admin.initialize_app(cred, {
         #     'databaseURL': self.database_url
@@ -175,14 +175,14 @@ class Aggregator:
         # push agg data
         with open(f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
-        write_file(self.edgelake_node_url, 'blobs_admin', 'agg_model_updates', f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{round_number}-agg_update.json')
+        write_file(self.edgelake_node_url, self.mongo_db_name, 'agg_model_updates', f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{round_number}-agg_update.json')
         # data_pushed = agg_ref.push(data_entry)
 
         # object_url = f"{self.database_url}/agg_model_updates/{data_pushed.key}.json"
 
         # clear the node model updates for clean slate during new round
         #node_ref.delete()
-        return "blobs_admin", "agg_model_updates", f'{round_number}-agg_update.json'
+        return self.mongo_db_name, "agg_model_updates", f'{round_number}-agg_update.json'
         # return object_url
 
     def encode_params(self, new_model_weights):

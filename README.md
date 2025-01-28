@@ -25,6 +25,11 @@
 [Ubuntu only] sudo apt install build-essential
 [Ubuntu only] pip install --use-pep517 gensim==3.8.0
 [Ubuntu only] pip install numpy==1.23.5
+[Ubuntu only ] pip install -U pip setuptools
+[Ubuntu only] sudo apt-get update
+[Ubuntu only ] sudo apt remove python3-apt
+[Ubuntu only ] sudo apt install python3-apt
+
 pip install "federated_learning_lib-2.0.1-py3-none-any.whl[tf,pytorch]"
 ```
 ## MongoDB (for file handling)

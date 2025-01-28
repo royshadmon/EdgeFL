@@ -28,7 +28,7 @@ class Node:
         self.database_url = os.getenv("DATABASE_URL")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
-
+        self.mongo_db_name = os.getenv('MONGO_DB_NAME')
         self.replicaName = replica_name
 
         # Node local data batches
@@ -188,11 +188,11 @@ class Node:
             f.write(encoded_params)
 
 
-        response = write_file(self.edgelake_node_url, 'blobs_admin', 'node_model_updates', file_name)
+        response = write_file(self.edgelake_node_url, self.mongo_db_name, 'node_model_updates', file_name)
 
 
         # return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
-        return "blobs_admin", "node_model_updates", file
+        return self.mongo_db_name, "node_model_updates", file
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
