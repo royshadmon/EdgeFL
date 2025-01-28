@@ -4,6 +4,7 @@ import docker
 
 import requests
 import sys
+import tarfile
 
 def write_file(edgelake_node_url, dbms, table, filename):
     lst = filename.split('/')

@@ -42,6 +42,7 @@ class Node:
             self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
+            create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/")
 
         # Node local data batches
         self.data_batches = []
@@ -204,7 +205,7 @@ class Node:
         if self.docker_running:
             print(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
             copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
-            return f'{self.docker_container_name}/{self.replicaName}/{file}'
+            return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name
 
 

@@ -44,6 +44,7 @@ class Aggregator:
             self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
+            create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
             # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
         # Define or obtain hyperparameters and protocol handler for the fusion model
@@ -191,7 +192,7 @@ class Aggregator:
         if self.docker_running:
             print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
             copy_file_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
-            return f'{self.docker_container_name}/aggregator/{round_number}-agg_update.json'
+            return f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json'
 
         return f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json'
 
