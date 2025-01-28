@@ -9,9 +9,13 @@ from dotenv import load_dotenv
 
 from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
 from ibmfl.model.model_update import ModelUpdate
+from sympy.stats.sampling.sample_numpy import numpy
 
-from platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
-from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file
+from mongo_file_store import copy_to_container, create_directory_in_container
+from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, \
+    check_policy_inserted
+from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_from_container
+
 # from custom_data_handler import CustomMnistPytorchDataHandler
 
 CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
@@ -26,24 +30,26 @@ class Aggregator:
         self.server_port = port
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
-        self.mongo_db_name = os.getenv('MONGO_DB_NAME')
+
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
-        self.contract_address = self.get_contract_address()
 
-        # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
+
+
+        if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
+            self.docker_running = False
+        else:
+            self.docker_running = True
+            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
+            self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
+            create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
+
+            # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
         # Define or obtain hyperparameters and protocol handler for the fusion model
         hyperparams = {}  # Replace with actual hyperparameters as required
         protocol_handler = None  # Replace with an appropriate protocol handler instance or object
 
-        # USE MNIST DATASET FOR TESTING THIS FUNCTIONALITY
-        # current_dir = os.path.dirname(os.path.abspath(__file__))
-        # data_path = os.path.join(current_dir, "mnist.npz")
-        # data_config = {
-        #     "npz_file": str("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/mnist.npz")
-        # }
-        # data_handler = MnistPytorchDataHandler(data_config=data_config)
 
         # Correctly instantiate the Fusion model with required arguments
         self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=None)
@@ -83,14 +89,14 @@ class Aggregator:
             success = False
             while not success:
                 print("Attempting insert")
-                response = force_insert_policy(self.edgelake_node_url, data)
+                response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
-                elif response.status_code == 400:
-                    if response.content.decode().__contains__("Duplicate blockchain object id"):
-                        success = True
                 else:
-                    sleep(4)
+                    sleep(np.random.randint(5,15))
+
+                    if check_policy_inserted(self.edgelake_node_url, data):
+                        success = True
 
             print(f"Training initialized with {roundNumber} rounds")
 
@@ -119,30 +125,42 @@ class Aggregator:
 
         decoded_params = []
         # Loop through each provided download link to retrieve node parameter objects
-        for i, link in enumerate(node_param_download_links):
+        for i, path in enumerate(node_param_download_links):
             try:
-                link = ast.literal_eval(link)
+
                 # make sure directory exists
+                filename = path.split('/')[-1]
                 os.makedirs(os.path.dirname(
                     f"{self.file_write_destination}/aggregator/"),
                             exist_ok=True)
-                response = read_file(self.edgelake_node_url, link[0], link[1], link[2], f'{self.file_write_destination}/aggregator/{link[2]}', ip_ports[i])
-                # response = requests.get(link)
+
+
+                if self.docker_running:
+                    response = read_file(self.edgelake_node_url, path,
+                                         f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i])
+                    copy_from_container(self.docker_container_name,
+                                        f'{self.docker_file_write_destination}/aggregator/{filename}',
+                                        f'{self.file_write_destination}/aggregator/{filename}')
+                else:
+                    response = read_file(self.edgelake_node_url, path,
+                                     f'{self.file_write_destination}/aggregator/{filename}', ip_ports[i])
+
+
                 if response.status_code == 200:
                     sleep(1)
-                    with open(f'{self.file_write_destination}/aggregator/{link[2]}', 'rb') as f:
+                    with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
                         data = pickle.load(f)
 
                     if not data:
-                        raise ValueError(f"Missing model_weights in data from link: {link}")
+                        raise ValueError(f"Missing model_weights in data from file: {filename}")
                     # decoded_params.append(data)
                     decoded_params.append(ModelUpdate(weights=data))
                     # decoded_params.append(ModelUpdate(weights=data[0].detach().numpy()))
                 else:
                     raise ValueError(
-                        f"Failed to retrieve node params from link: {link}. HTTP Status: {response.status_code}")
+                        f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
             except Exception as e:
-                raise ValueError(f"Error retrieving data from link {link}: {str(e)}")
+                raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
 
         # do aggregation function here (doesn't return anything)
         self.fusion_model.update_weights(decoded_params)
@@ -169,15 +187,12 @@ class Aggregator:
         # push agg data
         with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
-        write_file(self.edgelake_node_url, self.mongo_db_name, 'agg_model_updates', f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json')
-        # data_pushed = agg_ref.push(data_entry)
 
-        # object_url = f"{self.database_url}/agg_model_updates/{data_pushed.key}.json"
+        if self.docker_running:
+            copy_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
+            return f'{self.docker_container_name}/aggregator/{round_number}-agg_update.json'
 
-        # clear the node model updates for clean slate during new round
-        #node_ref.delete()
-        return self.mongo_db_name, "agg_model_updates", f'{round_number}-agg_update.json'
-        # return object_url
+        return f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json'
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)

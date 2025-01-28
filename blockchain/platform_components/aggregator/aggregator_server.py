@@ -123,14 +123,10 @@ async def init_training():
 def inference():
     """Inference on current model w/ data passed in."""
     try:
-        # data = request.json
-        # test_data = data.get('data', {})
 
         # hard coding tht test data right now: test_data = (x_test, y_test)
         (_), test_data = aggregator.fusion_model.data_handler.get_data()
 
-        # test data should be in the form of np.array
-        # test_data[0] = x_test, test_data[1] = y_test
         results = aggregator.inference(test_data)
         response = {
             'status': 'success',
@@ -171,8 +167,9 @@ async def listen_for_update_agg(min_params, roundNumber):
                         result = params_response.json()
                         if result and len(result) > 0:
                             # Extract all trained_params into a list
+
                             node_params_links = [
-                                item[f'a{roundNumber}']['trained_params_filename']
+                                item[f'a{roundNumber}']['trained_params_local_path']
                                 for item in result
                                 if f'a{roundNumber}' in item
                             ]
@@ -182,8 +179,6 @@ async def listen_for_update_agg(min_params, roundNumber):
                                 for item in result
                                 if f'a{roundNumber}' in item
                             ]
-
-                            # print(f"Collected trained_params links: {node_params_links}")  # Debugging line
 
                             # Aggregate the parameters
                             aggregated_params_link = aggregator.aggregate_model_params(

@@ -2,13 +2,17 @@ import os
 import pickle
 from asyncio import sleep
 import ast
+from fileinput import filename
+
 import keras
+import numpy as np
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 from keras import layers, optimizers, models
 
+from blockchain_EL_functions import insert_policy, check_policy_inserted
+from mongo_file_store import copy_to_container, create_directory_in_container
 from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
-from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file
-from platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
+from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_from_container
 from platform_components.EdgeLake_functions.mongo_file_store import write_file
 from platform_components.data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
 from sklearn.metrics import accuracy_score
@@ -31,6 +35,14 @@ class Node:
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
         self.mongo_db_name = os.getenv('MONGO_DB_NAME')
         self.replicaName = replica_name
+
+        if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
+            self.docker_running = False
+        else:
+            self.docker_running = True
+            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
+            self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
+            create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
 
         # Node local data batches
         self.data_batches = []
@@ -89,31 +101,28 @@ class Node:
     def add_node_params(self, round_number, model_metadata):
         print("in add_node_params")
 
-        dbms_name = model_metadata[0]
-        table_name = model_metadata[1]
-        filename = model_metadata
+        # dbms_name = model_metadata[0]
+        # table_name = model_metadata[1]
+        # filename = model_metadata
 
         try:
 
             data = f'''<my_policy = {{"a{round_number}" : {{
                                 "node" : "{self.replicaName}",
-                                "ip_port": "{self.edgelake_tcp_node_ip_port}",
-                                "trained_params_dbms": "{dbms_name}",
-                                "trained_params_table": "{table_name}",
-                                "trained_params_filename": "{filename}"
+                                "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
+                                "trained_params_local_path": "{model_metadata}"
             }} }}>'''
 
             success = False
             while not success:
                 print("Attempting insert")
-                response = force_insert_policy(self.edgelake_node_url, data)
+                response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
-                elif response.status_code == 400:
-                    if response.content.decode().__contains__("Duplicate blockchain object id"):
-                        success = True
                 else:
-                    sleep(4)
+                    sleep(np.random.randint(5,15))
+                    if check_policy_inserted(self.edgelake_node_url, data):
+                        success = True
 
 
             # print(f"Submitting results for round {round_number}")
@@ -150,16 +159,20 @@ class Node:
             try:
                 # Extract the key from the URL
 
-                model_updates_key = ast.literal_eval(aggregator_model_params_db_link.split('/')[-1])
 
-                response = read_file(self.edgelake_node_url, model_updates_key[0], model_updates_key[1], model_updates_key[2],
-                                     f'{self.file_write_destination}/{self.replicaName}/{model_updates_key[2]}',
-                                     ip_ports)
+                filename = aggregator_model_params_db_link.split('/')[-1]
+                if self.docker_running:
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
+                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+                    copy_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                else:
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
                     with open(
-                            f'{self.file_write_destination}/{self.replicaName}/{model_updates_key[2]}',
+                            f'{self.file_write_destination}/{self.replicaName}/{filename}',
                             'rb') as f:
                         data = pickle.load(f)
 
@@ -189,12 +202,12 @@ class Node:
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
+        if self.docker_running:
+            copy_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
+            return f'{self.docker_container_name}/{self.replicaName}/{file}'
+        return file_name
 
-        response = write_file(self.edgelake_node_url, self.mongo_db_name, 'node_model_updates', file_name)
 
-
-        # return f"{self.database_url}/node_model_updates/{data_pushed.key}.json"
-        return self.mongo_db_name, "node_model_updates", file
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)

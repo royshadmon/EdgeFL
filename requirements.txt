@@ -17,3 +17,4 @@ PyYAML~=6.0.2
 tqdm~=4.67.1
 python-dateutil~=2.9.0.post0
 matplotlib~=3.9.4
+docker
