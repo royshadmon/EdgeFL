@@ -21,6 +21,7 @@ load_dotenv()
 
 class Node:
     def __init__(self, model_def, replica_name, ip, port):
+        self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
         self.node_ip = ip
         self.node_port = port
         print("Node initializing")
@@ -65,8 +66,9 @@ class Node:
                 optimizer=optimizers.Adam(learning_rate=0.0002),
                 metrics=['mse', 'mae', rmse],
             )
+            print("BEFORE SET UP HANDLER")
             self.data_handler = WinniioDataHandler(self.replicaName, model)
-
+            print("AFTER SET UP HANDLER")
 
 
     '''
@@ -151,13 +153,13 @@ class Node:
                 model_updates_key = ast.literal_eval(aggregator_model_params_db_link.split('/')[-1])
 
                 response = read_file(self.edgelake_node_url, model_updates_key[0], model_updates_key[1], model_updates_key[2],
-                                     f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{model_updates_key[2]}',
+                                     f'{self.file_write_destination}/{self.replicaName}/{model_updates_key[2]}',
                                      ip_ports)
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
                     with open(
-                            f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{model_updates_key[2]}',
+                            f'{self.file_write_destination}/{self.replicaName}/{model_updates_key[2]}',
                             'rb') as f:
                         data = pickle.load(f)
 
@@ -182,8 +184,8 @@ class Node:
         encoded_params = self.encode_model(model_params)
         file = f"{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
-        os.makedirs(os.path.dirname(f"/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/"), exist_ok=True)
-        file_name = f"/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/{self.replicaName}/{file}"
+        os.makedirs(os.path.dirname(f"{self.file_write_destination}/{self.replicaName}/"), exist_ok=True)
+        file_name = f"{self.file_write_destination}/{self.replicaName}/{file}"
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 

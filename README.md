@@ -55,7 +55,8 @@ sudo apt-get install -y mongodb-mongosh
 mongosh --version
 ```
 [Mongo Ubuntu Setup](https://www.slingacademy.com/article/how-to-install-mongodb-shell-mongosh-on-windows-mac-and-ubuntu/)
-### Start
+
+### Start MongoDB Mac
 ```bash
 brew services start mongodb-community
 mongod --dbpath /usr/local/bin/mongodb/var/mongodb --logpath /usr/local/bin/mongodb/log/mongodb/mongo.log
@@ -76,8 +77,7 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 1. Clone the repository and switch to the merge branch:
    ```bash
    git clone https://github.com/isba1/Anylog-Edgelake-CSE115D.git
-   cd Anylog-Edgelake-CSE115D
-   git checkout merge-branch
+   cd Anylog-Edgelake-CSE115D 
    ```
 
 2. Configure Environment Variables:
@@ -101,6 +101,7 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 4. Install Dependencies:
    ```bash
    pip install -r requirements.txt
+   pip install flask[async]
    ```
 
 5. Start the Servers:

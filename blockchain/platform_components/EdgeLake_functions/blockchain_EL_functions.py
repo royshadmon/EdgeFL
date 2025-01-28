@@ -40,7 +40,7 @@ def force_insert_policy(el_url, policy):
 
         response = requests.post(el_url, headers=headers, data=policy)
 
-        sleep(3)
+
 
         headers = {
             'User-Agent': 'AnyLog/1.23',
@@ -56,7 +56,6 @@ def force_insert_policy(el_url, policy):
 
         response = delete_policy(el_url, policy_id)
 
-        sleep(3)
 
         response = insert_policy(el_url, policy)
         if response.status_code == 200:

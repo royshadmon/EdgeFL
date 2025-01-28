@@ -41,7 +41,9 @@ class WinniioDataHandler(DataHandler):
         super().__init__()
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+        print("BEFORE LOAD DATASET")
         (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
+        print("AFTER LOAD DATASET")
         self.fl_model = fl_model
         self.node_name = node_name
 

@@ -21,6 +21,7 @@ load_dotenv()
 
 class Aggregator:
     def __init__(self, provider_url, private_key, ip, port):
+        self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
         self.server_ip = ip
         self.server_port = port
         # Initialize Firebase database connection
@@ -123,13 +124,13 @@ class Aggregator:
                 link = ast.literal_eval(link)
                 # make sure directory exists
                 os.makedirs(os.path.dirname(
-                    f"/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/"),
+                    f"{self.file_write_destination}/aggregator/"),
                             exist_ok=True)
-                response = read_file(self.edgelake_node_url, link[0], link[1], link[2], f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{link[2]}', ip_ports[i])
+                response = read_file(self.edgelake_node_url, link[0], link[1], link[2], f'{self.file_write_destination}/aggregator/{link[2]}', ip_ports[i])
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
-                    with open(f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{link[2]}', 'rb') as f:
+                    with open(f'{self.file_write_destination}/aggregator/{link[2]}', 'rb') as f:
                         data = pickle.load(f)
 
                     if not data:
@@ -166,9 +167,9 @@ class Aggregator:
         }
 
         # push agg data
-        with open(f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{round_number}-agg_update.json', 'wb') as f:
+        with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
-        write_file(self.edgelake_node_url, self.mongo_db_name, 'agg_model_updates', f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/file_write/aggregator/{round_number}-agg_update.json')
+        write_file(self.edgelake_node_url, self.mongo_db_name, 'agg_model_updates', f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json')
         # data_pushed = agg_ref.push(data_entry)
 
         # object_url = f"{self.database_url}/agg_model_updates/{data_pushed.key}.json"

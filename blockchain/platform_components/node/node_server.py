@@ -150,7 +150,7 @@ def listen_for_start_round(nodeInstance, stop_event):
                 # else: # Debugging line
                 #     print(f"No data found for round r{nodeInstance.currentRound}")
 
-            time.sleep(2)  # Poll every 2 seconds
+            time.sleep(5)  # Poll every 2 seconds
 
         except Exception as e:
             print(f"Error in listener thread: {str(e)}")
