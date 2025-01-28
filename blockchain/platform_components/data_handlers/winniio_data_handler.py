@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from ibmfl.data.data_handler import DataHandler
-from EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
+from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from keras import layers, optimizers, models
 from tensorflow.python import keras
 from ibmfl.model.model_update import ModelUpdate

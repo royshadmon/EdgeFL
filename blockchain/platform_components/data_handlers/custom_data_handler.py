@@ -19,7 +19,7 @@ from ibmfl.model.model_update import ModelUpdate
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 from sklearn.metrics import accuracy_score
 
-from EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
+from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 
 logger = logging.getLogger(__name__)
 
