@@ -8,13 +8,10 @@ import pickle
 from dotenv import load_dotenv
 
 from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
-import firebase_admin
-from firebase_admin import credentials
 from ibmfl.model.model_update import ModelUpdate
-from ibmfl.util.data_handlers.mnist_pytorch_data_handler import MnistPytorchDataHandler
 
-from EdgeLake_functions.blockchain_EL_functions import force_insert_policy
-from EdgeLake_functions.mongo_file_store import read_file, write_file
+from platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
+from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file
 # from custom_data_handler import CustomMnistPytorchDataHandler
 
 CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
@@ -29,10 +26,6 @@ class Aggregator:
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
         self.mongo_db_name = os.getenv('MONGO_DB_NAME')
-        # cred = credentials.Certificate(os.getenv('FIREBASE_CREDENTIALS'))
-        # firebase_admin.initialize_app(cred, {
-        #     'databaseURL': self.database_url
-        # })
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'

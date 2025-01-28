@@ -6,11 +6,11 @@ import keras
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 from keras import layers, optimizers, models
 
-from data_handlers.winniio_data_handler import WinniioDataHandler
-from EdgeLake_functions.mongo_file_store import read_file, write_file
-from EdgeLake_functions.blockchain_EL_functions import force_insert_policy
-from EdgeLake_functions.mongo_file_store import write_file
-from data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
+from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
+from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file
+from platform_components.EdgeLake_functions.blockchain_EL_functions import force_insert_policy
+from platform_components.EdgeLake_functions.mongo_file_store import write_file
+from platform_components.data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
 from sklearn.metrics import accuracy_score
 # import pathlib
 

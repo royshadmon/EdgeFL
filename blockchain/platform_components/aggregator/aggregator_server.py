@@ -2,11 +2,11 @@ import argparse
 from dotenv import load_dotenv
 import asyncio
 from flask import Flask, jsonify, request
-from aggregator import Aggregator
+from platform_components.aggregator.aggregator import Aggregator
 import requests
 import os
 
-from blockchain.platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
+from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
 
 app = Flask(__name__)
 load_dotenv()

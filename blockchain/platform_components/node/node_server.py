@@ -3,7 +3,7 @@
 from flask import Flask, request, jsonify
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
-from node import Node
+from platform_components.node.node import Node
 import numpy as np
 import threading
 import time
