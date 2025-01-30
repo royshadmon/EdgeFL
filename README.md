@@ -32,35 +32,6 @@
 
 pip install "federated_learning_lib-2.0.1-py3-none-any.whl[tf,pytorch]"
 ```
-## MongoDB (for file handling)
-### Install / setup (Mac)
-```bash
-brew tap mongodb/brew  
-brew install mongodb-community # requires Xcode 16.0+
-brew install mongosh # (Optional) allows access through mongo-cli
-sudo mkdir -p /usr/local/bin/mongodb/var/mongodb
-sudo mkdir -p /usr/local/bin/mongodb/log/mongodb
-sudo chown $USER /usr/local/bin/mongodb/
-sudo chown $USER /usr/local/bin/mongodb/log/mongodb
-```
-[Mongo information](https://www.prisma.io/dataguide/mongodb/connecting-to-mongodb)
-[Mongo Install](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-os-x/)
-[Mongo Shell](https://www.mongodb.com/docs/mongodb-shell/)
-### Install / setup (Ubuntu)
-```bash
-wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -  
-echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
-sudo apt-get update
-sudo apt-get install -y mongodb-mongosh
-mongosh --version
-```
-[Mongo Ubuntu Setup](https://www.slingacademy.com/article/how-to-install-mongodb-shell-mongosh-on-windows-mac-and-ubuntu/)
-
-### Start MongoDB Mac
-```bash
-brew services start mongodb-community
-mongod --dbpath /usr/local/bin/mongodb/var/mongodb --logpath /usr/local/bin/mongodb/log/mongodb/mongo.log
-```
 # AnyLog-Edgelake Setup Guide
 
 This guide will walk you through setting up and running the AnyLog-Edgelake system.
@@ -76,14 +47,14 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 
 1. Clone the repository and switch to the merge branch:
    ```bash
-   git clone https://github.com/isba1/Anylog-Edgelake-CSE115D.git
+   git clone https://github.com/royshadmon/Anylog-Edgelake-CSE115D.git
    cd Anylog-Edgelake-CSE115D 
    ```
 
 2. Configure Environment Variables:
    - Navigate to `AnyLog/blockchain` directory
-   - Locate the `.env` file
-   - Modify the file with your required variables
+   - Locate the `.env` files in the `blockchain/env_files` directory. 
+   - Modify the file with the required variables
 
 3. Set up the Database:
    - Navigate to `AnyLog/blockchain`
@@ -91,8 +62,8 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
      ```bash
      ./db_script
      ```
-
-3.1. Install pip on Ubuntu
+   
+4. 3.1. Install pip on Ubuntu
    ```
    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
    python3.9 get-pip.py
@@ -104,10 +75,24 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
    pip install flask[async]
    ```
 
-5. Start the Servers:
+5. Set up and start a Postgres instance 
+
+[Postgres Mac instructions](https://www.sqlshack.com/setting-up-a-postgresql-database-on-mac/)
+
+5. Load data into Postgres
+
+Run the db script located in the  `blockchain/data` directories.
+
+Note that `model_def: 1` is for the mnist dataset and `model_def: 2` is for the Winniio dataset. 
+
+6. Start the Servers:
    ```bash
    ./start_servers.sh
    ```
+   Note, make sure you load the ENV variables from the env files.
+   You can also start each node server and the one aggregator server manually.
+   The code is located in the `blockchain/platform_components/node` and `blockchain/platform_components/aggregator`
+   directory. Make sure to run the file with the `_server.py`.
 
 ## System Initialization
 
@@ -144,7 +129,7 @@ Note that you need to also update the `blockchain/env_files/mnist.env` or `block
 
 ## Custom Data Handler
 Documentation for creating custom data handler (needs to be finished).
-Examples of working data handlers can be found in the directory `blockchain/data_handlers` 
+Examples of working data handlers can be found in the directory `blockchain/platform_components/data_handlers` 
 
 
 ## Starting the Training Process
@@ -190,3 +175,35 @@ If you encounter any issues:
 3. Verify all ports (8080, 8081, 8082) are available
 4. Make sure all prerequisites are installed
 5. If servers aren't responding, try killing them with `./kill_servers.sh` and restart
+
+
+
+## MongoDB (for file handling) [Mongo is currently deprecated, we will need to re-add this feature]
+### Install / setup (Mac)
+```bash
+brew tap mongodb/brew  
+brew install mongodb-community # requires Xcode 16.0+
+brew install mongosh # (Optional) allows access through mongo-cli
+sudo mkdir -p /usr/local/bin/mongodb/var/mongodb
+sudo mkdir -p /usr/local/bin/mongodb/log/mongodb
+sudo chown $USER /usr/local/bin/mongodb/
+sudo chown $USER /usr/local/bin/mongodb/log/mongodb
+```
+[Mongo information](https://www.prisma.io/dataguide/mongodb/connecting-to-mongodb)
+[Mongo Install](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-os-x/)
+[Mongo Shell](https://www.mongodb.com/docs/mongodb-shell/)
+### Install / setup (for Ubuntu machines)
+```bash
+wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -  
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
+sudo apt-get update
+sudo apt-get install -y mongodb-mongosh
+mongosh --version
+```
+[Mongo Ubuntu Setup](https://www.slingacademy.com/article/how-to-install-mongodb-shell-mongosh-on-windows-mac-and-ubuntu/)
+
+### Start MongoDB Mac
+```bash
+brew services start mongodb-community
+mongod --dbpath /usr/local/bin/mongodb/var/mongodb --logpath /usr/local/bin/mongodb/log/mongodb/mongo.log
+```
