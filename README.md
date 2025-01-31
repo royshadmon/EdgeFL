@@ -56,14 +56,8 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
    - Locate the `.env` files in the `blockchain/env_files` directory. 
    - Modify the file with the required variables
 
-3. Set up the Database:
-   - Navigate to `AnyLog/blockchain`
-   - Run the database setup script:
-     ```bash
-     ./db_script
-     ```
    
-4. 3.1. Install pip on Ubuntu
+3. 3.1. Install pip on Ubuntu
    ```
    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
    python3.9 get-pip.py
@@ -79,13 +73,19 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 
 [Postgres Mac instructions](https://www.sqlshack.com/setting-up-a-postgresql-database-on-mac/)
 
-5. Load data into Postgres
+6. Load data into Postgres
 
 Run the db script located in the  `blockchain/data` directories.
+Set up the Database:
+   - Navigate to `AnyLog/blockchain`
+   - Run the database setup script:
+     ```bash
+     ./db_script
+     ```
 
 Note that `model_def: 1` is for the mnist dataset and `model_def: 2` is for the Winniio dataset. 
 
-6. Start the Servers:
+7. Start the Servers:
    ```bash
    ./start_servers.sh
    ```
