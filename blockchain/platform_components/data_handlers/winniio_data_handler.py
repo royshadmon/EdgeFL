@@ -48,9 +48,9 @@ class WinniioDataHandler(DataHandler):
         super().__init__()
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
-        print("BEFORE LOAD DATASET")
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-        print("AFTER LOAD DATASET")
+        # print("BEFORE LOAD DATASET")
+        # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
+        # print("AFTER LOAD DATASET")
         self.fl_model = fl_model
         self.node_name = node_name
 
@@ -109,10 +109,10 @@ class WinniioDataHandler(DataHandler):
             x_train_images_final = np.array(x_train_images, dtype=np.float32)
             x_test_images_final = np.array(x_test_images, dtype=np.float32)
 
-            print("Train data shape after loading and reshaping:", x_train_images_final.shape)
+            # print("Train data shape after loading and reshaping:", x_train_images_final.shape)
 
             y_test_label_final = np.array(y_test_labels, dtype=np.float32)
-            print("Test data shape after loading:", x_test_images_final.shape)
+            # print("Test data shape after loading:", x_test_images_final.shape)
 
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
@@ -161,7 +161,7 @@ class WinniioDataHandler(DataHandler):
                                     epochs=1,
                                  verbose=1)
 
-        print(f'History is {history.history}')
+        # print(f'History is {history.history}')
         return self.get_weights()
 
     def batch_generator(self, x_train, y_train, batch_size):
@@ -181,7 +181,6 @@ class WinniioDataHandler(DataHandler):
         db_name = os.getenv("PSQL_DB_NAME")
         # query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
         query_test = f"sql {db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE data_type = 'test'"
-
 
         test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
@@ -222,6 +221,14 @@ class WinniioDataHandler(DataHandler):
 
         predictions = predictions.reshape(-1)
 
+        i = 1
+        res = {}
+        for prediction, label in zip(predictions, y_test_labels):
+            res[i] = f"{prediction} --> {label}"
+            i += 1
+            if len(res) == 10:
+                break
+
         mae = mean_absolute_error(y_test_labels, predictions)
         print("Mean Absolute Error (MAE):", mae)
         mse = mean_squared_error(y_test_labels, predictions)
@@ -233,7 +240,7 @@ class WinniioDataHandler(DataHandler):
         reg_accuracy = self.regression_accuracy(y_test_labels, predictions, threshold=0.1)
         print("Regression Accuracy (within 10%):", reg_accuracy)
 
-        return {"mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
+        return {"results": str(res), "mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
         # return acc
 
     def regression_accuracy(self, y_true, y_pred, threshold=0.1):

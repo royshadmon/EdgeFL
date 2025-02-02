@@ -63,7 +63,7 @@ def initialize_nodes(model_def, node_urls):
     for urlCount in range(len(node_urls)):
         try:
             url = node_urls[urlCount]
-            print(f"Sending contract address to node at {url}")
+            print(f"Initializing model at {url}")
 
             response = requests.post(f'{url}/init-node', json={
                 'replica_name': f"node{urlCount+1}",
@@ -105,12 +105,12 @@ async def init_training():
         if num_rounds <= 0:
             return jsonify({'status': 'error', 'message': 'Invalid number of rounds'}), 400
 
-        print(f"Training initialized with {num_rounds} rounds.")
+        print(f"{num_rounds} rounds of training started.")
 
         initialParams = ''
 
         for r in range(1, num_rounds + 1):
-            print(f"Starting round {r}")
+            print(f"Starting training round {r}")
             aggregator.start_round(initialParams, r)
             # print("Sent initial parameters to nodes")
             # Listen for updates from nodes

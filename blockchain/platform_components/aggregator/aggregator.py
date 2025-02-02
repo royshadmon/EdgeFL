@@ -95,7 +95,7 @@ class Aggregator:
                               }} }}>'''
             success = False
             while not success:
-                print("Attempting insert")
+                # print("Attempting insert")
                 response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
@@ -105,7 +105,7 @@ class Aggregator:
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
 
-            print(f"Training initialized with {roundNumber} rounds")
+            # print(f"Training initialized with {roundNumber} rounds")
 
             # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             if success:
@@ -195,8 +195,9 @@ class Aggregator:
         with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
 
+        print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
-            print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
+            # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
             copy_file_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
             return f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json'
 

@@ -76,7 +76,7 @@ def init_node():
         model_def = request.json.get('model_def', 1)
         replica_name = request.json.get('replica_name')
 
-        print(f"Replica name " + replica_name)
+        # print(f"Replica name " + replica_name)
 
         if not model_def:
             return jsonify({'status': 'error', 'message': 'No config provided'}), 400
@@ -123,11 +123,12 @@ def receive_data():
 
 
 def listen_for_start_round(nodeInstance, stop_event):
+    print(f"listening for start round {nodeInstance.currentRound}")
     while True:
         try:
             # next_round = nodeInstance.currentRound + 1
 
-            print(f"listening for start round {nodeInstance.currentRound}")
+            # print(f"listening for start round {nodeInstance.currentRound}")
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
@@ -147,7 +148,7 @@ def listen_for_start_round(nodeInstance, stop_event):
                         break  # Stop searching once the current round's data is found
 
                 if round_data:
-                    print(f"Round Data: {round_data}")  # Debugging line
+                    # print(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
                     modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound, ip_port)
@@ -159,7 +160,7 @@ def listen_for_start_round(nodeInstance, stop_event):
             time.sleep(5)  # Poll every 2 seconds
 
         except Exception as e:
-            print(f"Error in listener thread: {str(e)}")
+            # print(f"Error in listener thread: {str(e)}")
             time.sleep(2)
 
 

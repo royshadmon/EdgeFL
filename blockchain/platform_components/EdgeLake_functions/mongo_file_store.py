@@ -72,7 +72,8 @@ def copy_file_to_container(container_name, src_path, dest_path):
 
     # Clean up the temporary tar file
     os.remove("/tmp/temp.tar")
-    print(f"Copied {src_path} to {container_name}:{dest_path}")
+    # print(f"Copied {src_path} to {container_name}:{dest_path}")
+    # print(f"Received model params")
 
 def copy_file_from_container(container_name, src_path, dest_path):
     """
@@ -101,8 +102,8 @@ def copy_file_from_container(container_name, src_path, dest_path):
 
     # Clean up the temporary tar file
     os.remove("/tmp/temp.tar")
-    print(f"Copied {src_path} from {container_name} to {dest_path}")
-
+    # print(f"Copied {src_path} from {container_name} to {dest_path}")
+    print(f"Received model params")
 
 def read_file(edgelake_node_url, file_path, dest, ip_port):
     filename = file_path.split('/')[-1]
@@ -114,7 +115,7 @@ def read_file(edgelake_node_url, file_path, dest, ip_port):
         # 'destination': ip_port
     }
 
-    print(f"FILE GET COMMAND: headers: {headers['command']}")
+    # print(f"FILE GET COMMAND: headers: {headers['command']}")
     try:
         response = requests.post(edgelake_node_url, headers=headers, data='')
         return response

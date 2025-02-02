@@ -33,7 +33,7 @@ class Node:
         self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
         self.node_ip = ip
         self.node_port = port
-        print("Node initializing")
+        # print("Node initializing")
 
         self.database_url = os.getenv("DATABASE_URL")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -84,9 +84,9 @@ class Node:
                 optimizer=optimizers.Adam(learning_rate=0.0002),
                 metrics=['mse', 'mae', rmse],
             )
-            print("BEFORE SET UP HANDLER")
+            # print("BEFORE SET UP HANDLER")
             self.data_handler = WinniioDataHandler(self.replicaName, model)
-            print("AFTER SET UP HANDLER")
+            # print("AFTER SET UP HANDLER")
 
 
     '''
@@ -105,7 +105,7 @@ class Node:
     '''
 
     def add_node_params(self, round_number, model_metadata):
-        print("in add_node_params")
+        # print("in add_node_params")
 
         # dbms_name = model_metadata[0]
         # table_name = model_metadata[1]
@@ -121,7 +121,7 @@ class Node:
 
             success = False
             while not success:
-                print("Attempting insert")
+                # print("Attempting insert")
                 response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
@@ -134,7 +134,7 @@ class Node:
             # print(f"Submitting results for round {round_number}")
             # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             # TODO: add error check here
-            print(f"Results submitted for round {round_number} to {self.replicaName}")
+            print(f"Submitted round {round_number} model parameters")
 
             return {
                 'status': 'success',
@@ -154,7 +154,7 @@ class Node:
     '''
 
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
-        print(f"in train_model_params for round {round_number}")
+        # print(f"in train_model_params for round {round_number}")
 
         # First round initialization
         if round_number == 1:
@@ -208,8 +208,9 @@ class Node:
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
+        print(f"Completed round {round_number} local model training")
         if self.docker_running:
-            print(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
+            # print(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
             copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name
