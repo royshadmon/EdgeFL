@@ -16,9 +16,14 @@ import time
 import os
 import argparse
 import requests
+import warnings
+
+
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
 '''
+
+warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
 # load_dotenv()
@@ -153,6 +158,7 @@ def listen_for_start_round(nodeInstance, stop_event):
                     ip_port = round_data.get('ip_port', '')
                     modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound, ip_port)
                     nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate_metadata)
+                    print(f"[Round {nodeInstance.currentRound}] Step 3 Complete: Model parameters published")
                     nodeInstance.currentRound += 1
                 # else: # Debugging line
                 #     print(f"No data found for round r{nodeInstance.currentRound}")
@@ -184,6 +190,25 @@ def inference():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/infer', methods=['POST'])
+def direct_inference():
+    """Inference on current model w/ data passed in."""
+    try:
+        # data = request.json
+        # test_data = data.get('data', {})
+
+        msg = request.json
+        data = msg.get('input', [244.46153846153845,	453,	0,	52.29666666666667,	0.0375170724933045,	20.515])
+        float_list = [float(x) for x in data]
+        if len(float_list) != 6:
+            return jsonify({'status': 'error', 'message': "ML model input needs to be of len 6"}), 500
+        results = node_instance.direct_inference(np.array(float_list))
+        response = {
+            'prediction': str(results),
+        }
+        return response
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':

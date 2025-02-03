@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from ibmfl.data.data_handler import DataHandler
+
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from keras import layers, optimizers, models
 from tensorflow.python import keras
@@ -113,7 +114,6 @@ class WinniioDataHandler(DataHandler):
 
             y_test_label_final = np.array(y_test_labels, dtype=np.float32)
             # print("Test data shape after loading:", x_test_images_final.shape)
-
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
 
@@ -202,6 +202,11 @@ class WinniioDataHandler(DataHandler):
 
         return x_test_images_final, y_test_labels_final
 
+    def direct_inference(self, data):
+        data = data.reshape(-1, 1, 6)
+        predictions = self.fl_model.predict_on_batch(data)
+        print(f"[Inference] Step 5: Edge inference complete")
+        return predictions.reshape(-1)
 
     def run_inference(self):
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
@@ -230,16 +235,16 @@ class WinniioDataHandler(DataHandler):
                 break
 
         mae = mean_absolute_error(y_test_labels, predictions)
-        print("Mean Absolute Error (MAE):", mae)
+        # print("Mean Absolute Error (MAE):", mae)
         mse = mean_squared_error(y_test_labels, predictions)
-        print("Mean Squared Error (MSE):", mse)
+        # print("Mean Squared Error (MSE):", mse)
         rmse = np.sqrt(mse)
-        print("Root Mean Squared Error (RMSE):", rmse)
+        # print("Root Mean Squared Error (RMSE):", rmse)
         r2 = r2_score(y_test_labels, predictions)
-        print("R² Score:", r2)
+        # print("R² Score:", r2)
         reg_accuracy = self.regression_accuracy(y_test_labels, predictions, threshold=0.1)
-        print("Regression Accuracy (within 10%):", reg_accuracy)
-
+        # print("Regression Accuracy (within 10%):", reg_accuracy)
+        print(f"[Inference] Step 5: Edge inference complete")
         return {"results": str(res), "mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
         # return acc
 

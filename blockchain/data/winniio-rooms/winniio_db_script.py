@@ -113,7 +113,7 @@ def insert_round_data(conn, table_name, round_num, df, data_type):
             cur.executemany(
                 f"""
                 INSERT INTO {table_name} 
-                (round_number, data_type, actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, day, time, month, date, label)
+                (round_number, data_type, actuatorState, co2Value, eventCount, humidity, temperature, switchStatus, day, time, month, date, label)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 args
@@ -159,7 +159,7 @@ def verify_round_data(conn, table_name, round_num):
 
 def main():
     # Configuration
-    # NUM_NODES = 2
+    NUM_NODES = 3
     NUM_ROUNDS = 5
     SAMPLES_PER_ROUND = 50
     TRAIN_SAMPLES_PER_ROUND = 0.8

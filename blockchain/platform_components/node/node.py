@@ -134,7 +134,7 @@ class Node:
             # print(f"Submitting results for round {round_number}")
             # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             # TODO: add error check here
-            print(f"Submitted round {round_number} model parameters")
+
 
             return {
                 'status': 'success',
@@ -208,7 +208,7 @@ class Node:
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
-        print(f"Completed round {round_number} local model training")
+        print(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
             # print(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
             copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
@@ -235,3 +235,6 @@ class Node:
     # - training with two nodes for 12 rounds resulted in accuracy of ~55.17%
     def inference(self):
         return self.data_handler.run_inference()
+
+    def direct_inference(self, data):
+        return self.data_handler.direct_inference(data)

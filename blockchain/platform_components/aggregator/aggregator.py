@@ -195,7 +195,7 @@ class Aggregator:
         with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
 
-        print(f"Model aggregation for round {round_number} complete")
+        # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
             # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
             copy_file_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')

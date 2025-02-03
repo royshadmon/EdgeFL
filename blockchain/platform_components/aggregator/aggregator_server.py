@@ -14,7 +14,9 @@ import requests
 import os
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
+import warnings
 
+warnings.filterwarnings("ignore")
 app = Flask(__name__)
 load_dotenv()
 
@@ -119,6 +121,7 @@ async def init_training():
 
             # Set initial params to newly aggregated params for the next round
             initialParams = newAggregatorParams
+            print(f"[Round {r}] Step 4 Complete: model parameters aggregated")
 
         return jsonify({'status': 'success', 'message': 'Training completed successfully'})
 
@@ -148,7 +151,7 @@ def inference():
 
 async def listen_for_update_agg(min_params, roundNumber):
     """Asynchronously poll for aggregated parameters from the blockchain."""
-    print("Aggregator listening for updates...")
+    print("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     while True:
