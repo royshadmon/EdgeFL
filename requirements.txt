@@ -1,4 +1,4 @@
-web3~=7.6.0
+    web3~=7.6.0
 numpy==1.23.5
 ./federated-learning-lib-main/federated-learning-lib/federated_learning_lib-2.0.1-py3-none-any.whl[tf,pytorch]
 skorch>=0.12.0
