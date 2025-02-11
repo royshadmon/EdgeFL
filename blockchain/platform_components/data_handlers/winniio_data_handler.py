@@ -12,12 +12,12 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from ibmfl.data.data_handler import DataHandler
+from ibmfl.data.data_handler import DataHandler # IBM IMPORT HERE
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from keras import layers, optimizers, models
 from tensorflow.python import keras
-from ibmfl.model.model_update import ModelUpdate
+from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE
 
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error

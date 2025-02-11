@@ -11,12 +11,12 @@ import os
 import numpy as np
 import torch
 
-from ibmfl.data.data_handler import DataHandler
+from ibmfl.data.data_handler import DataHandler  # IBM IMPORT HERE
 import requests
 import json
 
-from ibmfl.model.model_update import ModelUpdate
-from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE
+from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE
 from sklearn.metrics import accuracy_score
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
