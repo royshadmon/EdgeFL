@@ -14,7 +14,7 @@ import pickle
 from dotenv import load_dotenv
 
 from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler # IBM IMPORT HERE
-from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE
+from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
@@ -161,7 +161,7 @@ class Aggregator:
                     if not data:
                         raise ValueError(f"Missing model_weights in data from file: {filename}")
                     # decoded_params.append(data)
-                    decoded_params.append(ModelUpdate(weights=data))
+                    decoded_params.append(ModelUpdate(weights=data)) # ModelUpdate HERE
                     # decoded_params.append(ModelUpdate(weights=data[0].detach().numpy()))
                 else:
                     raise ValueError(
@@ -175,7 +175,7 @@ class Aggregator:
         aggregate_params_weights = self.fusion_model.current_model_weights
 
         # aggregate_model_update = ModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
-        aggregate_model_update = ModelUpdate(weights=aggregate_params_weights)
+        aggregate_model_update = ModelUpdate(weights=aggregate_params_weights) # ModelUpdate HERE
 
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)
