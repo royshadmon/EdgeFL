@@ -23,6 +23,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
 
+from platform_components.lib.modules.local_model_update import LocalModelUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ class WinniioDataHandler(): # DataHandler HERE
         return self.fl_model.weights
 
     def update_model(self, weights):
-        if isinstance(weights, ModelUpdate): # ModelUpdate HERE
+        if isinstance(weights, LocalModelUpdate): # ModelUpdate HERE
             weights = weights.get("weights")
         self.fl_model.set_weights(weights)
 
