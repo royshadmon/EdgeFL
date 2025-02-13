@@ -11,12 +11,12 @@ import os
 import numpy as np
 import torch
 
-from ibmfl.data.data_handler import DataHandler
+from ibmfl.data.data_handler import DataHandler  # IBM IMPORT HERE # DataHandler IMPORTED HERE
 import requests
 import json
 
-from ibmfl.model.model_update import ModelUpdate
-from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
+from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 from sklearn.metrics import accuracy_score
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
@@ -24,7 +24,7 @@ from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch
 logger = logging.getLogger(__name__)
 
 
-class CustomMnistPytorchDataHandler(DataHandler):
+class CustomMnistPytorchDataHandler(DataHandler): # DataHandler HERE
     def __init__(self, node_name, fl_model:PytorchFLModel):
         super().__init__()
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -172,10 +172,10 @@ class CustomMnistPytorchDataHandler(DataHandler):
         return self.get_weights()
 
     def update_model(self, weights):
-        if not isinstance(weights, ModelUpdate):
-            model_update = ModelUpdate(weights=weights)
+        if not isinstance(weights, ModelUpdate): # ModelUpdate HERE
+            model_update = ModelUpdate(weights=weights) # ModelUpdate HERE
         else:
-            model_update = ModelUpdate(weights=np.array(weights.get("weights")))
+            model_update = ModelUpdate(weights=np.array(weights.get("weights"))) # ModelUpdate HERE
         self.fl_model.update_model(model_update)
 
 

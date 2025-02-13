@@ -12,7 +12,7 @@ from fileinput import filename
 
 import keras
 import numpy as np
-from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE
 from keras import layers, optimizers, models
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted

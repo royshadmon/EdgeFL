@@ -13,14 +13,17 @@ import requests
 import pickle
 from dotenv import load_dotenv
 
-from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
-from ibmfl.model.model_update import ModelUpdate
+# from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler # IBM IMPORT HERE
+# from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, \
     check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
+
+from platform_components.lib.modules.local_model_update import LocalModelUpdate
+from platform_components.lib.modules.ibm_fusion_handler import IterAvgFusionHandler
 
 # from custom_data_handler import CustomMnistPytorchDataHandler
 
@@ -60,6 +63,9 @@ class Aggregator:
 
         # Correctly instantiate the Fusion model with required arguments
         self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=None)
+
+        # self.__aggregate_model_updates = dict()
+
 
     def get_contract_address(self):
 
@@ -161,7 +167,10 @@ class Aggregator:
                     if not data:
                         raise ValueError(f"Missing model_weights in data from file: {filename}")
                     # decoded_params.append(data)
-                    decoded_params.append(ModelUpdate(weights=data))
+
+
+                    # decoded_params.append({'weights': pickle.dumps(data)}) # ModelUpdate HERE
+                    decoded_params.append(LocalModelUpdate(weights=data)) # ModelUpdate HERE
                     # decoded_params.append(ModelUpdate(weights=data[0].detach().numpy()))
                 else:
                     raise ValueError(
@@ -175,11 +184,13 @@ class Aggregator:
         aggregate_params_weights = self.fusion_model.current_model_weights
 
         # aggregate_model_update = ModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
-        aggregate_model_update = ModelUpdate(weights=aggregate_params_weights)
+        aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights) # ModelUpdate HERE
+        # aggregate_model_update = {}
+        # for key, val in aggregate_params_weights.items():
+        #     aggregate_model_update[key] = pickle.dumps(val)
 
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)
-
 
         # agg_ref = db.reference('agg_model_updates')
 
