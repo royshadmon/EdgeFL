@@ -13,8 +13,8 @@ import requests
 import pickle
 from dotenv import load_dotenv
 
-from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler # IBM IMPORT HERE
-from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
+# from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler # IBM IMPORT HERE
+# from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
@@ -23,6 +23,7 @@ from platform_components.EdgeLake_functions.blockchain_EL_functions import inser
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
+from platform_components.lib.modules.ibm_fusion_handler import IterAvgFusionHandler
 
 # from custom_data_handler import CustomMnistPytorchDataHandler
 
