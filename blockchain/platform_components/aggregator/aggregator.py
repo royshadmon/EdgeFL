@@ -23,9 +23,11 @@ from platform_components.EdgeLake_functions.blockchain_EL_functions import inser
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
-from platform_components.lib.modules.ibm_fusion_handler import IterAvgFusionHandler
+# from platform_components.lib.modules.ibm_fusion_handler import IterAvgFusionHandler
+from platform_components.lib.modules.aggregator_models.fed_avg_aggregation_model import FedAvgAggregationModel
 
 # from custom_data_handler import CustomMnistPytorchDataHandler
+
 
 CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
 
@@ -58,14 +60,13 @@ class Aggregator:
             # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
         # Define or obtain hyperparameters and protocol handler for the fusion model
         hyperparams = {}  # Replace with actual hyperparameters as required
-        protocol_handler = None  # Replace with an appropriate protocol handler instance or object
+        # protocol_handler = None  # Replace with an appropriate protocol handler instance or object
 
 
         # Correctly instantiate the Fusion model with required arguments
-        self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=None)
+        self.aggregation_model = FedAvgAggregationModel(hyperparams)
 
         # self.__aggregate_model_updates = dict()
-
 
     def get_contract_address(self):
 
@@ -179,9 +180,9 @@ class Aggregator:
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
 
         # do aggregation function here (doesn't return anything)
-        self.fusion_model.update_weights(decoded_params)
+        self.aggregation_model.update_weights(decoded_params)
 
-        aggregate_params_weights = self.fusion_model.current_model_weights
+        aggregate_params_weights = self.aggregation_model.current_model_weights
 
         # aggregate_model_update = ModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
         aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights) # ModelUpdate HERE
@@ -227,5 +228,5 @@ class Aggregator:
         return model_weights
 
     def inference(self, data):
-        results = self.fusion_model.fl_model.evaluate(data)
+        results = self.aggregation_model.fl_model.evaluate(data)
         return results
