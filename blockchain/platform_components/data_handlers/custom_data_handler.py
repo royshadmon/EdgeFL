@@ -11,30 +11,47 @@ import os
 import numpy as np
 import torch
 
-from ibmfl.data.data_handler import DataHandler  # IBM IMPORT HERE # DataHandler IMPORTED HERE
+# from ibmfl.data.data_handler import DataHandler  # IBM IMPORT HERE # DataHandler IMPORTED HERE
 import requests
 import json
 
-from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
-from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
-from sklearn.metrics import accuracy_score
+# from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
+from platform_components.lib.modules.local_model_update import LocalModelUpdate
+# from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
+from tensorflow.python import keras
+from keras import layers, optimizers, models
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
+
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import r2_score
 
 logger = logging.getLogger(__name__)
 
 
-class CustomMnistPytorchDataHandler(DataHandler): # DataHandler HERE
-    def __init__(self, node_name, fl_model:PytorchFLModel):
-        super().__init__()
+class CustomMnistPytorchDataHandler(): # DataHandler HERE
+    def __init__(self, node_name, fl_model:keras.Model):
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+
+        # Data Handler Initialization
+        self.x_train = None
+        self.y_train = None
+        self.x_test = None
+        self.y_test = None
+        self.preprocessor = None
+        self.testing_generator = None
+        self.training_generator = None
+
         # load the datasets from SQL
         (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
         self.fl_model = fl_model
         self.node_name = node_name
         # pre-process the datasets
         self.preprocess()
-        print(self.x_test)
+        # print(self.x_test)
 
     def get_data(self):
         """
@@ -168,15 +185,36 @@ class CustomMnistPytorchDataHandler(DataHandler): # DataHandler HERE
         (x_train, y_train), (x_test, y_test) = self.load_dataset(
             node_name=self.node_name, round_number=round_number)
 
-        self.fl_model.fit_model(train_data=(x_train,y_train))
+        early_stopping = keras.callbacks.EarlyStopping(
+            monitor='loss',
+            # patience=2,
+            restore_best_weights=True,
+            mode='min'
+        )
+
+        self.fl_model.fit(self.batch_generator(x_train, y_train, 128),
+                      callbacks=[early_stopping],
+                      steps_per_epoch=50,
+                      epochs=1,
+                      verbose=1)
+
         return self.get_weights()
 
+    def batch_generator(self, x_train, y_train, batch_size):
+        size = len(x_train)  # Total number of samples
+        while True:  # This makes the generator infinite (to be used with fit)
+            for start in range(0, size, batch_size):
+                end = min(start + batch_size, size)
+                x_batch = x_train[start:end]
+                y_batch = y_train[start:end]
+                yield x_batch, y_batch  # Yield the batch of data
+
     def update_model(self, weights):
-        if not isinstance(weights, ModelUpdate): # ModelUpdate HERE
-            model_update = ModelUpdate(weights=weights) # ModelUpdate HERE
-        else:
-            model_update = ModelUpdate(weights=np.array(weights.get("weights"))) # ModelUpdate HERE
-        self.fl_model.update_model(model_update)
+        if isinstance(weights, LocalModelUpdate):
+            model_update = weights.get("weights") # ModelUpdate HERE
+        else: # ModelUpdate HERE
+            model_update = LocalModelUpdate(weights=weights) # ModelUpdate HERE
+        self.fl_model.set_weights(model_update)
 
 
     # def update_model(self, weights):
@@ -184,11 +222,11 @@ class CustomMnistPytorchDataHandler(DataHandler): # DataHandler HERE
     #         p1.data = torch.from_numpy(p2)
     #         p1.data.requires_grad = True
 
-    def get_model_update(self):
-        return self.fl_model.get_model_update()
+    # def get_model_update(self):
+    #     return self.fl_model.get_model_update()
 
     def get_weights(self):
-        return self.fl_model.get_weights(to_numpy=True)
+        return self.fl_model.weights
 
     def run_inference(self):
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
@@ -206,7 +244,7 @@ class CustomMnistPytorchDataHandler(DataHandler): # DataHandler HERE
 
         for i_samples in range(sample_count):
             # Get prediction for a single test sample
-            pred = self.fl_model.predict(
+            pred = self.fl_model.predict_on_batch(
                 torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
             )
 
