@@ -12,15 +12,14 @@ from fileinput import filename
 
 import keras
 import numpy as np
-from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE
 from keras import layers, optimizers, models
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
-from platform_components.data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
-from sklearn.metrics import accuracy_score
+from platform_components.data_handlers.custom_data_handler import MnistDataHandler
+# from sklearn.metrics import accuracy_score
 # import pathlib
 
 from dotenv import load_dotenv
@@ -55,19 +54,27 @@ class Node:
 
         self.currentRound = 1
 
-        # model_def == 1: PytorchFLModel
+        # model_def == 1: Keras Model MNist
         if model_def == 1:
-            model_path = os.path.join("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain", "configs", "node", "pytorch", "pytorch_sequence.pt")
+            # Model for MNIST classification
+            model = models.Sequential([
+                layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)), # Applies 2d convolution, extracting features from the input images
+                layers.MaxPooling2D(pool_size=(2, 2)), # Reduces spatial dimensions
+                layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
+                layers.MaxPooling2D(pool_size=(2, 2)),
+                layers.Flatten(), # Converts 2d feature maps to 1d feature vector
+                layers.Dense(128, activation="relu"), # Fully connecting layers
+                layers.Dense(10, activation="softmax")
+            ])
 
-            model_spec = {
-                "loss_criterion": "nn.NLLLoss",
-                "model_definition": str(model_path),
-                "model_name": "pytorch-nn",
-                "optimizer": "optim.Adadelta"
-            }
+            # Compile the model with classification-appropriate loss and metrics
+            model.compile(
+                loss="sparse_categorical_crossentropy",
+                optimizer=optimizers.Adam(learning_rate=0.001),
+                metrics=["accuracy"]
+            )
 
-            fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-            self.data_handler = CustomMnistPytorchDataHandler(self.replicaName,fl_model)
+            self.data_handler = MnistDataHandler(self.replicaName, model)
         # add more model defs in elifs below
         elif model_def == 2:
             time_steps = 1

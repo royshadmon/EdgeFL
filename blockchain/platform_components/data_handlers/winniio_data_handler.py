@@ -17,7 +17,7 @@ from sklearn.preprocessing import MinMaxScaler
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from keras import layers, optimizers, models
 from tensorflow.python import keras
-from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
+# from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
@@ -48,22 +48,22 @@ class WinniioDataHandler(): # DataHandler HERE
             **kwargs: Additional arguments, passed to super init and load_mnist_shard
         """
         # super().__init__()
-
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
-        # print("BEFORE LOAD DATASET")
-        # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-        # print("AFTER LOAD DATASET")
-        self.fl_model = fl_model
-        self.node_name = node_name
 
         # Data Handler Initialization
         self.x_train = None
         self.y_train = None
         self.x_test = None
         self.y_test = None
-        # self.preprocessor = None
-        # self.testing_generator = None
-        # self.training_generator = None
+        self.preprocessor = None
+        self.testing_generator = None
+        self.training_generator = None
+
+        # print("BEFORE LOAD DATASET")
+        # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
+        # print("AFTER LOAD DATASET")
+        self.fl_model = fl_model
+        self.node_name = node_name
 
 
     def load_dataset(self, node_name, round_number):
