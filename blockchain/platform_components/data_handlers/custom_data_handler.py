@@ -32,8 +32,8 @@ from sklearn.metrics import r2_score
 logger = logging.getLogger(__name__)
 
 
-class CustomMnistPytorchDataHandler(): # DataHandler HERE
-    def __init__(self, node_name, fl_model:keras.Model):
+class MnistDataHandler(): # DataHandler HERE
+    def __init__(self, node_name, fl_model: keras.Model):
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
         # Data Handler Initialization
@@ -46,7 +46,7 @@ class CustomMnistPytorchDataHandler(): # DataHandler HERE
         self.training_generator = None
 
         # load the datasets from SQL
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = self._load_dataset(node_name, 1)
         self.fl_model = fl_model
         self.node_name = node_name
         # pre-process the datasets
@@ -64,8 +64,120 @@ class CustomMnistPytorchDataHandler(): # DataHandler HERE
         print("Test data shape in get_data:", self.x_test.shape)
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
+    def get_model_update(self):
+        return self.fl_model.get_model_update()
 
-    def load_dataset(self, node_name, round_number):
+    def get_weights(self):
+        return self.fl_model.get_weights()
+
+    def preprocess(self):
+        """
+        Preprocesses the training and testing datasets.
+        :return: None
+        """
+        print("Train data shape before preprocessing:", self.x_train.shape)
+        print("Test data shape before preprocessing:", self.x_test.shape)
+        img_rows, img_cols = 28, 28
+        print("Train data shape before preprocessing:", self.x_train.shape)
+
+        # Reshape to keras format
+        self.x_train = self.x_train.reshape(-1, img_rows, img_cols, 1)
+        self.x_test = self.x_test.reshape(-1, img_rows, img_cols, 1)
+
+        print("Train data shape after preprocessing:", self.x_train.shape)
+
+        # Convert labels to correct type
+        self.y_train = self.y_train.astype("int64")
+        self.y_test = self.y_test.astype("int64")
+
+    def run_inference(self):
+        x_test_images, y_test_labels = self._get_all_test_data(self.node_name)
+
+        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
+        # y_pred = np.array([])
+        # for i_samples in range(sample_count):
+        #     pred = party.fl_model.predict(
+        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
+        #     y_pred = np.append(y_pred, pred.argmax())
+        # acc = accuracy_score(y_true, y_pred) * 100
+
+        # OLD
+        # y_pred = np.array([])
+        # sample_count = x_test_images.shape[0]  # number of test samples
+        #
+        # for i_samples in range(sample_count):
+        #     # Get prediction for a single test sample
+        #     pred = self.fl_model.predict_on_batch(
+        #         torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
+        #     )
+        #
+        #     # Append the predicted class (argmax) to y_pred
+        #     y_pred = np.append(y_pred, pred.argmax())
+
+        # Get predictions
+        predictions = self.fl_model.predict(x_test_images)
+        y_pred = np.argmax(predictions, axis=1)
+
+        # Calculate accuracy
+        acc = accuracy_score(y_test_labels, y_pred) * 100
+
+        return acc
+
+    def train(self, round_number):
+        (x_train, y_train), (x_test, y_test) = self._load_dataset(
+            node_name=self.node_name, round_number=round_number)
+
+        early_stopping = keras.callbacks.EarlyStopping(
+            monitor='loss',
+            # patience=2,
+            restore_best_weights=True,
+            mode='min'
+        )
+
+        self.fl_model.fit(
+            x_train,
+            y_train,
+            batch_size=128, # can also be 32
+            epochs=1,
+            verbose=1,
+            callbacks=[early_stopping]
+        )
+
+        return self.get_weights()
+
+    def update_model(self, weights):
+        if isinstance(weights, LocalModelUpdate):
+            weights = weights.get("weights")
+        self.fl_model.set_weights(weights)
+
+    # PRIVATE METHODS
+    def _get_all_test_data(self, node_name):
+        # 1. run sql to get all test data for x and y
+        # 2. check if number returned equals number in db
+        # 3. return test data
+        db_name = os.getenv("PSQL_DB_NAME")
+        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+
+        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+
+        # Assuming the data is returned as dictionaries with keys 'x' and 'y'
+        query_test_result = np.array(test_data["Query"])
+        x_test_images = []
+        y_test_labels = []
+        for i in range(len(query_test_result)):
+            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+            y_test_label = query_test_result[i]['label']
+            x_test_images.append(x_test_image_np_array)
+            y_test_labels.append(y_test_label)
+
+        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
+
+        img_rows, img_cols = 28, 28
+        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+
+        return x_test_images_final, y_test_labels_final
+
+    def _load_dataset(self, node_name, round_number):
 
         """
         Loads the training and testing datasets by running SQL queries to fetch data.
@@ -85,7 +197,6 @@ class CustomMnistPytorchDataHandler(): # DataHandler HERE
         db_name = os.getenv("PSQL_DB_NAME")
         query_train = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
         query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
-
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
@@ -113,9 +224,9 @@ class CustomMnistPytorchDataHandler(): # DataHandler HERE
                 y_test_labels.append(y_test_label)
 
             img_rows, img_cols = 28, 28
-            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
-            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
-            
+            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+
             print("Train data shape after loading and reshaping:", x_train_images_final.shape)
 
             y_test_label_final = np.array(y_test_labels, dtype=np.int64)
@@ -124,7 +235,7 @@ class CustomMnistPytorchDataHandler(): # DataHandler HERE
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
 
-        return (x_train_images_final,  y_train_label_final), (x_test_images_final, y_test_label_final)
+        return (x_train_images_final, y_train_label_final), (x_test_images_final, y_test_label_final)
 
         # SAMPLE SQL Edglake Commands:
         # FORMAT:
@@ -134,123 +245,3 @@ class CustomMnistPytorchDataHandler(): # DataHandler HERE
         # [SQL command] a SQL command including a SQL query.
         # EXAMPLE
         # sql lsl_demo "drop table lsl_demo"
-
-    def preprocess(self):
-        """
-        Preprocesses the training and testing datasets.
-        :return: None
-        """
-        print("Train data shape before preprocessing:", self.x_train.shape)
-        print("Test data shape before preprocessing:", self.x_test.shape)
-        img_rows, img_cols = 28, 28
-        print("Train data shape before preprocessing:", self.x_train.shape)
-        
-        # Force reshape to 4D format [batch_size, channels, height, width]
-        self.x_train = self.x_train.reshape(-1, 1, img_rows, img_cols)
-        self.x_test = self.x_test.reshape(-1, 1, img_rows, img_cols)
-        
-        print("Train data shape after preprocessing:", self.x_train.shape)
-        
-        # Convert labels to correct type
-        self.y_train = self.y_train.astype("int64")
-        self.y_test = self.y_test.astype("int64")
-
-    def get_all_test_data(self, node_name):
-        # 1. run sql to get all test data for x and y
-        # 2. check if number returned equals number in db
-        # 3. return test data
-        db_name = os.getenv("PSQL_DB_NAME")
-        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
-
-        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
-
-        # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-        query_test_result = np.array(test_data["Query"])
-        x_test_images = []
-        y_test_labels = []
-        for i in range(len(query_test_result)):
-            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
-            y_test_label = query_test_result[i]['label']
-            x_test_images.append(x_test_image_np_array)
-            y_test_labels.append(y_test_label)
-
-        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
-
-        img_rows, img_cols = 28, 28
-        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
-
-        return x_test_images_final, y_test_labels_final
-
-    def train(self, round_number):
-        (x_train, y_train), (x_test, y_test) = self.load_dataset(
-            node_name=self.node_name, round_number=round_number)
-
-        early_stopping = keras.callbacks.EarlyStopping(
-            monitor='loss',
-            # patience=2,
-            restore_best_weights=True,
-            mode='min'
-        )
-
-        self.fl_model.fit(self.batch_generator(x_train, y_train, 128),
-                      callbacks=[early_stopping],
-                      steps_per_epoch=50,
-                      epochs=1,
-                      verbose=1)
-
-        return self.get_weights()
-
-    def batch_generator(self, x_train, y_train, batch_size):
-        size = len(x_train)  # Total number of samples
-        while True:  # This makes the generator infinite (to be used with fit)
-            for start in range(0, size, batch_size):
-                end = min(start + batch_size, size)
-                x_batch = x_train[start:end]
-                y_batch = y_train[start:end]
-                yield x_batch, y_batch  # Yield the batch of data
-
-    def update_model(self, weights):
-        if isinstance(weights, LocalModelUpdate):
-            model_update = weights.get("weights") # ModelUpdate HERE
-        else: # ModelUpdate HERE
-            model_update = LocalModelUpdate(weights=weights) # ModelUpdate HERE
-        self.fl_model.set_weights(model_update)
-
-
-    # def update_model(self, weights):
-    #     for p1, p2 in zip(self.fl_model.get_weights(), weights):
-    #         p1.data = torch.from_numpy(p2)
-    #         p1.data.requires_grad = True
-
-    # def get_model_update(self):
-    #     return self.fl_model.get_model_update()
-
-    def get_weights(self):
-        return self.fl_model.weights
-
-    def run_inference(self):
-        x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
-
-        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
-        # y_pred = np.array([])
-        # for i_samples in range(sample_count):
-        #     pred = party.fl_model.predict(
-        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
-        #     y_pred = np.append(y_pred, pred.argmax())
-        # acc = accuracy_score(y_true, y_pred) * 100
-
-        y_pred = np.array([])
-        sample_count = x_test_images.shape[0]  # number of test samples
-
-        for i_samples in range(sample_count):
-            # Get prediction for a single test sample
-            pred = self.fl_model.predict_on_batch(
-                torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
-            )
-
-            # Append the predicted class (argmax) to y_pred
-            y_pred = np.append(y_pred, pred.argmax())
-
-        acc = accuracy_score(y_test_labels, y_pred) * 100
-
-        return acc
