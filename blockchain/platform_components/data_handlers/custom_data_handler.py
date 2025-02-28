@@ -11,13 +11,10 @@ import os
 import numpy as np
 import torch
 
-# from ibmfl.data.data_handler import DataHandler  # IBM IMPORT HERE # DataHandler IMPORTED HERE
 import requests
 import json
 
-# from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
-# from ibmfl.model.pytorch_fl_model import PytorchFLModel # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 from tensorflow.python import keras
 from keras import layers, optimizers, models
 
@@ -32,7 +29,7 @@ from sklearn.metrics import r2_score
 logger = logging.getLogger(__name__)
 
 
-class MnistDataHandler(): # DataHandler HERE
+class MnistDataHandler():
     def __init__(self, node_name, fl_model: keras.Model):
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
@@ -100,19 +97,6 @@ class MnistDataHandler(): # DataHandler HERE
         #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
         #     y_pred = np.append(y_pred, pred.argmax())
         # acc = accuracy_score(y_true, y_pred) * 100
-
-        # OLD
-        # y_pred = np.array([])
-        # sample_count = x_test_images.shape[0]  # number of test samples
-        #
-        # for i_samples in range(sample_count):
-        #     # Get prediction for a single test sample
-        #     pred = self.fl_model.predict_on_batch(
-        #         torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
-        #     )
-        #
-        #     # Append the predicted class (argmax) to y_pred
-        #     y_pred = np.append(y_pred, pred.argmax())
 
         # Get predictions
         predictions = self.fl_model.predict(x_test_images)
