@@ -7,121 +7,92 @@
 
 ## Why EdgeLake:
 
-- **Efficiency:** Reduces data transfer by sharing model parameters instead of sharing entire datasets.
+ **Efficiency:**  Reduces data transfer by sharing model parameters instead of sharing entire datasets.
 
 - **Performance:** Our distributed system enables high-computation training to be split across multiple nodes, significantly enhancing speed and scalability compared to single-node processing. .
 
 - **Privacy:** Keeps data on nodes, minimizing exposure risks and enhancing security with privacy-preserving technologies such as blockchain.
 
+
+<!-- ## Prerequisites -->
+<!-- we need specify more stuff here -->
+### Software Requirements
+- Python 3.9+ installed.
+## Install ibmfl from the repo (does not work on python3.12)
+[whl file location](https://github.com/royshadmon/Anylog-Edgelake-CSE115D/blob/main/federated-learning-lib-main/federated-learning-lib/federated_learning_lib-2.0.1-py3-none-any.whl) 
+```bash
+[Ubuntu only] sudo apt install python3.9-dev
+[Ubuntu only] sudo apt install build-essential
+[Ubuntu only] pip install --use-pep517 gensim==3.8.0
+[Ubuntu only] pip install numpy==1.23.5
+[Ubuntu only ] pip install -U pip setuptools
+[Ubuntu only] sudo apt-get update
+[Ubuntu only ] sudo apt remove python3-apt
+[Ubuntu only ] sudo apt install python3-apt
+
+pip install "federated_learning_lib-2.0.1-py3-none-any.whl[tf,pytorch]"
+```
 # AnyLog-Edgelake Setup Guide
 
 This guide will walk you through setting up and running the AnyLog-Edgelake system.
 
-<!-- ## Prerequisites -->
-<!-- we need specify more stuff here -->
+## Prerequisites
 
-## Software Requirements
-
-- Python 3.11 (currently doesn't work with 3.12)
 - Git
+- Python (with pip)
 - Ability to run shell scripts
 - cURL (for API requests)
-- EdgeLake (to run the aggregator and nodes)
-- _Optional_: PyCharm \[Professional Edition\]
 
 ## Installation Steps
 
-1. Clone the repository:
-
+1. Clone the repository and switch to the merge branch:
    ```bash
    git clone https://github.com/royshadmon/Anylog-Edgelake-CSE115D.git
+   cd Anylog-Edgelake-CSE115D 
    ```
 
 2. Configure Environment Variables:
+   - Navigate to `AnyLog/blockchain` directory
+   - Locate the `.env` files in the `blockchain/env_files` directory. 
+   - Modify the file with the required variables
 
-    Note that there are currently two datasets in `blockchain/data`: _mnist_ and _winniio_.
-    For this setup, we will use the winniio dataset and configure for it.
-
-    - Navigate to `Anylog-Edgelake-CSE115D/blockchain/env_files`
-
-   ```bash
-   cd Anylog-Edgelake-CSE115D/blockchain/env_files
-   ```
-
-    - Locate `winniio.env` in the directory
-    - Modify these variables in the file:
-
-        - `EXTERNAL_IP`: Replace the IP portion with your machine's IP address.
-                You can fetch them in the terminal using the command `ifconfig` on
-                Mac/Linux, found under `inet`/`en0`(`ipconfig` on Windows under `IPv4`).
-        - `EXTERNAL_TCP_IP_PORT`: Do the same process done for `EXTERNAL_IP`.
-        - `PSQL_DB_USER`: Set this to the user for the database that will be used.
-        - `PSQL_DB_PASSWORD`: If you have a password for the user, set this to it.
-        - `FILE_WRITE_DESTINATION`: Set this path to `[/path/to]/Anylog-Edgelake-CSE115D/blockchain/file_write`
-
-    - Notes:
-    
-        - If your database will not be locally hosted, set `PSQL_DB_HOST` accordingly.
-        - If you have specified the port of your database, set `PSQL_DB_PORT` accordingly.
-
-3. Install pip:
-
-    - Navigate back to `Anylog-Edgelake-CSE115D/` and run the following:
-
+   
+3. 3.1. Install pip on Ubuntu
    ```
    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-   python3.11 get-pip.py
+   python3.9 get-pip.py
    ```
 
-4. Install dependencies:
-
+4. Install Dependencies:
    ```bash
    pip install -r requirements.txt
    pip install flask[async]
    ```
 
-5. Set up and start a Postgres instance
+5. Set up and start a Postgres instance 
 
-    - [Postgres Mac instructions](https://www.sqlshack.com/setting-up-a-postgresql-database-on-mac/)
+[Postgres Mac instructions](https://www.sqlshack.com/setting-up-a-postgresql-database-on-mac/)
 
-6. Set up and load data into Postgres
+6. Load data into Postgres
 
-    - In `Anylog-Edgelake-CSE115D/`, navigate to `blockchain/data/winniio-rooms/linode-setup/`
-    - Locate `winniio_db_script.py` and ensure that it is configured to get ENV variables from
-        `winniio.env`.
-        - On PyCharm, you can edit the configuration of the script and specify the
-            .env file in _Path(s) to ".env" files_
-    - Run the script to load the winniio dataset:
-      ```bash
-      ./winniio_db_script
-      ```
+Run the db script located in the  `blockchain/data` directories.
+Set up the Database:
+   - Navigate to `AnyLog/blockchain`
+   - Run the database setup script:
+     ```bash
+     ./db_script
+     ```
 
-8. Start the Servers:
+Note that `model_def: 1` is for the mnist dataset and `model_def: 2` is for the Winniio dataset. 
 
-    - The following script has not yet been updated (eventually):
-
+7. Start the Servers:
    ```bash
    ./start_servers.sh
    ```
-   
-    - Instead, start each node server and the one aggregator server manually.
-    
-        - The aggregator server file and node server file are located in
-            `blockchain/platform_components/aggregator/` and
-            `blockchain/platform_components/node/`, respectively.
-        - Run `/aggregator/aggregator_server.py` to start the aggregator server.
-        - Run `/aggregator/node_server.py` to start a node server.
-
-    - **Notes**:
-
-        - For each server file ran, ensure that you've load the ENV variables
-            from the env files.
-        - For each node server, make sure you've specified their ports (8081,
-            8082, etc.).
-            - If you're using PyCharm, you can edit the configuration
-                of `node_server.py` and add this to _script parameters_:
-                `--p [next available port]`. You can also create a new
-                configuration for each node server you want to start for convenience.
+   Note, make sure you load the ENV variables from the env files.
+   You can also start each node server and the one aggregator server manually.
+   The code is located in the `blockchain/platform_components/node` and `blockchain/platform_components/aggregator`
+   directory. Make sure to run the file with the `_server.py`.
 
 ## System Initialization
 
@@ -150,20 +121,20 @@ curl -X POST http://localhost:8080/init \
   "model_def": 1
 }'
 ```
-
-### Model definitions
-To train on the MNIST dataset, set "model_def: 1." \
-To train on the Winniio dataset, set "model_def: 2."
+## Model definitions
+To train on the MNIST dataset, set "model_def: 1"
+To train on the Winniio dataset, set "model_def: 2"
 
 Note that you need to also update the `blockchain/env_files/mnist.env` or `blockchain/env_files/winniio.env` files + initialize them before starting the node/aggregator server.
 
 ## Custom Data Handler
-(Documentation for creating custom data handler (needs to be finished). Examples
-of working data handlers can be found in the directory `blockchain/platform_components/data_handlers`)
+Documentation for creating custom data handler (needs to be finished).
+Examples of working data handlers can be found in the directory `blockchain/platform_components/data_handlers` 
+
 
 ## Starting the Training Process
 
-To begin the training process for the MNIST/Winniio dataset, use this curl command:
+To begin the training process for the MNIST Dataset, use this curl command:
 
 ```bash
 curl -X POST http://localhost:8080/start-training \
@@ -175,18 +146,13 @@ curl -X POST http://localhost:8080/start-training \
 ```
 
 ## Running inference once the model is trained
-
-In the following command, you can specify the port in the URL to run inference
-on specific nodes:
-
-```bash
+```
 curl -X POST http://localhost:8081/inference
 ```
 
 ## Shutting Down the Servers
 
-~~When you're done, you can stop all running servers using:~~ \
-The following script has not yet been updated (eventually):
+When you're done, you can stop all running servers using:
 ```bash
 ./kill_servers.sh
 ```
@@ -207,13 +173,13 @@ If you encounter any issues:
 1. Ensure all servers are running properly
 2. Check that the `.env` file is configured correctly
 3. Verify all ports (8080, 8081, 8082) are available
-4. Make sure all the software requirements are properly installed \
-~~5. If servers aren't responding, try killing them with `./kill_servers.sh` and restart~~
+4. Make sure all prerequisites are installed
+5. If servers aren't responding, try killing them with `./kill_servers.sh` and restart
+
+
 
 ## MongoDB (for file handling) [Mongo is currently deprecated, we will need to re-add this feature]
-
 ### Install / setup (Mac)
-
 ```bash
 brew tap mongodb/brew  
 brew install mongodb-community # requires Xcode 16.0+
@@ -223,13 +189,10 @@ sudo mkdir -p /usr/local/bin/mongodb/log/mongodb
 sudo chown $USER /usr/local/bin/mongodb/
 sudo chown $USER /usr/local/bin/mongodb/log/mongodb
 ```
-
 [Mongo information](https://www.prisma.io/dataguide/mongodb/connecting-to-mongodb)
 [Mongo Install](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-os-x/)
 [Mongo Shell](https://www.mongodb.com/docs/mongodb-shell/)
-
 ### Install / setup (for Ubuntu machines)
-
 ```bash
 wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -  
 echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
@@ -237,7 +200,6 @@ sudo apt-get update
 sudo apt-get install -y mongodb-mongosh
 mongosh --version
 ```
-
 [Mongo Ubuntu Setup](https://www.slingacademy.com/article/how-to-install-mongodb-shell-mongosh-on-windows-mac-and-ubuntu/)
 
 ### Start MongoDB Mac
