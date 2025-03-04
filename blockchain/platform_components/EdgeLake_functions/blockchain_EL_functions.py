@@ -15,7 +15,7 @@ def insert_policy(el_url, policy):
     headers = {
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'text/plain',
-        'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
+        'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = master'
     }
 
     response = requests.post(el_url, headers=headers, data=policy)
@@ -25,7 +25,7 @@ def delete_policy(el_url, policy_id):
     headers = {
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'text/plain',
-        'command': f'blockchain delete policy where id = {policy_id} and local = true and blockchain = optimism'
+        'command': f'blockchain delete policy where id = {policy_id} and local = true and blockchain = master'
     }
 
     response = requests.post(el_url, headers=headers, data=None)
@@ -104,14 +104,16 @@ def get_local_ip():
 
 
 if __name__ == '__main__':
-    el_url = 'http://192.168.1.125:32049'
-    data = f'''<my_policy = {{"a-1" : {{
+    el_url = 'http://192.168.65.3:32049'
+    data = f'''<my_policy = {{"test-policy" : {{
                                     "node" : "A",
                                     "ip_port": "10.0.0",
                                     "trained_params_dbms": "my_db",
                                     "trained_params_table": "my_table",
                                     "trained_params_filename": "file.json"
                 }} }}>'''
+    response = insert_policy(el_url, data)
+    print(response.status_code)
     # response = force_insert_policy(el_url, data)
     # print(response.status_code)
     # response = force_insert_policy(el_url, data)
@@ -121,11 +123,11 @@ if __name__ == '__main__':
 
     response = insert_policy(el_url, data)
     print(response.status_code)
-    response = delete_policy(el_url, "f6df879142f006e6e4fc8e14114b63e2")
-    print(response.status_code)
-    response = insert_policy(el_url, data)
-    print(response.status_code)
-    response = delete_policy(el_url, "f6df879142f006e6e4fc8e14114b63e2")
-    print(response.status_code)
-    response = insert_policy(el_url, data)
-    print(response.status_code)
+    # response = delete_policy(el_url, "f6df879142f006e6e4fc8e14114b63e2")
+    # print(response.status_code)
+    # response = insert_policy(el_url, data)
+    # print(response.status_code)
+    # response = delete_policy(el_url, "f6df879142f006e6e4fc8e14114b63e2")
+    # print(response.status_code)
+    # response = insert_policy(el_url, data)
+    # print(response.status_code)

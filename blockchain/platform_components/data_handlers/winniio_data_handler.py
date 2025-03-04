@@ -22,22 +22,13 @@ from ibmfl.model.model_update import ModelUpdate
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
-
+from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 
 logger = logging.getLogger(__name__)
 
-# from logging import getLogger
-# logger = getLogger(__name__)
-
-# import sys
-# import os
-# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# from pipeline import run_pipeline
-
 
 class WinniioDataHandler(DataHandler):
-    def __init__(self, node_name, fl_model: keras.Model):
+    def __init__(self, node_name):
         """
         Initialize.
 
@@ -52,8 +43,26 @@ class WinniioDataHandler(DataHandler):
         # print("BEFORE LOAD DATASET")
         # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
         # print("AFTER LOAD DATASET")
-        self.fl_model = fl_model
+        if self.node_name != 'aggregator':
+            self.fl_model = self.model_def()
         self.node_name = node_name
+
+    def model_def(self):
+        time_steps = 1
+
+        input = layers.Input(shape=(time_steps, 6))
+        hidden_layer = layers.LSTM(256, activation='relu')(input)
+        output = layers.Dense(1)(hidden_layer)
+        model = models.Model(input, output)
+
+        rmse = keras.metrics.RootMeanSquaredError(name='rmse')
+
+        model.compile(
+            loss='mse',
+            optimizer=optimizers.Adam(learning_rate=0.0002),
+            metrics=['mse', 'mae', rmse],
+        )
+        return model
 
 
 
@@ -201,6 +210,10 @@ class WinniioDataHandler(DataHandler):
         x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, 6)
 
         return x_test_images_final, y_test_labels_final
+
+    def aggregate_model_weights(self, weights):
+        aggregated_params = FedAvg_aggregate(weights)
+        return aggregated_params
 
     def direct_inference(self, data):
         data = data.reshape(-1, 1, 6)

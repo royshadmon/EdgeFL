@@ -7,21 +7,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 import os
 import pickle
 from asyncio import sleep
-import ast
-from fileinput import filename
-
-import keras
 import numpy as np
-from ibmfl.model.pytorch_fl_model import PytorchFLModel
-from keras import layers, optimizers, models
+
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
-from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
-from platform_components.data_handlers.custom_data_handler import CustomMnistPytorchDataHandler
-from sklearn.metrics import accuracy_score
-# import pathlib
+from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
 from dotenv import load_dotenv
 
@@ -30,7 +22,8 @@ load_dotenv()
 
 class Node:
     def __init__(self, model_def, replica_name, ip, port):
-        self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
+        self.github_dir = os.getenv('GITHUB_DIR')
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
         self.node_port = port
         # print("Node initializing")
@@ -40,6 +33,12 @@ class Node:
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
         self.mongo_db_name = os.getenv('MONGO_DB_NAME')
         self.replicaName = replica_name
+
+        # init training application class reference
+        training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
+        module_name = os.getenv('MODULE_NAME')
+        TrainingApp_class = load_class_from_file(training_app_path, module_name)
+        self.data_handler = TrainingApp_class(self.replicaName)  # Create an instance
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
@@ -55,38 +54,6 @@ class Node:
 
         self.currentRound = 1
 
-        # model_def == 1: PytorchFLModel
-        if model_def == 1:
-            model_path = os.path.join("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain", "configs", "node", "pytorch", "pytorch_sequence.pt")
-
-            model_spec = {
-                "loss_criterion": "nn.NLLLoss",
-                "model_definition": str(model_path),
-                "model_name": "pytorch-nn",
-                "optimizer": "optim.Adadelta"
-            }
-
-            fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-            self.data_handler = CustomMnistPytorchDataHandler(self.replicaName,fl_model)
-        # add more model defs in elifs below
-        elif model_def == 2:
-            time_steps = 1
-
-            input = layers.Input(shape=(time_steps, 6))
-            hidden_layer = layers.LSTM(256, activation='relu')(input)
-            output = layers.Dense(1)(hidden_layer)
-            model = models.Model(input, output)
-
-            rmse = keras.metrics.RootMeanSquaredError(name='rmse')
-
-            model.compile(
-                loss='mse',
-                optimizer=optimizers.Adam(learning_rate=0.0002),
-                metrics=['mse', 'mae', rmse],
-            )
-            # print("BEFORE SET UP HANDLER")
-            self.data_handler = WinniioDataHandler(self.replicaName, model)
-            # print("AFTER SET UP HANDLER")
 
 
     '''
@@ -105,11 +72,6 @@ class Node:
     '''
 
     def add_node_params(self, round_number, model_metadata):
-        # print("in add_node_params")
-
-        # dbms_name = model_metadata[0]
-        # table_name = model_metadata[1]
-        # filename = model_metadata
 
         try:
 
@@ -189,7 +151,7 @@ class Node:
                 else:
                     raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
             except Exception as e:
-                print(f"Error getting weights: {str(e)}")
+                # print(f"Error getting weights: {str(e)}")
                 raise
 
         # Update model with weights
@@ -219,20 +181,12 @@ class Node:
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
-        # compressed_data = zlib.compress(serialized_data)
-        # encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
         return serialized_data
 
     def decode_params(self, encoded_model_update):
-        # compressed_data = base64.b64decode(encoded_model_update)
-        # serialized_data = zlib.decompress(compressed_data)
-        # model_weights = pickle.loads(serialized_data)
         model_weights = pickle.loads(encoded_model_update)
         return model_weights
 
-    # NOTE:
-    # - training with one node for 12 rounds resulted in accuracy of ~44.75%
-    # - training with two nodes for 12 rounds resulted in accuracy of ~55.17%
     def inference(self):
         return self.data_handler.run_inference()
 

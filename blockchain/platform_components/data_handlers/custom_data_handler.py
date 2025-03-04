@@ -9,32 +9,49 @@ import logging
 import os
 
 import numpy as np
-import torch
 
 from ibmfl.data.data_handler import DataHandler
-import requests
-import json
 
 from ibmfl.model.model_update import ModelUpdate
 from ibmfl.model.pytorch_fl_model import PytorchFLModel
 from sklearn.metrics import accuracy_score
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
+from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
+import torch
 
 logger = logging.getLogger(__name__)
 
 
+
 class CustomMnistPytorchDataHandler(DataHandler):
-    def __init__(self, node_name, fl_model:PytorchFLModel):
+    def __init__(self, node_name):
         super().__init__()
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
-        # load the datasets from SQL
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-        self.fl_model = fl_model
         self.node_name = node_name
-        # pre-process the datasets
-        self.preprocess()
-        print(self.x_test)
+        # load the datasets from SQL
+
+        if self.node_name != 'aggregator':
+            (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
+            self.fl_model = self.model_def()
+
+            # pre-process the datasets
+            self.preprocess()
+            print(self.x_test)
+
+    def model_def(self):
+        # model_path = os.path.join("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain", "configs", "node",
+        #                           "pytorch", "pytorch_sequence.pt")
+        model_path = os.path.join(os.getenv('GITHUB_DIR'), "blockchain/configs/node/pytorch/pytorch_sequence.pt")
+        model_spec = {
+            "loss_criterion": "nn.NLLLoss",
+            "model_definition": model_path,
+            "model_name": "pytorch-nn",
+            "optimizer": "optim.Adadelta"
+        }
+
+        fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
+        return fl_model
 
     def get_data(self):
         """
@@ -68,7 +85,6 @@ class CustomMnistPytorchDataHandler(DataHandler):
         db_name = os.getenv("PSQL_DB_NAME")
         query_train = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
         query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
-
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
@@ -142,33 +158,43 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
+        batch_amount = 50 # TODO: make this parameterized
         db_name = os.getenv("PSQL_DB_NAME")
-        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
 
-        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+        # Get number of rows
+        row_count_query = f"sql {db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
+        row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
+        num_rows = row_count["Query"][0].get('count(*)')
+        # fetch in offsets of 50
+        for offset in range(0, num_rows, batch_amount):
+            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50 OFFSET {offset}"
+            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
-        # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-        query_test_result = np.array(test_data["Query"])
-        x_test_images = []
-        y_test_labels = []
-        for i in range(len(query_test_result)):
-            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
-            y_test_label = query_test_result[i]['label']
-            x_test_images.append(x_test_image_np_array)
-            y_test_labels.append(y_test_label)
+            # Assuming the data is returned as dictionaries with keys 'x' and 'y'
+            query_test_result = np.array(test_data["Query"])
+            x_test_images = []
+            y_test_labels = []
+            for i in range(len(query_test_result)):
+                x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+                y_test_label = query_test_result[i]['label']
+                x_test_images.append(x_test_image_np_array)
+                y_test_labels.append(y_test_label)
 
-        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
+            y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
 
-        img_rows, img_cols = 28, 28
-        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
+            img_rows, img_cols = 28, 28
+            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
 
-        return x_test_images_final, y_test_labels_final
+            return x_test_images_final, y_test_labels_final
 
     def train(self, round_number):
         (x_train, y_train), (x_test, y_test) = self.load_dataset(
             node_name=self.node_name, round_number=round_number)
 
+
         self.fl_model.fit_model(train_data=(x_train,y_train))
+        # self.fl_model.fit_model(train_data=(np.array(x_train,dtype=np.float32), np.array(y_train,dtype=np.int64)))
+        # self.fl_model.fit_model(train_data=(torch.tensor(x_train, dtype=torch.float64), torch.tensor(y_train, dtype=torch.float64)))
         return self.get_weights()
 
     def update_model(self, weights):
@@ -179,10 +205,10 @@ class CustomMnistPytorchDataHandler(DataHandler):
         self.fl_model.update_model(model_update)
 
 
-    # def update_model(self, weights):
-    #     for p1, p2 in zip(self.fl_model.get_weights(), weights):
-    #         p1.data = torch.from_numpy(p2)
-    #         p1.data.requires_grad = True
+    def aggregate_model_weights(self, weights):
+        aggregated_params = FedAvg_aggregate(weights)
+        return aggregated_params
+
 
     def get_model_update(self):
         return self.fl_model.get_model_update()

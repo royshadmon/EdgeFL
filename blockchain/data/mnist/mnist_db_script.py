@@ -148,10 +148,10 @@ def verify_round_data(conn, table_name, round_num):
 
 def main():
     # Configuration
-    NUM_NODES = 2
-    NUM_ROUNDS = 12
-    TRAIN_SAMPLES_PER_ROUND = 50
-    TEST_SAMPLES_PER_ROUND = 10
+    NUM_NODES = 3
+    NUM_ROUNDS = 25
+    TRAIN_SAMPLES_PER_ROUND = 600
+    TEST_SAMPLES_PER_ROUND = 100
 
     print("Creating database...")
     create_database()
@@ -198,6 +198,9 @@ def main():
                 print(f"Verification for {node_name} Round {round_num}:")
                 print(f"Training samples: {train_count}")
                 print(f"Test samples: {test_count}")
+
+                # Query example to view number of images
+                # select round_number, data_type, COUNT(*) from node_node2 group by round_number,data_type order by round_number
 
     
     finally:

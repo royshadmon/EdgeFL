@@ -81,7 +81,8 @@ def initialize_nodes(model_def, node_urls):
             #     print(f"Failed to send contract address to {url}: {response.text}")
 
         except Exception as e:
-            print(f"Error sending contract address: {str(e)}")
+            pass
+            # print(f"Error sending contract address: {str(e)}")
 
 
 '''
@@ -125,26 +126,6 @@ async def init_training():
 
         return jsonify({'status': 'success', 'message': 'Training completed successfully'})
 
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@app.route('/inference', methods=['POST'])
-def inference():
-    """Inference on current model w/ data passed in."""
-    try:
-
-        # hard coding tht test data right now: test_data = (x_test, y_test)
-        (_), test_data = aggregator.fusion_model.data_handler.get_data()
-
-        results = aggregator.inference(test_data)
-        response = {
-            'status': 'success',
-            'message': 'Inference completed successfully',
-            'model_accuracy': results['acc'] * 100,
-            'classification_report': results['classification_report']
-        }
-        return jsonify(response)
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -199,7 +180,8 @@ async def listen_for_update_agg(min_params, roundNumber):
                             return aggregated_params_link
 
         except Exception as e:
-            print(f"Aggregator_server.py --> Waiting for file: {e}")
+            pass
+            # print(f"Aggregator_server.py --> Waiting for file: {e}")
 
         await asyncio.sleep(2)
 
