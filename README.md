@@ -77,7 +77,6 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 
    ```bash
    pip install -r requirements.txt
-   pip install flask[async]
    ```
 
 5. Set up and start a Postgres instance
