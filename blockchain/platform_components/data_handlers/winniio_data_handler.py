@@ -12,10 +12,12 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+# from ibmfl.data.data_handler import DataHandler # IBM IMPORT HERE # DataHandler IMPORTED HERE
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from keras import layers, optimizers, models
 from tensorflow.python import keras
+# from ibmfl.model.model_update import ModelUpdate # IBM IMPORT HERE # ModelUpdate IMPORTED HERE
 
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
@@ -35,7 +37,7 @@ logger = logging.getLogger(__name__)
 # from pipeline import run_pipeline
 
 
-class WinniioDataHandler():
+class WinniioDataHandler(): # DataHandler HERE
     def __init__(self, node_name, fl_model: keras.Model):
         """
         Initialize.
@@ -45,6 +47,7 @@ class WinniioDataHandler():
             batch_size (int): The batch size for the data loader
             **kwargs: Additional arguments, passed to super init and load_mnist_shard
         """
+        # super().__init__()
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
         # Data Handler Initialization
@@ -141,7 +144,7 @@ class WinniioDataHandler():
         return self.fl_model.weights
 
     def update_model(self, weights):
-        if isinstance(weights, LocalModelUpdate):
+        if isinstance(weights, LocalModelUpdate): # ModelUpdate HERE
             weights = weights.get("weights")
         self.fl_model.set_weights(weights)
 
