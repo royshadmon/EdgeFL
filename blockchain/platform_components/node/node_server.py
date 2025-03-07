@@ -6,7 +6,6 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 # from dotenv import load_dotenv
 
-from flask import Flask, request, jsonify
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
 from platform_components.node.node import Node
@@ -18,6 +17,9 @@ import argparse
 import requests
 import warnings
 
+import uvicorn
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel
 
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
@@ -25,14 +27,21 @@ TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number
 
 warnings.filterwarnings("ignore")
 
-app = Flask(__name__)
+# Set up argument parser
+parser = argparse.ArgumentParser(description='Start the FastAPI server.')
+parser.add_argument('--port', type=int, default=8081, help='Port to run the FastAPI server on.')
+args = parser.parse_args()
+
+app = FastAPI()
+
+
 # load_dotenv()
 
 # Configuration
-PROVIDER_URL = os.getenv('PROVIDER_URL')
+PROVIDER_URL = os.getenv("PROVIDER_URL")
 PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 
-# Initialize the Node instance 
+# Initialize the Node instance
 node_instance = None
 listener_thread = None
 stop_listening_thread = False
@@ -40,13 +49,12 @@ stop_listening_thread = False
 '''
 /set-contract-address [POST]
     - Sets up connection with provider
-    - Gets config file and intializes node instance
+    - Gets config file and initializes node instance
     - Starts 2 threads listening for start training and for update node
 '''
 
 '''
 SAMPLE CURL REQUEST COMING FROM AGGREGATOR SERVER:
-
 curl -X POST http://localhost:8081/init-node \
 -H "Content-Type: application/json" \
 -d '{
@@ -56,10 +64,8 @@ curl -X POST http://localhost:8081/init-node \
     "key2": "value2"
   }
 }'
-
 Note: when the aggregator server is calling this function, it will be with a new contract address field, but if you are 
 calling this endpoint from the terminal for testing you don't need to add it 
-
 SAMPLE CURL COMING FROM COMMAND LINE FOR TESTING:
 curl -X POST http://localhost:8081/init-node \
 -H "Content-Type: application/json" \
@@ -71,20 +77,28 @@ curl -X POST http://localhost:8081/init-node \
 
 edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
-@app.route('/init-node', methods=['POST'])
-def init_node():
+class InitNodeRequest(BaseModel):
+    replica_name: str
+    model_def: int
+
+# @app.route('/init-node', methods=['POST'])
+@app.post('/init-node')
+def init_node(request: InitNodeRequest):
     """Receive the contract address from the aggregator server."""
     global node_instance, listener_thread, stop_listening_thread
     try:
         ip = get_local_ip()
-        port = app.config.get("SERVER_PORT")
-        model_def = request.json.get('model_def', 1)
-        replica_name = request.json.get('replica_name')
+        port = args.port
+        model_def = request.model_def
+        replica_name = request.replica_name
 
         # print(f"Replica name " + replica_name)
 
         if not model_def:
-            return jsonify({'status': 'error', 'message': 'No config provided'}), 400
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No Config Provided"
+            )
         if listener_thread and listener_thread.is_alive():
             stop_listening_thread = True
             listener_thread.join(timeout=1)
@@ -106,25 +120,43 @@ def init_node():
         listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
         listener_thread.start()
 
-        return jsonify({'status': 'success', 'message': 'Contract address set and Node initialized successfully'}), 200
-
+        return {
+            'status': 'success',
+            'message': 'Contract address set and Node initialized successfully'
+        }
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
 '''
 /receive_data [POST] (data)
     - Endpoint to receive data block from the simulated data stream
 '''
+class ReceiveDataRequest(BaseModel):
+    data: list
 
 
-@app.route('/receive_data', methods=['POST'])
-def receive_data():
-    data = request.json.get('data')
-    if data:
-        node_instance.add_data_batch(np.array(data))
-        return jsonify({"status": "data_received", "batch_size": len(data)})
-    return jsonify({"error": "No data provided"}), 400
+# @app.route('/receive_data', methods=['POST'])
+@app.post('/receive_data')
+def receive_data(request: ReceiveDataRequest):
+    if not node_instance:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node instance not initialized"
+        )
+    if request.data:
+        node_instance.add_data_batch(np.array(request.data))
+        return {
+            "status": "data_received",
+            "batch_size": len(request.data)
+        }
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="No Data Provided"
+    )
 
 
 def listen_for_start_round(nodeInstance, stop_event):
@@ -143,7 +175,7 @@ def listen_for_start_round(nodeInstance, stop_event):
 
             if response.status_code == 200:
                 data = response.json()
-                # print(f"Response Data: {data}")  # Debugging line 
+                # print(f"Response Data: {data}")  # Debugging line
 
                 round_data = None
                 for item in data:
@@ -166,11 +198,12 @@ def listen_for_start_round(nodeInstance, stop_event):
             time.sleep(5)  # Poll every 2 seconds
 
         except Exception as e:
-            # print(f"Error in listener thread: {str(e)}")
+            print(f"Error in listener thread: {str(e)}")
             time.sleep(2)
 
 
-@app.route('/inference', methods=['POST'])
+# @app.route('/inference', methods=['POST'])
+@app.post('/inference')
 def inference():
     """Inference on current model w/ data passed in."""
     try:
@@ -188,34 +221,42 @@ def inference():
         }
         return response
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-@app.route('/infer', methods=['POST'])
-def direct_inference():
+class InferenceRequest(BaseModel):
+    input: list[float] = [244.46153846153845, 453, 0, 52.29666666666667, 0.0375170724933045, 20.515]
+
+# @app.route('/infer', methods=['POST'])
+@app.post('/infer')
+def direct_inference(request: InferenceRequest):
     """Inference on current model w/ data passed in."""
     try:
-        # data = request.json
-        # test_data = data.get('data', {})
-
-        msg = request.json
-        data = msg.get('input', [244.46153846153845,	453,	0,	52.29666666666667,	0.0375170724933045,	20.515])
-        float_list = [float(x) for x in data]
+        float_list = request.input
         if len(float_list) != 6:
-            return jsonify({'status': 'error', 'message': "ML model input needs to be of len 6"}), 500
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ML model input needs to be of len 6"
+            )
         results = node_instance.direct_inference(np.array(float_list))
         response = {
             'prediction': str(results),
         }
         return response
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
 if __name__ == '__main__':
-    # Set up argument parser
-    parser = argparse.ArgumentParser(description='Start the Flask server.')
-    parser.add_argument('--port', type=int, default=8081, help='Port to run the Flask server on.')
-    args = parser.parse_args()
-    app.config["SERVER_PORT"] = args.port
-    # Run the Flask server on the specified port
-    app.run(host='0.0.0.0', port=args.port)
+    # print(args) # debugging
+    uvicorn.run(
+    "node_server_fast:app",
+        host="0.0.0.0",
+        port=args.port,
+        reload=True  # Enable auto-reload on code changes (optional)
+    )

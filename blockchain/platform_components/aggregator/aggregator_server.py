@@ -8,16 +8,20 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 import argparse
 from dotenv import load_dotenv
 import asyncio
-from flask import Flask, jsonify, request
 from platform_components.aggregator.aggregator import Aggregator
 import requests
 import os
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
 import warnings
 
 warnings.filterwarnings("ignore")
-app = Flask(__name__)
+
+app = FastAPI()
 load_dotenv()
 
 # Use environment variables for sensitive data
@@ -26,12 +30,11 @@ PRIVATE_KEY =  os.getenv("PRIVATE_KEY")
 
 # Initialize the Aggregator instance
 ip = get_local_ip()
-port = app.config.get("SERVER_PORT", "8080")
+port = os.getenv("SERVER_PORT", "8080")
 aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY, ip, port)
 
 '''
 CURL REQUEST FOR DEPLOYING CONTRACT
-
 curl -X POST http://localhost:8080/init \
 -H "Content-Type: application/json" \
 -d '{
@@ -43,24 +46,35 @@ curl -X POST http://localhost:8080/init \
 }'
 '''
 
+#######  FASTAPI IMPLEMENTATION  #######
 
-@app.route('/init', methods=['POST'])
-def deploy_contract():
+class InitRequest(BaseModel):
+    model_def: int
+    nodeUrls: list[str]
+
+class TrainingRequest(BaseModel):
+    totalRounds: int
+    minParams: int
+
+# @app.route('/init', methods=['POST'])
+
+@app.post("/init")
+def deploy_contract(request: InitRequest):
     """Deploy the smart contract with predefined nodes."""
     try:
-        data = request.json
-        node_urls = data.get('nodeUrls', [])
-        model_def = data.get('model_def', 1)
-
         # Initialize the nodes and send the contract address
-        initialize_nodes(model_def, node_urls)
-
+        initialize_nodes(request.model_def, request.nodeUrls)
+        return {
+            "status": "success",
+            "message": f"Initialized nodes with model definition: {request.model_def}"
+        }
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-    return f"Initialized nodes with model definition: {model_def}", 200
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-
-def initialize_nodes(model_def, node_urls):
+def initialize_nodes(model_def: int , node_urls: list[str]):
     """Send the deployed contract address to multiple node servers."""
     for urlCount in range(len(node_urls)):
         try:
@@ -72,13 +86,11 @@ def initialize_nodes(model_def, node_urls):
                 'model_def': model_def
             })
 
-            # TODO: figure out how to handle response
-            # I am assuming that the node initialization above will be successful without actually checking
-
-            # if response.status_code == 200:
-            #     print(f"Contract address successfully sent to node at {url}")
-            # else:
-            #     print(f"Failed to send contract address to {url}: {response.text}")
+            if response.status_code == 200:
+                print(f"Node at {url} initialized successfully.")
+            else:
+                print(
+                    f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
 
         except Exception as e:
             print(f"Error sending contract address: {str(e)}")
@@ -86,7 +98,6 @@ def initialize_nodes(model_def, node_urls):
 
 '''
 EXAMPLE CURL REQUEST FOR STARTING TRAINING
-
 curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
 -d '{
@@ -96,40 +107,49 @@ curl -X POST http://localhost:8080/start-training \
 '''
 
 
-@app.route('/start-training', methods=['POST'])
-async def init_training():
+# @app.route('/start-training', methods=['POST'])
+@app.post('/start-training')
+async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
     try:
-        data = request.json
-        num_rounds = data.get('totalRounds', 1)
-        min_params = data.get('minParams', 1)
+        num_rounds = request.totalRounds
+        min_params = request.minParams
 
         if num_rounds <= 0:
-            return jsonify({'status': 'error', 'message': 'Invalid number of rounds'}), 400
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Number of rounds must be positive"
+            )
 
         print(f"{num_rounds} rounds of training started.")
 
-        initialParams = ''
+        initial_params = ''
 
         for r in range(1, num_rounds + 1):
             print(f"Starting training round {r}")
-            aggregator.start_round(initialParams, r)
+            aggregator.start_round(initial_params, r)
             # print("Sent initial parameters to nodes")
             # Listen for updates from nodes
-            newAggregatorParams = await listen_for_update_agg(min_params, r)
+            new_aggregator_params = await listen_for_update_agg(min_params, r)
             # print("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
-            initialParams = newAggregatorParams
+            initial_params = new_aggregator_params
             print(f"[Round {r}] Step 4 Complete: model parameters aggregated")
-
-        return jsonify({'status': 'success', 'message': 'Training completed successfully'})
+        return {
+            "status": "success",
+            "message": "Training completed successfully"
+        }
 
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
-@app.route('/inference', methods=['POST'])
+# @app.route('/inference', methods=['POST'])
+@app.post('/inference')
 def inference():
     """Inference on current model w/ data passed in."""
     try:
@@ -144,12 +164,14 @@ def inference():
             'model_accuracy': results['acc'] * 100,
             'classification_report': results['classification_report']
         }
-        return jsonify(response)
+        return response
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        raise HTTPException(
+            status_code= status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-
-async def listen_for_update_agg(min_params, roundNumber):
+async def listen_for_update_agg(min_params: int, roundNumber):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     print("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -207,8 +229,12 @@ async def listen_for_update_agg(min_params, roundNumber):
 if __name__ == '__main__':
     # Add argument parsing to make the port configurable
     parser = argparse.ArgumentParser(description="Run the Aggregator Server.")
-    parser.add_argument('--port', type=int, default=8080, help="Port to run the server on")
+    parser.add_argument('--port', type=int, default=8080, help="Port to run the server on.")
     args = parser.parse_args()
-    app.config["SERVER_PORT"] = args.port
-    # Run the Flask server on the provided port
-    app.run(host='0.0.0.0', port=args.port)
+
+    uvicorn.run(
+        "aggregator_server_fast:app",
+        host="0.0.0.0",
+        port=args.port,
+        reload=True  # Enable auto-reload on code changes (optional)
+    )
