@@ -163,9 +163,9 @@ class Aggregator:
                     # decoded_params.append(data)
 
 
-                    # decoded_params.append({'weights': pickle.dumps(data)}) # ModelUpdate HERE
-                    decoded_params.append(LocalModelUpdate(weights=data)) # ModelUpdate HERE
-                    # decoded_params.append(ModelUpdate(weights=data[0].detach().numpy()))
+                    # decoded_params.append({'weights': pickle.dumps(data)})
+                    decoded_params.append(LocalModelUpdate(weights=data))
+                    # decoded_params.append(LocalModelUpdate(weights=data[0].detach().numpy()))
                 else:
                     raise ValueError(
                         f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
@@ -177,8 +177,8 @@ class Aggregator:
 
         aggregate_params_weights = self.aggregation_model.current_model_weights
 
-        # aggregate_model_update = ModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
-        aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights) # ModelUpdate HERE
+        # aggregate_model_update = LocalModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
+        aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights)
         # aggregate_model_update = {}
         # for key, val in aggregate_params_weights.items():
         #     aggregate_model_update[key] = pickle.dumps(val)
@@ -217,7 +217,9 @@ class Aggregator:
     def decode_params(self, encoded_model_update):
         # compressed_data = base64.b64decode(encoded_model_update)
         # serialized_data = zlib.decompress(compressed_data)
+        print(f"encoded_model_update: {encoded_model_update}")
         model_weights = pickle.loads(encoded_model_update)
+        print(f"model_weights: {model_weights}")
         return model_weights
 
     def inference(self, data):
