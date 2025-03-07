@@ -1,5 +1,5 @@
 web3~=7.8.0
-numpy==1.23.5
+numpy~=1.26.0
 skorch>=0.15.0
 psycopg2-binary~=2.9.9
 scikit-learn~=1.6.1
@@ -16,8 +16,8 @@ PyYAML~=6.0.2
 tqdm~=4.67.1
 python-dateutil~=2.9.0.post0
 matplotlib~=3.9.4
-docker~=7.0.0
+docker~=7.1.0
 
-torch ~= 2.2.2
-tensorflow ~= 2.16.2
-cython ~= 3.0.12
+torch~=2.2.2
+tensorflow~=2.16.2
+cython~=3.0.12

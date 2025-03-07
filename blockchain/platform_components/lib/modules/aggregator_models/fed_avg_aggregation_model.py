@@ -23,7 +23,8 @@ class FedAvgAggregationModel(BaseAggregationModel):
         weights_list = []
         for update in model_updates:
             try:
-                weights = np.array(update.get("weights"))
+                current_weights = update.get("weights")
+                weights = np.array(current_weights, dtype=object)
                 weights_list.append(weights)
             except Exception:
                 logger.warning("Failed to process model update")

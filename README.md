@@ -22,7 +22,7 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 
 ## Software Requirements
 
-- Python 3.11 (currently doesn't work with 3.12)
+- Python 3.12
 - Git
 - Ability to run shell scripts
 - cURL (for API requests)
@@ -70,7 +70,7 @@ This guide will walk you through setting up and running the AnyLog-Edgelake syst
 
    ```
    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-   python3.11 get-pip.py
+   python3.12 get-pip.py
    ```
 
 4. Install dependencies:
