@@ -255,7 +255,7 @@ def direct_inference(request: InferenceRequest):
 if __name__ == '__main__':
     # print(args) # debugging
     uvicorn.run(
-    "node_server_fast:app",
+    "node_server:app",
         host="0.0.0.0",
         port=args.port,
         reload=True  # Enable auto-reload on code changes (optional)
