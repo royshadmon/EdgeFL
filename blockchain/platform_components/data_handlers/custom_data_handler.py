@@ -9,23 +9,21 @@ import logging
 import os
 
 import numpy as np
+import torch
+from tensorflow.python import keras
+from keras import layers, optimizers, models
+from sklearn.metrics import accuracy_score
 
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
-from tensorflow.python import keras
-from keras import layers, optimizers, models
-
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
-
-from sklearn.metrics import accuracy_score
-
+from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 
 
 class MnistDataHandler():
-    def __init__(self, node_name, fl_model: keras.Model, port=None):
+    def __init__(self, node_name, port=None):
         configure_logging(f"node_server_{port}")
         self.logger = logging.getLogger(__name__)
-
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
         # Data Handler Initialization
@@ -36,13 +34,38 @@ class MnistDataHandler():
         self.preprocessor = None
         self.testing_generator = None
         self.training_generator = None
-
-        # load the datasets from SQL
-        (self.x_train, self.y_train), (self.x_test, self.y_test) = self._load_dataset(node_name, 1)
-        self.fl_model = fl_model
+        
         self.node_name = node_name
-        # pre-process the datasets
-        self.preprocess()
+        
+        # load the datasets from SQL
+        if self.node_name != 'aggregator':
+            (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
+            self.fl_model = self.model_def()
+
+            # pre-process the datasets
+            self.preprocess()
+            print(self.x_test)
+            
+    def model_def(self):
+        # Model for MNIST classification
+        model = models.Sequential([
+            layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)), # Applies 2d convolution, extracting features from the input images
+            layers.MaxPooling2D(pool_size=(2, 2)), # Reduces spatial dimensions
+            layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
+            layers.MaxPooling2D(pool_size=(2, 2)),
+            layers.Flatten(), # Converts 2d feature maps to 1d feature vector
+            layers.Dense(128, activation="relu"), # Fully connecting layers
+            layers.Dense(10, activation="softmax")
+        ])
+
+        # Compile the model with classification-appropriate loss and metrics
+        model.compile(
+            loss="sparse_categorical_crossentropy",
+            optimizer=optimizers.Adam(learning_rate=0.001),
+            metrics=["accuracy"]
+        )
+        
+        return model
 
     def get_data(self):
         """
@@ -127,33 +150,44 @@ class MnistDataHandler():
         if isinstance(weights, LocalModelUpdate):
             weights = weights.get("weights")
         self.fl_model.set_weights(weights)
+      
+    def aggregate_model_weights(self, weights):
+        aggregated_params = FedAvg_aggregate(weights)
+        return aggregated_params
 
     # PRIVATE METHODS
     def _get_all_test_data(self, node_name):
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
+        batch_amount = 50 # TODO: make this parameterized
         db_name = os.getenv("PSQL_DB_NAME")
-        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
 
-        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+        # Get number of rows
+        row_count_query = f"sql {db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
+        row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
+        num_rows = row_count["Query"][0].get('count(*)')
+        # fetch in offsets of 50
+        for offset in range(0, num_rows, batch_amount):
+            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
-        # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-        query_test_result = np.array(test_data["Query"])
-        x_test_images = []
-        y_test_labels = []
-        for i in range(len(query_test_result)):
-            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
-            y_test_label = query_test_result[i]['label']
-            x_test_images.append(x_test_image_np_array)
-            y_test_labels.append(y_test_label)
+            # Assuming the data is returned as dictionaries with keys 'x' and 'y'
+            query_test_result = np.array(test_data["Query"])
+            x_test_images = []
+            y_test_labels = []
+            for i in range(len(query_test_result)):
+                x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+                y_test_label = query_test_result[i]['label']
+                x_test_images.append(x_test_image_np_array)
+                y_test_labels.append(y_test_label)
 
-        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
+            y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
 
-        img_rows, img_cols = 28, 28
-        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+            img_rows, img_cols = 28, 28
+            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
 
-        return x_test_images_final, y_test_labels_final
+            return x_test_images_final, y_test_labels_final
 
     def _load_dataset(self, node_name, round_number):
 

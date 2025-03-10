@@ -155,31 +155,8 @@ async def init_training(request: TrainingRequest):
             detail=str(e)
         )
 
-
-# @app.route('/inference', methods=['POST'])
-@app.post('/inference')
-def inference():
-    """Inference on current model w/ data passed in."""
-    try:
-
-        # hard coding tht test data right now: test_data = (x_test, y_test)
-        (_), test_data = aggregator.fusion_model.data_handler.get_data()
-
-        results = aggregator.inference(test_data)
-        response = {
-            'status': 'success',
-            'message': 'Inference completed successfully',
-            'model_accuracy': results['acc'] * 100,
-            'classification_report': results['classification_report']
-        }
-        return response
-    except Exception as e:
-        raise HTTPException(
-            status_code= status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-async def listen_for_update_agg(min_params: int, roundNumber):
+        
+async def listen_for_update_agg(min_params, roundNumber):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     logger.info("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'

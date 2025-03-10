@@ -21,6 +21,7 @@ from platform_components.EdgeLake_functions.mongo_file_store import read_file, w
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
 from platform_components.lib.modules.aggregator_models.fed_avg_aggregation_model import FedAvgAggregationModel
 
+from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
 CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
 
@@ -29,11 +30,19 @@ load_dotenv()
 
 class Aggregator:
     def __init__(self, provider_url, private_key, ip, port):
-        self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
+        self.github_dir = os.getenv('GITHUB_DIR')
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.server_ip = ip
         self.server_port = port
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
+
+        # init training application class reference
+        training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
+        module_name = os.getenv('MODULE_NAME')
+        TrainingApp_class = load_class_from_file(training_app_path, module_name)
+        self.training_app = TrainingApp_class('aggregator')  # Create an instance
+
 
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -173,24 +182,20 @@ class Aggregator:
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
 
         # do aggregation function here (doesn't return anything)
-        self.aggregation_model.update_weights(decoded_params)
+        # self.fusion_model.update_weights(decoded_params)
+        # aggregate_params_weights2 = self.fusion_model.current_model_weights
+        #
+        # # aggregate_params_weights = FedMax_aggregate(decoded_params)
+        # aggregate_params_weights = PBA_aggregate(decoded_params)
 
-        aggregate_params_weights = self.aggregation_model.current_model_weights
+        aggregate_params_weights = self.training_app.aggregate_model_weights(decoded_params)
 
-        # aggregate_model_update = LocalModelUpdate(weights=np.array(aggregate_params_weights, dtype=np.float32))
+        # aggregate_params_weights = [np.array(aggregate_params_weights[0], dtype=np.float32)]
+
         aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights)
-        # aggregate_model_update = {}
-        # for key, val in aggregate_params_weights.items():
-        #     aggregate_model_update[key] = pickle.dumps(val)
 
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)
-
-        # agg_ref = db.reference('agg_model_updates')
-
-        # delete the old aggregated params
-        # if agg_ref.get() is not None:
-        #     agg_ref.delete()
 
         data_entry = {
             'newUpdates': encoded_params
@@ -221,7 +226,3 @@ class Aggregator:
         model_weights = pickle.loads(encoded_model_update)
         print(f"model_weights: {model_weights}")
         return model_weights
-
-    def inference(self, data):
-        results = self.aggregation_model.fl_model.evaluate(data)
-        return results

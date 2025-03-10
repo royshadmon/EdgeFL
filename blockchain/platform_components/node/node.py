@@ -13,12 +13,12 @@ import keras
 import numpy as np
 from keras import layers, optimizers, models
 
+
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
-from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
-from platform_components.data_handlers.custom_data_handler import MnistDataHandler
 from platform_components.lib.logger.logger_config import configure_logging
+from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -26,7 +26,8 @@ load_dotenv()
 
 class Node:
     def __init__(self, model_def, replica_name, ip, port):
-        self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
+        self.github_dir = os.getenv('GITHUB_DIR')
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
         self.node_port = port
         configure_logging(f"node_server_{port}")
@@ -40,6 +41,12 @@ class Node:
         self.mongo_db_name = os.getenv('MONGO_DB_NAME')
         self.replicaName = replica_name
 
+        # init training application class reference
+        training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
+        module_name = os.getenv('MODULE_NAME')
+        TrainingApp_class = load_class_from_file(training_app_path, module_name)
+        self.data_handler = TrainingApp_class(self.replicaName)  # Create an instance
+
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
@@ -51,47 +58,7 @@ class Node:
 
         # Node local data batches
         self.data_batches = []
-
         self.currentRound = 1
-
-        # model_def == 1: Keras Model MNist
-        if model_def == 1:
-            # Model for MNIST classification
-            model = models.Sequential([
-                layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)), # Applies 2d convolution, extracting features from the input images
-                layers.MaxPooling2D(pool_size=(2, 2)), # Reduces spatial dimensions
-                layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
-                layers.MaxPooling2D(pool_size=(2, 2)),
-                layers.Flatten(), # Converts 2d feature maps to 1d feature vector
-                layers.Dense(128, activation="relu"), # Fully connecting layers
-                layers.Dense(10, activation="softmax")
-            ])
-
-            # Compile the model with classification-appropriate loss and metrics
-            model.compile(
-                loss="sparse_categorical_crossentropy",
-                optimizer=optimizers.Adam(learning_rate=0.001),
-                metrics=["accuracy"]
-            )
-
-            self.data_handler = MnistDataHandler(self.replicaName, model, self.node_port)
-        # add more model defs in elifs below
-        elif model_def == 2:
-            time_steps = 1
-
-            input = layers.Input(shape=(time_steps, 6))
-            hidden_layer = layers.LSTM(256, activation='relu')(input)
-            output = layers.Dense(1)(hidden_layer)
-            model = models.Model(input, output)
-
-            rmse = keras.metrics.RootMeanSquaredError(name='rmse')
-
-            model.compile(
-                loss='mse',
-                optimizer=optimizers.Adam(learning_rate=0.0002),
-                metrics=['mse', 'mae', rmse],
-            )
-            self.data_handler = WinniioDataHandler(self.replicaName, model, self.node_port)
 
 
     '''
@@ -111,10 +78,6 @@ class Node:
 
     def add_node_params(self, round_number, model_metadata):
         self.logger.debug("in add_node_params")
-
-        # dbms_name = model_metadata[0]
-        # table_name = model_metadata[1]
-        # filename = model_metadata
 
         try:
 
@@ -222,20 +185,12 @@ class Node:
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
-        # compressed_data = zlib.compress(serialized_data)
-        # encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
         return serialized_data
 
     def decode_params(self, encoded_model_update):
-        # compressed_data = base64.b64decode(encoded_model_update)
-        # serialized_data = zlib.decompress(compressed_data)
-        # model_weights = pickle.loads(serialized_data)
         model_weights = pickle.loads(encoded_model_update)
         return model_weights
 
-    # NOTE:
-    # - training with one node for 12 rounds resulted in accuracy of ~44.75%
-    # - training with two nodes for 12 rounds resulted in accuracy of ~55.17%
     def inference(self):
         return self.data_handler.run_inference()
 
