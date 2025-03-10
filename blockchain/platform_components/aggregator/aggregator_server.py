@@ -9,6 +9,7 @@ import argparse
 from dotenv import load_dotenv
 import asyncio
 from platform_components.aggregator.aggregator import Aggregator
+import logging
 import requests
 import os
 
@@ -19,10 +20,16 @@ from pydantic import BaseModel
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
 import warnings
 
+from platform_components.lib.logger.logger_config import configure_logging
+
+
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
 load_dotenv()
+
+configure_logging("aggregator_server")
+logger = logging.getLogger(__name__)
 
 # Use environment variables for sensitive data
 PROVIDER_URL = os.getenv("PROVIDER_URL")
@@ -64,14 +71,14 @@ def deploy_contract(request: InitRequest):
     try:
         # Initialize the nodes and send the contract address
         initialize_nodes(request.model_def, request.nodeUrls)
+        logger.info(f"Initialized nodes with model definition: {request.model_def}")
         return {
-            "status": "success",
-            "message": f"Initialized nodes with model definition: {request.model_def}"
+            "status": "success"
         }
     except Exception as e:
+        logger.error(f"Failed to initialize nodes: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 def initialize_nodes(model_def: int , node_urls: list[str]):
@@ -79,7 +86,7 @@ def initialize_nodes(model_def: int , node_urls: list[str]):
     for urlCount in range(len(node_urls)):
         try:
             url = node_urls[urlCount]
-            print(f"Initializing model at {url}")
+            logger.info(f"Initializing model at {url}")
 
             response = requests.post(f'{url}/init-node', json={
                 'replica_name': f"node{urlCount+1}",
@@ -87,13 +94,13 @@ def initialize_nodes(model_def: int , node_urls: list[str]):
             })
 
             if response.status_code == 200:
-                print(f"Node at {url} initialized successfully.")
+                logger.info(f"Node at {url} initialized successfully.")
             else:
-                print(
+                logger.error(
                     f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
 
         except Exception as e:
-            print(f"Error sending contract address: {str(e)}")
+            logger.critical(f"Error sending contract address: {str(e)}")
 
 
 '''
@@ -121,21 +128,22 @@ async def init_training(request: TrainingRequest):
                 detail="Number of rounds must be positive"
             )
 
-        print(f"{num_rounds} rounds of training started.")
+        logger.info(f"{num_rounds} rounds of training started.")
 
         initial_params = ''
 
         for r in range(1, num_rounds + 1):
-            print(f"Starting training round {r}")
+            logger.info(f"Starting training round {r}")
             aggregator.start_round(initial_params, r)
-            # print("Sent initial parameters to nodes")
+            logger.debug("Sent initial parameters to nodes")
+
             # Listen for updates from nodes
             new_aggregator_params = await listen_for_update_agg(min_params, r)
-            # print("Received aggregated parameters")
+            logger.debug("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
             initial_params = new_aggregator_params
-            print(f"[Round {r}] Step 4 Complete: model parameters aggregated")
+            logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
         return {
             "status": "success",
             "message": "Training completed successfully"
@@ -173,7 +181,7 @@ def inference():
 
 async def listen_for_update_agg(min_params: int, roundNumber):
     """Asynchronously poll for aggregated parameters from the blockchain."""
-    print("listening for updates...")
+    logger.info("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     while True:
@@ -221,7 +229,7 @@ async def listen_for_update_agg(min_params: int, roundNumber):
                             return aggregated_params_link
 
         except Exception as e:
-            print(f"Aggregator_server.py --> Waiting for file: {e}")
+            logger.error(f"Aggregator_server.py --> Waiting for file: {e}")
 
         await asyncio.sleep(2)
 
@@ -236,5 +244,5 @@ if __name__ == '__main__':
         "aggregator_server:app",
         host="0.0.0.0",
         port=args.port,
-        reload=True  # Enable auto-reload on code changes (optional)
+        reload=False  # Enable auto-reload on code changes (optional)
     )

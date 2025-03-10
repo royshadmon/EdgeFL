@@ -5,11 +5,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
 
 # from dotenv import load_dotenv
-
-
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
 from platform_components.node.node import Node
 import numpy as np
+import logging
 import threading
 import time
 import os
@@ -20,6 +19,8 @@ import warnings
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+
+from platform_components.lib.logger.logger_config import configure_logging
 
 '''
 TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
@@ -33,9 +34,10 @@ parser.add_argument('--port', type=int, default=8081, help='Port to run the Fast
 args = parser.parse_args()
 
 app = FastAPI()
-
-
 # load_dotenv()
+
+configure_logging(f"node_server_{args.port}")
+logger = logging.getLogger(__name__)
 
 # Configuration
 PROVIDER_URL = os.getenv("PROVIDER_URL")
@@ -92,7 +94,7 @@ def init_node(request: InitNodeRequest):
         model_def = request.model_def
         replica_name = request.replica_name
 
-        # print(f"Replica name " + replica_name)
+        # logger.debug(f"Replica name " + replica_name)
 
         if not model_def:
             raise HTTPException(
@@ -110,7 +112,7 @@ def init_node(request: InitNodeRequest):
         node_instance = Node(model_def, replica_name, ip, port)
         node_instance.currentRound = 1
 
-        print(f"{replica_name} successfully initialized")
+        logger.info(f"{replica_name} successfully initialized")
 
         # Start event listener for start round
         listener_thread = threading.Thread(
@@ -160,12 +162,12 @@ def receive_data(request: ReceiveDataRequest):
 
 
 def listen_for_start_round(nodeInstance, stop_event):
-    print(f"listening for start round {nodeInstance.currentRound}")
+    logger.debug(f"listening for start round {nodeInstance.currentRound}")
     while True:
         try:
             # next_round = nodeInstance.currentRound + 1
 
-            # print(f"listening for start round {nodeInstance.currentRound}")
+            # logger.debug(f"listening for start round {nodeInstance.currentRound}")
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
@@ -175,7 +177,7 @@ def listen_for_start_round(nodeInstance, stop_event):
 
             if response.status_code == 200:
                 data = response.json()
-                # print(f"Response Data: {data}")  # Debugging line
+                # logger.debug(f"Response Data: {data}")  # Debugging line
 
                 round_data = None
                 for item in data:
@@ -185,20 +187,20 @@ def listen_for_start_round(nodeInstance, stop_event):
                         break  # Stop searching once the current round's data is found
 
                 if round_data:
-                    # print(f"Round Data: {round_data}")  # Debugging line
+                    logger.debug(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
                     modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound, ip_port)
                     nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate_metadata)
-                    print(f"[Round {nodeInstance.currentRound}] Step 3 Complete: Model parameters published")
+                    logger.info(f"[Round {nodeInstance.currentRound}] Step 3 Complete: Model parameters published")
                     nodeInstance.currentRound += 1
                 # else: # Debugging line
-                #     print(f"No data found for round r{nodeInstance.currentRound}")
+                #     logger.error(f"No data found for round r{nodeInstance.currentRound}")
 
             time.sleep(5)  # Poll every 2 seconds
 
         except Exception as e:
-            print(f"Error in listener thread: {str(e)}")
+            logger.error(f"Error in listener thread: {str(e)}")
             time.sleep(2)
 
 
@@ -253,10 +255,9 @@ def direct_inference(request: InferenceRequest):
 
 
 if __name__ == '__main__':
-    # print(args) # debugging
     uvicorn.run(
     "node_server:app",
         host="0.0.0.0",
         port=args.port,
-        reload=True  # Enable auto-reload on code changes (optional)
+        reload=False  # Enable auto-reload on code changes (optional)
     )
