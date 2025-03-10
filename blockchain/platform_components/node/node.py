@@ -4,11 +4,10 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
 
+import logging
 import os
 import pickle
 from asyncio import sleep
-import ast
-from fileinput import filename
 
 import keras
 import numpy as np
@@ -19,11 +18,9 @@ from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to
 from platform_components.data_handlers.winniio_data_handler import WinniioDataHandler
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 from platform_components.data_handlers.custom_data_handler import MnistDataHandler
-# from sklearn.metrics import accuracy_score
-# import pathlib
+from platform_components.lib.logger.logger_config import configure_logging
 
 from dotenv import load_dotenv
-
 load_dotenv()
 
 
@@ -32,7 +29,10 @@ class Node:
         self.file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
         self.node_ip = ip
         self.node_port = port
-        # print("Node initializing")
+        configure_logging(f"node_server_{port}")
+        self.logger = logging.getLogger(__name__)
+
+        self.logger.debug("Node initializing")
 
         self.database_url = os.getenv("DATABASE_URL")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -74,7 +74,7 @@ class Node:
                 metrics=["accuracy"]
             )
 
-            self.data_handler = MnistDataHandler(self.replicaName, model)
+            self.data_handler = MnistDataHandler(self.replicaName, model, self.node_port)
         # add more model defs in elifs below
         elif model_def == 2:
             time_steps = 1
@@ -91,9 +91,7 @@ class Node:
                 optimizer=optimizers.Adam(learning_rate=0.0002),
                 metrics=['mse', 'mae', rmse],
             )
-            # print("BEFORE SET UP HANDLER")
-            self.data_handler = WinniioDataHandler(self.replicaName, model)
-            # print("AFTER SET UP HANDLER")
+            self.data_handler = WinniioDataHandler(self.replicaName, model, self.node_port)
 
 
     '''
@@ -112,7 +110,7 @@ class Node:
     '''
 
     def add_node_params(self, round_number, model_metadata):
-        # print("in add_node_params")
+        self.logger.debug("in add_node_params")
 
         # dbms_name = model_metadata[0]
         # table_name = model_metadata[1]
@@ -128,7 +126,7 @@ class Node:
 
             success = False
             while not success:
-                # print("Attempting insert")
+                self.logger.debug("Attempting insert")
                 response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
@@ -138,7 +136,7 @@ class Node:
                         success = True
 
 
-            # print(f"Submitting results for round {round_number}")
+            self.logger.debug(f"Submitting results for round {round_number}")
             # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             # TODO: add error check here
 
@@ -161,7 +159,7 @@ class Node:
     '''
 
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
-        # print(f"in train_model_params for round {round_number}")
+        self.logger.debug(f"in train_model_params for round {round_number}")
 
         # First round initialization
         if round_number == 1:
@@ -171,8 +169,6 @@ class Node:
         else:
             try:
                 # Extract the key from the URL
-
-
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
@@ -189,14 +185,14 @@ class Node:
                             'rb') as f:
                         data = pickle.load(f)
 
-
                 # Ensure the data is valid and decode the parameters
                 if data and 'newUpdates' in data:
                     weights = self.decode_params(data['newUpdates'])
                 else:
+                    self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
                     raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
             except Exception as e:
-                print(f"Error getting weights: {str(e)}")
+                self.logger.error(f"Error getting weights: {str(e)}")
                 raise
 
         # Update model with weights
@@ -215,9 +211,9 @@ class Node:
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
-        print(f"[Round {round_number}] Step 2 Complete: model training done")
+        self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
-            # print(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
+            self.logger.debug(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
             copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name

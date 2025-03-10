@@ -9,11 +9,8 @@ import logging
 import os
 
 import numpy as np
-import torch
 
-import requests
-import json
-
+from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
 from tensorflow.python import keras
 from keras import layers, optimizers, models
@@ -21,16 +18,14 @@ from keras import layers, optimizers, models
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import r2_score
 
-logger = logging.getLogger(__name__)
 
 
 class MnistDataHandler():
-    def __init__(self, node_name, fl_model: keras.Model):
+    def __init__(self, node_name, fl_model: keras.Model, port=None):
+        configure_logging(f"node_server_{port}")
+        self.logger = logging.getLogger(__name__)
+
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
         # Data Handler Initialization
@@ -48,7 +43,6 @@ class MnistDataHandler():
         self.node_name = node_name
         # pre-process the datasets
         self.preprocess()
-        # print(self.x_test)
 
     def get_data(self):
         """
@@ -57,8 +51,8 @@ class MnistDataHandler():
         :return: training data
         :rtype: `tuple`
         """
-        print("Train data shape in get_data:", self.x_train.shape)
-        print("Test data shape in get_data:", self.x_test.shape)
+        self.logger.debug(f"Train data shape in get_data: {self.x_train.shape}")
+        self.logger.debug(f"Test data shape in get_data: {self.x_test.shape}")
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
     def get_model_update(self):
@@ -72,16 +66,16 @@ class MnistDataHandler():
         Preprocesses the training and testing datasets.
         :return: None
         """
-        print("Train data shape before preprocessing:", self.x_train.shape)
-        print("Test data shape before preprocessing:", self.x_test.shape)
+        self.logger.debug(f"Train data shape before preprocessing: {self.x_train.shape}")
+        self.logger.debug(f"Test data shape before preprocessing: {self.x_test.shape}")
         img_rows, img_cols = 28, 28
-        print("Train data shape before preprocessing:", self.x_train.shape)
+        self.logger.debug(f"Train data shape before preprocessing: {self.x_train.shape}")
 
         # Reshape to keras format
         self.x_train = self.x_train.reshape(-1, img_rows, img_cols, 1)
         self.x_test = self.x_test.reshape(-1, img_rows, img_cols, 1)
 
-        print("Train data shape after preprocessing:", self.x_train.shape)
+        self.logger.debug(f"Train data shape after preprocessing: {self.x_train.shape}")
 
         # Convert labels to correct type
         self.y_train = self.y_train.astype("int64")
@@ -175,7 +169,7 @@ class MnistDataHandler():
         # these queries will depend on how we've uploaded mnist data and use round_number param in query
         # we are pulling batched data for each round
         # query_train = f"SELECT * FROM {node_name}"
-        # print(query_train)
+        # self.logger.debug(query_train)
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         db_name = os.getenv("PSQL_DB_NAME")
@@ -211,10 +205,10 @@ class MnistDataHandler():
             x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
             x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
 
-            print("Train data shape after loading and reshaping:", x_train_images_final.shape)
+            self.logger.debug(f"Train data shape after loading and reshaping: {x_train_images_final.shape}")
 
             y_test_label_final = np.array(y_test_labels, dtype=np.int64)
-            print("Test data shape after loading:", x_test_images_final.shape)
+            self.logger.debug(f"Test data shape after loading: {x_test_images_final.shape}")
 
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")

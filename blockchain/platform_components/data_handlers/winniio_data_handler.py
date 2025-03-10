@@ -23,10 +23,9 @@ from sklearn.metrics import r2_score
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
 
+from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
-# from logging import getLogger
-# logger = getLogger(__name__)
 
 # import sys
 # import os
@@ -36,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 class WinniioDataHandler():
-    def __init__(self, node_name, fl_model: keras.Model):
+    def __init__(self, node_name, fl_model: keras.Model, port=None):
         """
         Initialize.
 
@@ -45,6 +44,8 @@ class WinniioDataHandler():
             batch_size (int): The batch size for the data loader
             **kwargs: Additional arguments, passed to super init and load_mnist_shard
         """
+        configure_logging(f"node_server_{port}")
+        self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
         # Data Handler Initialization
@@ -55,12 +56,10 @@ class WinniioDataHandler():
         self.preprocessor = None
         self.testing_generator = None
         self.training_generator = None
-
-        # print("BEFORE LOAD DATASET")
-        # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-        # print("AFTER LOAD DATASET")
         self.fl_model = fl_model
         self.node_name = node_name
+
+        # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
 
 
     def load_dataset(self, node_name, round_number):
@@ -77,7 +76,7 @@ class WinniioDataHandler():
         # these queries will depend on how we've uploaded mnist data and use round_number param in query
         # we are pulling batched data for each round
         # query_train = f"SELECT * FROM {node_name}"
-        # print(query_train)
+        # self.logger.debug(query_train)
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         db_name = os.getenv("PSQL_DB_NAME")
@@ -116,10 +115,10 @@ class WinniioDataHandler():
             x_train_images_final = np.array(x_train_images, dtype=np.float32)
             x_test_images_final = np.array(x_test_images, dtype=np.float32)
 
-            # print("Train data shape after loading and reshaping:", x_train_images_final.shape)
+            self.logger.debug(f"Train data shape after loading and reshaping: {x_train_images_final.shape}")
 
             y_test_label_final = np.array(y_test_labels, dtype=np.float32)
-            # print("Test data shape after loading:", x_test_images_final.shape)
+            self.logger.debug(f"Test data shape after loading: {x_test_images_final.shape}")
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
 
@@ -133,8 +132,8 @@ class WinniioDataHandler():
         :return: training data
         :rtype: `tuple`
         """
-        print("Train data shape in get_data:", self.x_train.shape)
-        print("Test data shape in get_data:", self.x_test.shape)
+        self.logger.debug(f"Train data shape in get_data: {self.x_train.shape}")
+        self.logger.debug(f"Test data shape in get_data: {self.x_test.shape}")
         return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
     def get_weights(self):
@@ -167,7 +166,7 @@ class WinniioDataHandler():
                                     epochs=1,
                                  verbose=1)
 
-        # print(f'History is {history.history}')
+        self.logger.debug(f'History is {history.history}')
         return self.get_weights()
 
     def batch_generator(self, x_train, y_train, batch_size):
@@ -211,7 +210,7 @@ class WinniioDataHandler():
     def direct_inference(self, data):
         data = data.reshape(-1, 1, 6)
         predictions = self.fl_model.predict_on_batch(data)
-        print(f"[Inference] Step 5: Edge inference complete")
+        self.logger.info(f"[Inference] Step 5: Edge inference complete")
         return predictions.reshape(-1)
 
     def run_inference(self):
@@ -241,16 +240,16 @@ class WinniioDataHandler():
                 break
 
         mae = mean_absolute_error(y_test_labels, predictions)
-        # print("Mean Absolute Error (MAE):", mae)
+        self.logger.debug("Mean Absolute Error (MAE):", mae)
         mse = mean_squared_error(y_test_labels, predictions)
-        # print("Mean Squared Error (MSE):", mse)
+        self.logger.debug("Mean Squared Error (MSE):", mse)
         rmse = np.sqrt(mse)
-        # print("Root Mean Squared Error (RMSE):", rmse)
+        self.logger.debug("Root Mean Squared Error (RMSE):", rmse)
         r2 = r2_score(y_test_labels, predictions)
-        # print("R² Score:", r2)
+        self.logger.debug("R² Score:", r2)
         reg_accuracy = self.regression_accuracy(y_test_labels, predictions, threshold=0.1)
-        # print("Regression Accuracy (within 10%):", reg_accuracy)
-        print(f"[Inference] Step 5: Edge inference complete")
+        self.logger.debug("Regression Accuracy (within 10%):", reg_accuracy)
+        self.logger.info(f"[Inference] Step 5: Edge inference complete")
         return {"results": str(res), "mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
         # return acc
 
