@@ -15,7 +15,8 @@ def configure_logging(file_type="app"):
 
     # Create handlers
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    log_directory = f"./../../logs/{current_time}"
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+    log_directory = os.path.join(project_root, "logs", current_time)
     os.makedirs(log_directory, exist_ok=True) # dynamically created
 
     # Configure console level based on debugger setting

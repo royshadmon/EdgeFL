@@ -248,7 +248,7 @@ class WinniioDataHandler():
         r2 = r2_score(y_test_labels, predictions)
         self.logger.debug("R² Score:", r2)
         reg_accuracy = self.regression_accuracy(y_test_labels, predictions, threshold=0.1)
-        self.logger.debug("Regression Accuracy (within 10%):", reg_accuracy)
+        self.logger.debug(f"Regression Accuracy (within 10%): {reg_accuracy}")
         self.logger.info(f"[Inference] Step 5: Edge inference complete")
         return {"results": str(res), "mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
         # return acc
