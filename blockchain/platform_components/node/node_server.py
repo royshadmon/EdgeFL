@@ -132,14 +132,12 @@ def init_node(request: InitNodeRequest):
             detail=str(e)
         )
 
-
 '''
 /receive_data [POST] (data)
     - Endpoint to receive data block from the simulated data stream
 '''
 class ReceiveDataRequest(BaseModel):
     data: list
-
 
 # @app.route('/receive_data', methods=['POST'])
 @app.post('/receive_data')
@@ -159,7 +157,6 @@ def receive_data(request: ReceiveDataRequest):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="No Data Provided"
     )
-
 
 def listen_for_start_round(nodeInstance, stop_event):
     logger.debug(f"listening for start round {nodeInstance.currentRound}")
@@ -198,11 +195,9 @@ def listen_for_start_round(nodeInstance, stop_event):
                 #     logger.error(f"No data found for round r{nodeInstance.currentRound}")
 
             time.sleep(5)  # Poll every 2 seconds
-
         except Exception as e:
             logger.error(f"Error in listener thread: {str(e)}")
             time.sleep(2)
-
 
 # @app.route('/inference', methods=['POST'])
 @app.post('/inference')
@@ -211,7 +206,6 @@ def inference():
     try:
         # data = request.json
         # test_data = data.get('data', {})
-
 
         # test data should be in the form of np.array
         # test_data[0] = x_test, test_data[1] = y_test
@@ -252,7 +246,6 @@ def direct_inference(request: InferenceRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
 
 if __name__ == '__main__':
     uvicorn.run(

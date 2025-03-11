@@ -9,7 +9,6 @@ import logging
 import os
 
 import numpy as np
-import torch
 from tensorflow.python import keras
 from keras import layers, optimizers, models
 from sklearn.metrics import accuracy_score
@@ -21,8 +20,9 @@ from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 
 
 class MnistDataHandler():
-    def __init__(self, node_name, port=None):
-        configure_logging(f"node_server_{port}")
+    def __init__(self, node_name):
+        # configure_logging(f"node_server_{port}")
+        configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
@@ -44,7 +44,7 @@ class MnistDataHandler():
 
             # pre-process the datasets
             self.preprocess()
-            print(self.x_test)
+            self.logger.debug(self.x_test)
             
     def model_def(self):
         # Model for MNIST classification
@@ -105,7 +105,7 @@ class MnistDataHandler():
         self.y_test = self.y_test.astype("int64")
 
     def run_inference(self):
-        x_test_images, y_test_labels = self._get_all_test_data(self.node_name)
+        x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
 
         # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
         # y_pred = np.array([])
@@ -125,7 +125,7 @@ class MnistDataHandler():
         return acc
 
     def train(self, round_number):
-        (x_train, y_train), (x_test, y_test) = self._load_dataset(
+        (x_train, y_train), (x_test, y_test) = self.load_dataset(
             node_name=self.node_name, round_number=round_number)
 
         early_stopping = keras.callbacks.EarlyStopping(
@@ -155,8 +155,7 @@ class MnistDataHandler():
         aggregated_params = FedAvg_aggregate(weights)
         return aggregated_params
 
-    # PRIVATE METHODS
-    def _get_all_test_data(self, node_name):
+    def get_all_test_data(self, node_name):
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
@@ -189,7 +188,15 @@ class MnistDataHandler():
 
             return x_test_images_final, y_test_labels_final
 
-    def _load_dataset(self, node_name, round_number):
+    # SAMPLE SQL Edgelake Commands:
+    # FORMAT:
+    # sql [dbms name] [query options] [sql command or select statement]
+    # [dbms name] is the logical DBMS containing the data.
+    # [query option] are formatting instructions and output directions (and are detailed below).
+    # [SQL command] a SQL command including a SQL query.
+    # EXAMPLE
+    # sql lsl_demo "drop table lsl_demo"
+    def load_dataset(self, node_name, round_number):
 
         """
         Loads the training and testing datasets by running SQL queries to fetch data.
@@ -248,12 +255,3 @@ class MnistDataHandler():
             raise IOError(f"Error fetching datasets: {str(e)}")
 
         return (x_train_images_final, y_train_label_final), (x_test_images_final, y_test_label_final)
-
-        # SAMPLE SQL Edglake Commands:
-        # FORMAT:
-        # sql [dbms name] [query options] [sql command or select statement]
-        # [dbms name] is the logical DBMS containing the data.
-        # [query option] are formatting instructions and output directions (and are detailed below).
-        # [SQL command] a SQL command including a SQL query.
-        # EXAMPLE
-        # sql lsl_demo "drop table lsl_demo"

@@ -4,14 +4,13 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
 
-
-import ast
+# import ast
 import os
 import logging
 
 import numpy as np
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+# import pandas as pd
+# from sklearn.preprocessing import MinMaxScaler
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from keras import layers, optimizers, models
@@ -28,7 +27,7 @@ from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
 class WinniioDataHandler():
-    def __init__(self, node_name, port=None):
+    def __init__(self, node_name):
         """
         Initialize.
 
@@ -37,7 +36,8 @@ class WinniioDataHandler():
             batch_size (int): The batch size for the data loader
             **kwargs: Additional arguments, passed to super init and load_mnist_shard
         """
-        configure_logging(f"node_server_{port}")
+        # configure_logging(f"node_server_{port}")
+        configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
@@ -49,9 +49,9 @@ class WinniioDataHandler():
         self.preprocessor = None
         self.testing_generator = None
         self.training_generator = None
-        # print("BEFORE LOAD DATASET")
+        # self.logger.debug("BEFORE LOAD DATASET")
         # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-        # print("AFTER LOAD DATASET")
+        # self.logger.debug("AFTER LOAD DATASET")
         self.node_name = node_name
         if self.node_name != 'aggregator':
             self.fl_model = self.model_def()
@@ -128,9 +128,9 @@ class WinniioDataHandler():
             x_train_images_final = np.array(x_train_images, dtype=np.float32)
             x_test_images_final = np.array(x_test_images, dtype=np.float32)
 
-            self.logger.debug(f"Train data shape after loading and reshaping: {x_train_images_final.shape}")
-
             y_test_label_final = np.array(y_test_labels, dtype=np.float32)
+
+            self.logger.debug(f"Train data shape after loading and reshaping: {x_train_images_final.shape}")
             self.logger.debug(f"Test data shape after loading: {x_test_images_final.shape}")
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
@@ -257,13 +257,13 @@ class WinniioDataHandler():
                 break
 
         mae = mean_absolute_error(y_test_labels, predictions)
-        self.logger.debug("Mean Absolute Error (MAE):", mae)
+        self.logger.debug(f"Mean Absolute Error (MAE):{mae}")
         mse = mean_squared_error(y_test_labels, predictions)
-        self.logger.debug("Mean Squared Error (MSE):", mse)
+        self.logger.debug(f"Mean Squared Error (MSE): {mse}")
         rmse = np.sqrt(mse)
-        self.logger.debug("Root Mean Squared Error (RMSE):", rmse)
+        self.logger.debug(f"Root Mean Squared Error (RMSE): {rmse}")
         r2 = r2_score(y_test_labels, predictions)
-        self.logger.debug("R² Score:", r2)
+        self.logger.debug(f"R² Score: {r2}")
         reg_accuracy = self.regression_accuracy(y_test_labels, predictions, threshold=0.1)
         self.logger.debug(f"Regression Accuracy (within 10%): {reg_accuracy}")
         self.logger.info(f"[Inference] Step 5: Edge inference complete")

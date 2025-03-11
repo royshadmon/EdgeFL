@@ -9,10 +9,9 @@ import os
 import pickle
 from asyncio import sleep
 
-import keras
+# import keras
 import numpy as np
-from keras import layers, optimizers, models
-
+# from keras import layers, optimizers, models
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
@@ -30,9 +29,9 @@ class Node:
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
         self.node_port = port
+
         configure_logging(f"node_server_{port}")
         self.logger = logging.getLogger(__name__)
-
         self.logger.debug("Node initializing")
 
         self.database_url = os.getenv("DATABASE_URL")
@@ -60,14 +59,12 @@ class Node:
         self.data_batches = []
         self.currentRound = 1
 
-
     '''
     add_data_batch(data)
         - Adds passed in data to local storage
         - Used for simulating data stream
         - Assumes data is in correct format for model / datahandler
     '''
-
     def add_data_batch(self, data):
         self.data_batches.append(data)
 
@@ -75,12 +72,9 @@ class Node:
     add_node_params()
         - Returns current node nodel parameters to blockchain via event listener
     '''
-
     def add_node_params(self, round_number, model_metadata):
         self.logger.debug("in add_node_params")
-
         try:
-
             data = f'''<my_policy = {{"a{round_number}" : {{
                                 "node" : "{self.replicaName}",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
@@ -98,17 +92,14 @@ class Node:
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
 
-
             self.logger.debug(f"Submitting results for round {round_number}")
             # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             # TODO: add error check here
-
 
             return {
                 'status': 'success',
                 'message': 'node model parameters added successfully'
             }
-
         except Exception as e:
             return {
                 'status': 'error',
@@ -120,7 +111,6 @@ class Node:
         - Uses updated aggreagtor model params and updates local model
         - Gets local data and runs training on updated model
     '''
-
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
         self.logger.debug(f"in train_model_params for round {round_number}")
 
@@ -180,8 +170,6 @@ class Node:
             copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name
-
-
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)

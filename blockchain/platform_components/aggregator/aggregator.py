@@ -19,7 +19,6 @@ from platform_components.EdgeLake_functions.blockchain_EL_functions import inser
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
-from platform_components.lib.modules.aggregator_models.fed_avg_aggregation_model import FedAvgAggregationModel
 
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
@@ -43,12 +42,8 @@ class Aggregator:
         TrainingApp_class = load_class_from_file(training_app_path, module_name)
         self.training_app = TrainingApp_class('aggregator')  # Create an instance
 
-
-
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
-
-
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
@@ -59,19 +54,12 @@ class Aggregator:
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
-            # Correctly instantiate the Fusion model here (using IterAvg as place holder for now)
+        # Correctly instantiate the Fusion model here (using IterAvg as placeholder for now)
         # Define or obtain hyperparameters and protocol handler for the fusion model
         hyperparams = {}  # Replace with actual hyperparameters as required
         # protocol_handler = None  # Replace with an appropriate protocol handler instance or object
 
-
-        # Correctly instantiate the Fusion model with required arguments
-        self.aggregation_model = FedAvgAggregationModel(hyperparams)
-
-        # self.__aggregate_model_updates = dict()
-
     def get_contract_address(self):
-
         headers = {
             'User-Agent': 'AnyLog/1.23',
             'Content-Type': 'text/plain',
@@ -89,7 +77,6 @@ class Aggregator:
     # function to call the start round function from the smart contract
     def start_round(self, initParamsLink, roundNumber):
         try:
-
             # headers = {
             #     'User-Agent': 'AnyLog/1.23',
             #     'Content-Type': 'text/plain',
@@ -127,7 +114,6 @@ class Aggregator:
                     'status': 'error',
                     'message': f'Request failed with status code: {response.status_code}'
                 }
-
         except Exception as e:
             return {
                 'status': 'error',
@@ -143,13 +129,11 @@ class Aggregator:
         # Loop through each provided download link to retrieve node parameter objects
         for i, path in enumerate(node_param_download_links):
             try:
-
                 # make sure directory exists
                 filename = path.split('/')[-1]
                 os.makedirs(os.path.dirname(
                     f"{self.file_write_destination}/aggregator/"),
                             exist_ok=True)
-
 
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, path,
@@ -161,7 +145,6 @@ class Aggregator:
                     response = read_file(self.edgelake_node_url, path,
                                      f'{self.file_write_destination}/aggregator/{filename}', ip_ports[i])
 
-
                 if response.status_code == 200:
                     sleep(1)
                     with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
@@ -170,7 +153,6 @@ class Aggregator:
                     if not data:
                         raise ValueError(f"Missing model_weights in data from file: {filename}")
                     # decoded_params.append(data)
-
 
                     # decoded_params.append({'weights': pickle.dumps(data)})
                     decoded_params.append(LocalModelUpdate(weights=data))
