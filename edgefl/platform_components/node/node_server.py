@@ -160,7 +160,7 @@ def listen_for_start_round(nodeInstance, stop_event):
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'edgefl get r{nodeInstance.currentRound}'
+                'command': f'blockchain get r{nodeInstance.currentRound}'
             }
             response = requests.get(edgelake_node_url, headers=headers)
 

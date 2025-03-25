@@ -96,7 +96,7 @@ def copy_file_from_container(container_name, src_path, dest_path):
 
     with tarfile.open("/tmp/temp.tar", mode="r") as tar:
         # Extract the file to the desired host location
-        tar.extractall(path=os.path.dirname(dest_path))
+        tar.extractall(path=os.path.dirname(dest_path), filter='fully_trusted')
         extracted_file = os.path.join(os.path.dirname(dest_path), os.path.basename(src_path))
         os.rename(extracted_file, dest_path)
 

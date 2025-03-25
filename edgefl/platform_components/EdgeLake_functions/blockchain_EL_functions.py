@@ -15,7 +15,7 @@ def insert_policy(el_url, policy):
     headers = {
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'text/plain',
-        'command': 'edgefl insert where policy = !my_policy and local = true and edgefl = master'
+        'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = master'
     }
 
     response = requests.post(el_url, headers=headers, data=policy)
@@ -25,7 +25,7 @@ def delete_policy(el_url, policy_id):
     headers = {
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'text/plain',
-        'command': f'edgefl delete policy where id = {policy_id} and local = true and edgefl = master'
+        'command': f'blockchain delete policy where id = {policy_id} and local = true and blockchain = master'
     }
 
     response = requests.post(el_url, headers=headers, data=None)
@@ -41,7 +41,7 @@ def check_policy_inserted(el_url, policy):
         headers = {
             'User-Agent': 'AnyLog/1.23',
             'Content-Type': 'text/plain',
-            'command': 'edgefl prepare policy !my_policy'
+            'command': 'blockchain prepare policy !my_policy'
         }
 
         response = requests.post(el_url, headers=headers, data=policy)

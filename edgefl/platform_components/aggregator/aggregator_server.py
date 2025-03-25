@@ -154,7 +154,7 @@ async def init_training(request: TrainingRequest):
 
         
 async def listen_for_update_agg(min_params, roundNumber):
-    """Asynchronously poll for aggregated parameters from the edgefl."""
+    """Asynchronously poll for aggregated parameters from the blockchain."""
     logger.info("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
@@ -163,7 +163,7 @@ async def listen_for_update_agg(min_params, roundNumber):
             # Check parameter count
             count_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"edgefl get a{roundNumber} count"
+                "command": f"blockchain get a{roundNumber} count"
             })
 
             if count_response.status_code == 200:
@@ -174,7 +174,7 @@ async def listen_for_update_agg(min_params, roundNumber):
                 if count >= min_params:
                     params_response = requests.get(url, headers={
                         'User-Agent': 'AnyLog/1.23',
-                        "command": f"edgefl get a{roundNumber}"
+                        "command": f"blockchain get a{roundNumber}"
                     })
 
                     if params_response.status_code == 200:
