@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Kill existing Python processes for the blockchain servers
+# Kill existing Python processes for the edgefl servers
 echo "Stopping existing servers..."
 pkill -f "python node_server.py"
 pkill -f "python aggregator_server.py"

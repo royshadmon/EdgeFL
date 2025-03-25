@@ -24,7 +24,7 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, model_def, replica_name, ip, port):
+    def __init__(self, replica_name, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
@@ -70,7 +70,7 @@ class Node:
 
     '''
     add_node_params()
-        - Returns current node nodel parameters to blockchain via event listener
+        - Returns current node nodel parameters to edgefl via event listener
     '''
     def add_node_params(self, round_number, model_metadata):
         self.logger.debug("in add_node_params")

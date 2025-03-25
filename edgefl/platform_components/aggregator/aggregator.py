@@ -80,7 +80,7 @@ class Aggregator:
             # headers = {
             #     'User-Agent': 'AnyLog/1.23',
             #     'Content-Type': 'text/plain',
-            #     'command': 'blockchain insert where policy = !my_policy and local = true and blockchain = optimism'
+            #     'command': 'edgefl insert where policy = !my_policy and local = true and edgefl = optimism'
             # }
 
             # Format data exactly like the example curl command but with your values

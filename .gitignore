@@ -1,5 +1,6 @@
+__pycache__/
 .DS_Store
-blockchain/env_files/
-blockchain/file_write/
+edgefl/env_files/
+edgefl/file_write/
 .idea/
-blockchain/logs/
+edgefl/logs/

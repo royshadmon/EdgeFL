@@ -48,15 +48,13 @@ curl -X POST http://localhost:8080/init \
   "nodeUrls": [
     "http://localhost:8081", 
     "http://localhost:8082"
-  ],
-  "model_def": 1
+  ]  
 }'
 '''
 
 #######  FASTAPI IMPLEMENTATION  #######
 
 class InitRequest(BaseModel):
-    model_def: int
     nodeUrls: list[str]
 
 class TrainingRequest(BaseModel):
@@ -70,8 +68,8 @@ def deploy_contract(request: InitRequest):
     """Deploy the smart contract with predefined nodes."""
     try:
         # Initialize the nodes and send the contract address
-        initialize_nodes(request.model_def, request.nodeUrls)
-        logger.info(f"Initialized nodes with model definition: {request.model_def}")
+        initialize_nodes(request.nodeUrls)
+        logger.info(f"Initialized nodes: {request.nodeUrls}")
         return {
             "status": "success"
         }
@@ -81,7 +79,7 @@ def deploy_contract(request: InitRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-def initialize_nodes(model_def: int , node_urls: list[str]):
+def initialize_nodes(node_urls: list[str]):
     """Send the deployed contract address to multiple node servers."""
     for urlCount in range(len(node_urls)):
         try:
@@ -90,7 +88,6 @@ def initialize_nodes(model_def: int , node_urls: list[str]):
 
             response = requests.post(f'{url}/init-node', json={
                 'replica_name': f"node{urlCount+1}",
-                'model_def': model_def
             })
 
             if response.status_code == 200:
@@ -157,7 +154,7 @@ async def init_training(request: TrainingRequest):
 
         
 async def listen_for_update_agg(min_params, roundNumber):
-    """Asynchronously poll for aggregated parameters from the blockchain."""
+    """Asynchronously poll for aggregated parameters from the edgefl."""
     logger.info("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
@@ -166,7 +163,7 @@ async def listen_for_update_agg(min_params, roundNumber):
             # Check parameter count
             count_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"blockchain get a{roundNumber} count"
+                "command": f"edgefl get a{roundNumber} count"
             })
 
             if count_response.status_code == 200:
@@ -177,7 +174,7 @@ async def listen_for_update_agg(min_params, roundNumber):
                 if count >= min_params:
                     params_response = requests.get(url, headers={
                         'User-Agent': 'AnyLog/1.23',
-                        "command": f"blockchain get a{roundNumber}"
+                        "command": f"edgefl get a{roundNumber}"
                     })
 
                     if params_response.status_code == 200:

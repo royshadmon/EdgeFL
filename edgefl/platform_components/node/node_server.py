@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from platform_components.lib.logger.logger_config import configure_logging
 
 '''
-TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number>"
+TO START NODE YOU CAN USE "python3 edgefl/node_server.py --port <port number>"
 '''
 
 warnings.filterwarnings("ignore")
@@ -72,8 +72,7 @@ SAMPLE CURL COMING FROM COMMAND LINE FOR TESTING:
 curl -X POST http://localhost:8081/init-node \
 -H "Content-Type: application/json" \
 -d '{
-  "replica_name": "node1",
-  "model_def": 1
+  "replica_name": "node1"
 }'
 '''
 
@@ -81,7 +80,6 @@ edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
 class InitNodeRequest(BaseModel):
     replica_name: str
-    model_def: int
 
 # @app.route('/init-node', methods=['POST'])
 @app.post('/init-node')
@@ -91,16 +89,10 @@ def init_node(request: InitNodeRequest):
     try:
         ip = get_local_ip()
         port = args.port
-        model_def = request.model_def
         replica_name = request.replica_name
 
         # logger.debug(f"Replica name " + replica_name)
 
-        if not model_def:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No Config Provided"
-            )
         if listener_thread and listener_thread.is_alive():
             stop_listening_thread = True
             listener_thread.join(timeout=1)
@@ -109,7 +101,7 @@ def init_node(request: InitNodeRequest):
         stop_listening_thread = False
 
         # Instantiate the Node class
-        node_instance = Node(model_def, replica_name, ip, port)
+        node_instance = Node(replica_name, ip, port)
         node_instance.currentRound = 1
 
         logger.info(f"{replica_name} successfully initialized")
@@ -168,7 +160,7 @@ def listen_for_start_round(nodeInstance, stop_event):
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'blockchain get r{nodeInstance.currentRound}'
+                'command': f'edgefl get r{nodeInstance.currentRound}'
             }
             response = requests.get(edgelake_node_url, headers=headers)
 
