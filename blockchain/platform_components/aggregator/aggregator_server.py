@@ -27,21 +27,7 @@ PRIVATE_KEY =  os.getenv("PRIVATE_KEY")
 # Initialize the Aggregator instance
 ip = get_local_ip()
 port = app.config.get("SERVER_PORT", "8080")
-aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY, ip, port)
-
-'''
-CURL REQUEST FOR DEPLOYING CONTRACT
-
-curl -X POST http://localhost:8080/init \
--H "Content-Type: application/json" \
--d '{
-  "nodeUrls": [
-    "http://localhost:8081", 
-    "http://localhost:8082"
-  ],
-  "model_def": 1
-}'
-'''
+aggregator = Aggregator(PROVIDER_URL, ip, port)
 
 
 @app.route('/init', methods=['POST'])

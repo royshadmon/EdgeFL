@@ -10,21 +10,19 @@ import os
 
 import numpy as np
 
-from ibmfl.data.data_handler import DataHandler
+from tensorflow.python import keras
+from keras import layers, optimizers, models
 
-from ibmfl.model.model_update import ModelUpdate
-from ibmfl.model.pytorch_fl_model import PytorchFLModel
+from platform_components.helpers.ModelUpdate import ModelUpdate
 from sklearn.metrics import accuracy_score
-
+from platform_components.model_fusion_algorithms.proximal_agreement_fusion import PBA_aggregate
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
-from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
-import torch
 
 logger = logging.getLogger(__name__)
 
 
 
-class CustomMnistPytorchDataHandler(DataHandler):
+class CustomMnistPytorchDataHandler():
     def __init__(self, node_name):
         super().__init__()
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -40,18 +38,28 @@ class CustomMnistPytorchDataHandler(DataHandler):
             print(self.x_test)
 
     def model_def(self):
-        # model_path = os.path.join("/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain", "configs", "node",
-        #                           "pytorch", "pytorch_sequence.pt")
-        model_path = os.path.join(os.getenv('GITHUB_DIR'), "blockchain/configs/node/pytorch/pytorch_sequence.pt")
-        model_spec = {
-            "loss_criterion": "nn.NLLLoss",
-            "model_definition": model_path,
-            "model_name": "pytorch-nn",
-            "optimizer": "optim.Adadelta"
-        }
 
-        fl_model = PytorchFLModel(model_name="pytorch-nn", model_spec=model_spec)
-        return fl_model
+        model = models.Sequential([
+            layers.Input(shape=(28, 28, 1)),  # Explicitly define input shape here
+            layers.Conv2D(32, kernel_size=(3, 3), activation="relu"),  # No input_shape here
+            layers.MaxPooling2D(pool_size=(2, 2)),
+            layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
+            layers.MaxPooling2D(pool_size=(2, 2)),
+            layers.Flatten(),
+            layers.Dense(128, activation="relu"),
+            layers.Dense(10, activation="softmax")
+        ])
+
+        # Compile the model
+        model.compile(
+            loss="sparse_categorical_crossentropy",
+            optimizer=optimizers.Adam(learning_rate=0.001),
+            metrics=["accuracy"]
+        )
+
+        return model
+
+        # fl_model = FLMnistModel()
 
     def get_data(self):
         """
@@ -112,9 +120,9 @@ class CustomMnistPytorchDataHandler(DataHandler):
                 y_test_labels.append(y_test_label)
 
             img_rows, img_cols = 28, 28
-            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
-            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
-            
+            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+
             print("Train data shape after loading and reshaping:", x_train_images_final.shape)
 
             y_test_label_final = np.array(y_test_labels, dtype=np.int64)
@@ -123,7 +131,7 @@ class CustomMnistPytorchDataHandler(DataHandler):
         except Exception as e:
             raise IOError(f"Error fetching datasets: {str(e)}")
 
-        return (x_train_images_final,  y_train_label_final), (x_test_images_final, y_test_label_final)
+        return (x_train_images_final, y_train_label_final), (x_test_images_final, y_test_label_final)
 
         # SAMPLE SQL Edglake Commands:
         # FORMAT:
@@ -143,13 +151,13 @@ class CustomMnistPytorchDataHandler(DataHandler):
         print("Test data shape before preprocessing:", self.x_test.shape)
         img_rows, img_cols = 28, 28
         print("Train data shape before preprocessing:", self.x_train.shape)
-        
+
         # Force reshape to 4D format [batch_size, channels, height, width]
         self.x_train = self.x_train.reshape(-1, 1, img_rows, img_cols)
         self.x_test = self.x_test.reshape(-1, 1, img_rows, img_cols)
-        
+
         print("Train data shape after preprocessing:", self.x_train.shape)
-        
+
         # Convert labels to correct type
         self.y_train = self.y_train.astype("int64")
         self.y_test = self.y_test.astype("int64")
@@ -158,55 +166,70 @@ class CustomMnistPytorchDataHandler(DataHandler):
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
-        batch_amount = 50 # TODO: make this parameterized
         db_name = os.getenv("PSQL_DB_NAME")
+        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 100"
 
-        # Get number of rows
-        row_count_query = f"sql {db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
-        row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
-        num_rows = row_count["Query"][0].get('count(*)')
-        # fetch in offsets of 50
-        for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50 OFFSET {offset}"
-            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
-            # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-            query_test_result = np.array(test_data["Query"])
-            x_test_images = []
-            y_test_labels = []
-            for i in range(len(query_test_result)):
-                x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
-                y_test_label = query_test_result[i]['label']
-                x_test_images.append(x_test_image_np_array)
-                y_test_labels.append(y_test_label)
+        # Assuming the data is returned as dictionaries with keys 'x' and 'y'
+        query_test_result = np.array(test_data["Query"])
+        x_test_images = []
+        y_test_labels = []
+        for i in range(len(query_test_result)):
+            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+            y_test_label = query_test_result[i]['label']
+            x_test_images.append(x_test_image_np_array)
+            y_test_labels.append(y_test_label)
 
-            y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
+        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
 
-            img_rows, img_cols = 28, 28
-            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, 1, img_rows, img_cols)
+        img_rows, img_cols = 28, 28
+        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
 
-            return x_test_images_final, y_test_labels_final
+        return x_test_images_final, y_test_labels_final
 
     def train(self, round_number):
+        # (x_train, y_train), (x_test, y_test) = self.load_dataset(
+        #     node_name=self.node_name, round_number=round_number)
+        #
+        #
+        # self.fl_model.fit_model(train_data=(x_train,y_train))
+        # # self.fl_model.fit_model(train_data=(np.array(x_train,dtype=np.float32), np.array(y_train,dtype=np.int64)))
+        # # self.fl_model.fit_model(train_data=(torch.tensor(x_train, dtype=torch.float64), torch.tensor(y_train, dtype=torch.float64)))
+        # return self.get_weights()
+
         (x_train, y_train), (x_test, y_test) = self.load_dataset(
             node_name=self.node_name, round_number=round_number)
 
+        early_stopping = keras.callbacks.EarlyStopping(
+            monitor='loss',
+            # patience=2,
+            restore_best_weights=True,
+            mode='min'
+        )
 
-        self.fl_model.fit_model(train_data=(x_train,y_train))
-        # self.fl_model.fit_model(train_data=(np.array(x_train,dtype=np.float32), np.array(y_train,dtype=np.int64)))
-        # self.fl_model.fit_model(train_data=(torch.tensor(x_train, dtype=torch.float64), torch.tensor(y_train, dtype=torch.float64)))
+        self.fl_model.fit(
+            x_train,
+            y_train,
+            batch_size=128,  # can also be 32
+            epochs=1,
+            verbose=1,
+            callbacks=[early_stopping]
+        )
+
         return self.get_weights()
 
     def update_model(self, weights):
-        if not isinstance(weights, ModelUpdate):
-            model_update = ModelUpdate(weights=weights)
-        else:
-            model_update = ModelUpdate(weights=np.array(weights.get("weights")))
-        self.fl_model.update_model(model_update)
+        if isinstance(weights, ModelUpdate):
+            weights = weights.get("weights")
+        self.fl_model.set_weights(weights)
 
 
     def aggregate_model_weights(self, weights):
-        aggregated_params = FedAvg_aggregate(weights)
+        # aggregated_params = FedAvg_aggregate(weights)
+
+        aggregated_params = PBA_aggregate(weights)
+
         return aggregated_params
 
 
@@ -214,31 +237,35 @@ class CustomMnistPytorchDataHandler(DataHandler):
         return self.fl_model.get_model_update()
 
     def get_weights(self):
-        return self.fl_model.get_weights(to_numpy=True)
+        return self.fl_model.get_weights()
 
     def run_inference(self):
+        # x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
+        #
+        # y_pred = np.array([])
+        # sample_count = x_test_images.shape[0]  # number of test samples
+        #
+        # for i_samples in range(sample_count):
+        #     # Get prediction for a single test sample
+        #     pred = self.fl_model.predict(
+        #         torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
+        #     )
+        #
+        #     # Append the predicted class (argmax) to y_pred
+        #     y_pred = np.append(y_pred, pred.argmax())
+        #
+        # acc = accuracy_score(y_test_labels, y_pred) * 100
+        #
+        # return acc
+
+
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
 
-        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
-        # y_pred = np.array([])
-        # for i_samples in range(sample_count):
-        #     pred = party.fl_model.predict(
-        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
-        #     y_pred = np.append(y_pred, pred.argmax())
-        # acc = accuracy_score(y_true, y_pred) * 100
+        # Get predictions
+        predictions = self.fl_model.predict(x_test_images)
+        y_pred = np.argmax(predictions, axis=1)
 
-        y_pred = np.array([])
-        sample_count = x_test_images.shape[0]  # number of test samples
-
-        for i_samples in range(sample_count):
-            # Get prediction for a single test sample
-            pred = self.fl_model.predict(
-                torch.unsqueeze(torch.from_numpy(x_test_images[i_samples]), 0)
-            )
-
-            # Append the predicted class (argmax) to y_pred
-            y_pred = np.append(y_pred, pred.argmax())
-
+        # Calculate accuracy
         acc = accuracy_score(y_test_labels, y_pred) * 100
 
         return acc

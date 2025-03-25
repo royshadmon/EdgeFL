@@ -26,11 +26,6 @@ TO START NODE YOU CAN USE "python3 blockchain/node_server.py --port <port number
 warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
-# load_dotenv()
-
-# Configuration
-PROVIDER_URL = os.getenv('PROVIDER_URL')
-PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 
 # Initialize the Node instance 
 node_instance = None

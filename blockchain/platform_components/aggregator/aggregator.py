@@ -3,33 +3,33 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-
+import asyncio
 import os
-from asyncio import sleep
+# from asyncio import sleep
 import ast
+from time import sleep
 
 import numpy as np
 import requests
 import pickle
-from dotenv import load_dotenv
 
-from ibmfl.aggregator.fusion.iter_avg_fusion_handler import IterAvgFusionHandler
-from ibmfl.model.model_update import ModelUpdate
-
+from platform_components.helpers.ModelUpdate import ModelUpdate
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, \
     check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
+from dotenv import load_dotenv
 
-CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
 
-load_dotenv()
+
+load_dotenv("edgefl/env_files/mnist1.env")
+
 
 
 class Aggregator:
-    def __init__(self, provider_url, private_key, ip, port):
+    def __init__(self, provider_url, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.server_ip = ip
@@ -64,9 +64,6 @@ class Aggregator:
         hyperparams = {}  # Replace with actual hyperparameters as required
         protocol_handler = None  # Replace with an appropriate protocol handler instance or object
 
-
-        # Correctly instantiate the Fusion model with required arguments
-        self.fusion_model = IterAvgFusionHandler(hyperparams, protocol_handler, data_handler=None)
 
     def get_contract_address(self):
 
@@ -108,6 +105,7 @@ class Aggregator:
                     success = True
                 else:
                     sleep(np.random.randint(5,15))
+
 
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
@@ -162,13 +160,16 @@ class Aggregator:
 
                 if response.status_code == 200:
                     sleep(1)
-                    with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
-                        data = pickle.load(f)
+                    try:
+                        with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
+                            data = pickle.load(f)
 
-                    if not data:
-                        raise ValueError(f"Missing model_weights in data from file: {filename}")
-                    # decoded_params.append(data)
-                    decoded_params.append(ModelUpdate(weights=data))
+                        if not data:
+                            raise ValueError(f"Missing model_weights in data from file: {filename}")
+                        # decoded_params.append(data)
+                        decoded_params.append(ModelUpdate(weights=data))
+                    except Exception as e:
+                        continue
                     # decoded_params.append(ModelUpdate(weights=data[0].detach().numpy()))
                 else:
                     raise ValueError(

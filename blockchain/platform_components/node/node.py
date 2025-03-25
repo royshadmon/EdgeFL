@@ -6,7 +6,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import os
 import pickle
-from asyncio import sleep
+from time import sleep
 import numpy as np
 
 
@@ -127,14 +127,17 @@ class Node:
             try:
                 # Extract the key from the URL
 
-
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-                    copy_file_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}',
+                                         ip_ports)
+                    copy_file_from_container(self.docker_container_name,
+                                             f'{self.docker_file_write_destination}/{self.replicaName}/{filename}',
+                                             f'{self.file_write_destination}/{self.replicaName}/{filename}')
                 else:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
+                                         f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
 
                 # response = requests.get(link)
                 if response.status_code == 200:
@@ -143,7 +146,6 @@ class Node:
                             f'{self.file_write_destination}/{self.replicaName}/{filename}',
                             'rb') as f:
                         data = pickle.load(f)
-
 
                 # Ensure the data is valid and decode the parameters
                 if data and 'newUpdates' in data:
