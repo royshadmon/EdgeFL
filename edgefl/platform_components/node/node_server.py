@@ -11,84 +11,49 @@ import numpy as np
 import logging
 import threading
 import time
+from dotenv import load_dotenv
 import os
 import argparse
 import requests
 import warnings
 
-import uvicorn
+from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
 from platform_components.lib.logger.logger_config import configure_logging
 
-'''
-TO START NODE YOU CAN USE "python3 edgefl/node_server.py --port <port number>"
-'''
 
 warnings.filterwarnings("ignore")
 
-# Set up argument parser
-parser = argparse.ArgumentParser(description='Start the FastAPI server.')
-parser.add_argument('--port', type=int, default=8081, help='Port to run the FastAPI server on.')
-args = parser.parse_args()
-
 app = FastAPI()
-# load_dotenv()
+load_dotenv()
 
-configure_logging(f"node_server_{args.port}")
 logger = logging.getLogger(__name__)
-
-# Configuration
-PROVIDER_URL = os.getenv("PROVIDER_URL")
-PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 
 # Initialize the Node instance
 node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
-'''
-/set-contract-address [POST]
-    - Sets up connection with provider
-    - Gets config file and initializes node instance
-    - Starts 2 threads listening for start training and for update node
-'''
-
-'''
-SAMPLE CURL REQUEST COMING FROM AGGREGATOR SERVER:
-curl -X POST http://localhost:8081/init-node \
--H "Content-Type: application/json" \
--d '{
-  "contractAddress": "your_contract_address_here",
-  "config": {
-    "key1": "value1",
-    "key2": "value2"
-  }
-}'
-Note: when the aggregator server is calling this function, it will be with a new contract address field, but if you are 
-calling this endpoint from the terminal for testing you don't need to add it 
-SAMPLE CURL COMING FROM COMMAND LINE FOR TESTING:
-curl -X POST http://localhost:8081/init-node \
--H "Content-Type: application/json" \
--d '{
-  "replica_name": "node1"
-}'
-'''
 
 edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
 class InitNodeRequest(BaseModel):
     replica_name: str
+    replica_ip: str
+    replica_port: str
 
-# @app.route('/init-node', methods=['POST'])
+
 @app.post('/init-node')
 def init_node(request: InitNodeRequest):
     """Receive the contract address from the aggregator server."""
     global node_instance, listener_thread, stop_listening_thread
     try:
         ip = get_local_ip()
-        port = args.port
+
+        port = request.replica_port
+
         replica_name = request.replica_name
 
         # logger.debug(f"Replica name " + replica_name)
@@ -101,7 +66,9 @@ def init_node(request: InitNodeRequest):
         stop_listening_thread = False
 
         # Instantiate the Node class
+        logger.info(f"{replica_name} before initialized")
         node_instance = Node(replica_name, ip, port)
+        configure_logging(f"node_server_{port}")
         node_instance.currentRound = 1
 
         logger.info(f"{replica_name} successfully initialized")
@@ -240,7 +207,12 @@ def direct_inference(request: InferenceRequest):
         )
 
 if __name__ == '__main__':
-    uvicorn.run(
+    global port
+    parser = argparse.ArgumentParser(description="Run the Node Server.")
+    parser.add_argument('--port', type=int, default=8080, help="Port to run the server on.")
+    args = parser.parse_args()
+
+    run(
     "node_server:app",
         host="0.0.0.0",
         port=args.port,

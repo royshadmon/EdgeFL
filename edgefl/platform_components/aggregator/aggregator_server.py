@@ -36,17 +36,6 @@ ip = get_local_ip()
 port = os.getenv("SERVER_PORT", "8080")
 aggregator = Aggregator(ip, port)
 
-'''
-CURL REQUEST FOR DEPLOYING CONTRACT
-curl -X POST http://localhost:8080/init \
--H "Content-Type: application/json" \
--d '{
-  "nodeUrls": [
-    "http://localhost:8081", 
-    "http://localhost:8082"
-  ]  
-}'
-'''
 
 #######  FASTAPI IMPLEMENTATION  #######
 
@@ -60,7 +49,7 @@ class TrainingRequest(BaseModel):
 # @app.route('/init', methods=['POST'])
 
 @app.post("/init")
-def deploy_contract(request: InitRequest):
+def init(request: InitRequest):
     """Deploy the smart contract with predefined nodes."""
     try:
         # Initialize the nodes and send the contract address
@@ -77,12 +66,15 @@ def deploy_contract(request: InitRequest):
 
 def initialize_nodes(node_urls: list[str]):
     """Send the deployed contract address to multiple node servers."""
-    for urlCount in range(len(node_urls)):
+    for urlCount, url in enumerate(node_urls):
         try:
-            url = node_urls[urlCount]
+            my_url = node_urls[urlCount].split('/')[-1]
+            my_url = my_url.split(':')
             logger.info(f"Initializing model at {url}")
 
             response = requests.post(f'{url}/init-node', json={
+                'replica_ip': my_url[0],
+                'replica_port': my_url[1],
                 'replica_name': f"node{urlCount+1}",
             })
 
@@ -93,21 +85,11 @@ def initialize_nodes(node_urls: list[str]):
                     f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
 
         except Exception as e:
-            logger.critical(f"Error sending contract address: {str(e)}")
+            logger.critical(f"Error initializing node: {str(e)}")
 
 
-'''
-EXAMPLE CURL REQUEST FOR STARTING TRAINING
-curl -X POST http://localhost:8080/start-training \
--H "Content-Type: application/json" \
--d '{
-  "totalRounds": 5, 
-  "minParams": 2
-}'
-'''
 
 
-# @app.route('/start-training', methods=['POST'])
 @app.post('/start-training')
 async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
