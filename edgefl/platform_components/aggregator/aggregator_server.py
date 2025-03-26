@@ -30,6 +30,7 @@ load_dotenv()
 
 configure_logging("aggregator_server")
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 
 # Initialize the Aggregator instance
 ip = get_local_ip()

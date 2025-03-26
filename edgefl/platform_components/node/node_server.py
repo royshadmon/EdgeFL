@@ -30,6 +30,7 @@ app = FastAPI()
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 
 # Initialize the Node instance
 node_instance = None
@@ -163,11 +164,8 @@ def listen_for_start_round(nodeInstance, stop_event):
 def inference():
     """Inference on current model w/ data passed in."""
     try:
-        # data = request.json
-        # test_data = data.get('data', {})
-
-        # test data should be in the form of np.array
-        # test_data[0] = x_test, test_data[1] = y_test
+        
+        logger.info("received inference request")
         results = node_instance.inference()
         response = {
             'status': 'success',
