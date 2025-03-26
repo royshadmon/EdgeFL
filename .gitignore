@@ -1,6 +1,5 @@
 __pycache__/
 .DS_Store
-edgefl/env_files/
 edgefl/file_write/
 .idea/
 edgefl/logs/
