@@ -28,7 +28,7 @@ load_dotenv()
 
 
 class Aggregator:
-    def __init__(self, provider_url, private_key, ip, port):
+    def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.server_ip = ip
