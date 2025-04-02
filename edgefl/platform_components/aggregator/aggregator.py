@@ -137,7 +137,7 @@ class Aggregator:
 
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, path,
-                                         f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i])
+                                         f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i], self.docker_container_name)
                     copy_file_from_container(self.docker_container_name,
                                         f'{self.docker_file_write_destination}/aggregator/{filename}',
                                         f'{self.file_write_destination}/aggregator/{filename}')

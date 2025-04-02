@@ -89,9 +89,9 @@ def file_exists_in_container(container_name, file_path):
     client = docker.from_env()
     container = client.containers.get(container_name)
 
-    exec_result = container.exec_run(f"test -f {file_path} && echo EXISTS")
+    exec_result = container.exec_run(f"ls {file_path}")
 
-    return "EXISTS" in exec_result.output.decode()
+    return not "No such file or directory" in exec_result.output.decode()
 
 
 def copy_file_from_container(container_name, src_path, dest_path, max_retries=5, wait_time=1):
