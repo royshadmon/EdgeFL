@@ -21,7 +21,6 @@ from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 from tensorflow.python.client import device_lib
 
 device = "/GPU:0" if tf.config.list_physical_devices('GPU') else "/CPU:0"
-
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     print(device_lib.list_local_devices())
@@ -121,14 +120,6 @@ class MnistDataHandler():
     def run_inference(self):
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
 
-        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
-        # y_pred = np.array([])
-        # for i_samples in range(sample_count):
-        #     pred = party.fl_model.predict(
-        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
-        #     y_pred = np.append(y_pred, pred.argmax())
-        # acc = accuracy_score(y_true, y_pred) * 100
-
         # Get predictions
         with tf.device(device):
             predictions = self.fl_model.predict(x_test_images)
@@ -182,10 +173,10 @@ class MnistDataHandler():
         row_count_query = f"sql {db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
         row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
         num_rows = row_count["Query"][0].get('count(*)')
-        # TODO: Get AnyLog batch queries to work
         # fetch in offsets of 50
-        # for offset in range(0, num_rows, batch_amount):
+        # TODO: Get row offset queries to work
         for offset in range(1):
+        # for offset in range(0, num_rows, batch_amount):
             query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50"
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
