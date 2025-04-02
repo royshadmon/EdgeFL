@@ -125,7 +125,7 @@ class Node:
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports, self.docker_container_name)
                     copy_file_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
                 else:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
@@ -133,10 +133,16 @@ class Node:
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
-                    with open(
-                            f'{self.file_write_destination}/{self.replicaName}/{filename}',
-                            'rb') as f:
-                        data = pickle.load(f)
+                    # with open(
+                    #         f'{self.file_write_destination}/{self.replicaName}/{filename}',
+                    #         'rb') as f:
+                    #     data = pickle.load(f)
+                    with open(f'{self.file_write_destination}/{self.replicaName}/{filename}','rb') as f:
+                        data = bytearray()
+                        while chunk := f.read(1024):
+                            data.extend(chunk)
+                        data = pickle.loads(data)
+
 
                 # Ensure the data is valid and decode the parameters
                 if data and 'newUpdates' in data:
@@ -145,6 +151,8 @@ class Node:
                     self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
                     raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
             except Exception as e:
+                if os.path.exists(f'{self.file_write_destination}/{self.replicaName}/{filename}'):
+                    os.remove(f'{self.file_write_destination}/{self.replicaName}/{filename}')
                 self.logger.error(f"Error getting weights: {str(e)}")
                 raise
 
@@ -163,6 +171,8 @@ class Node:
         file_name = f"{self.file_write_destination}/{self.replicaName}/{file}"
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
+            f.flush()
+            os.fsync(f.fileno())
 
         self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:

@@ -164,7 +164,7 @@ def listen_for_start_round(nodeInstance, stop_event):
 def inference():
     """Inference on current model w/ data passed in."""
     try:
-        
+
         logger.info("received inference request")
         results = node_instance.inference()
         response = {

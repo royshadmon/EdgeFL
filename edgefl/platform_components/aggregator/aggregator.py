@@ -147,8 +147,14 @@ class Aggregator:
 
                 if response.status_code == 200:
                     sleep(1)
+                    # with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
+                    #     data = pickle.load(f)
+
                     with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
-                        data = pickle.load(f)
+                        data = bytearray()
+                        while chunk := f.read(1024):
+                            data.extend(chunk)
+                        data = pickle.loads(data)
 
                     if not data:
                         raise ValueError(f"Missing model_weights in data from file: {filename}")
@@ -161,14 +167,10 @@ class Aggregator:
                     raise ValueError(
                         f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
             except Exception as e:
+                if os.path.exists(f'{self.file_write_destination}/aggregator/{filename}'):
+                    os.remove(f'{self.file_write_destination}/aggregator/{filename}')
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
 
-        # do aggregation function here (doesn't return anything)
-        # self.fusion_model.update_weights(decoded_params)
-        # aggregate_params_weights2 = self.fusion_model.current_model_weights
-        #
-        # # aggregate_params_weights = FedMax_aggregate(decoded_params)
-        # aggregate_params_weights = PBA_aggregate(decoded_params)
 
         aggregate_params_weights = self.training_app.aggregate_model_weights(decoded_params)
 
@@ -183,9 +185,13 @@ class Aggregator:
             'newUpdates': encoded_params
         }
 
+
         # push agg data
         with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
+            f.flush()  # Ensure data is written to buffer
+            os.fsync(f.fileno())  # Ensure data is written to disk
+
 
         # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
@@ -197,13 +203,10 @@ class Aggregator:
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)
-        # compressed_data = zlib.compress(serialized_data)
-        # encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
+
         return serialized_data
 
     def decode_params(self, encoded_model_update):
-        # compressed_data = base64.b64decode(encoded_model_update)
-        # serialized_data = zlib.decompress(compressed_data)
         print(f"encoded_model_update: {encoded_model_update}")
         model_weights = pickle.loads(encoded_model_update)
         print(f"model_weights: {model_weights}")

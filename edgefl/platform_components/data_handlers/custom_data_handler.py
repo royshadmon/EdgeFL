@@ -168,7 +168,7 @@ class MnistDataHandler():
         num_rows = row_count["Query"][0].get('count(*)')
         # fetch in offsets of 50
         for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' OFFSET {offset}"
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'

@@ -6,6 +6,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 
 import os
+import time
+
 import docker
 # Add files to MongoDB through EdgeLake
 
@@ -75,37 +77,88 @@ def copy_file_to_container(container_name, src_path, dest_path):
     # print(f"Copied {src_path} to {container_name}:{dest_path}")
     # print(f"Received model params")
 
-def copy_file_from_container(container_name, src_path, dest_path):
+
+def file_exists_in_container(container_name, file_path):
     """
-    Copies a file from a container to the host machine.
+    Checks if a file exists inside a Docker container.
 
     :param container_name: Name or ID of the container
-    :param src_path: Path of the source file inside the container
-    :param dest_path: Destination path on the host (directory or full path)
+    :param file_path: Path to the file inside the container
+    :return: True if file exists, False otherwise
     """
     client = docker.from_env()
     container = client.containers.get(container_name)
 
-    # Get the file from the container as a tar stream
-    tar_stream, _ = container.get_archive(src_path)
+    exec_result = container.exec_run(f"test -f {file_path} && echo EXISTS")
 
-    # Extract the tar stream to the host
-    with open("/tmp/temp.tar", "wb") as temp_tar:
-        for chunk in tar_stream:
-            temp_tar.write(chunk)
+    return "EXISTS" in exec_result.output.decode()
 
-    with tarfile.open("/tmp/temp.tar", mode="r") as tar:
-        # Extract the file to the desired host location
-        tar.extractall(path=os.path.dirname(dest_path), filter='fully_trusted')
-        extracted_file = os.path.join(os.path.dirname(dest_path), os.path.basename(src_path))
+
+def copy_file_from_container(container_name, src_path, dest_path, max_retries=5, wait_time=1):
+    """
+    Copies a file from a Docker container to the host machine and ensures it is fully copied.
+
+    :param container_name: Name or ID of the Docker container
+    :param src_path: Path of the source file inside the container
+    :param dest_path: Destination path on the host
+    :param max_retries: Number of retries for file verification
+    :param wait_time: Time (seconds) to wait between retries
+    :return: True if successful, False otherwise
+    """
+    client = docker.from_env()
+    container = client.containers.get(container_name)
+    temp_tar_path = "/tmp/temp_copy.tar"
+
+    try:
+        # Step 1: Get file size inside the container for verification
+        exec_result = container.exec_run(f"stat -c %s {src_path}")
+        if exec_result.exit_code != 0:
+            print(f"❌ Error: Could not get file size for {src_path} inside the container.")
+            return False
+        container_file_size = int(exec_result.output.decode().strip())
+
+        # Step 2: Retrieve file as tar stream
+        tar_stream, _ = container.get_archive(src_path)
+
+        # Step 3: Write tar stream to a temp file
+        with open(temp_tar_path, "wb") as temp_tar:
+            for chunk in tar_stream:
+                temp_tar.write(chunk)
+            temp_tar.flush()
+            os.fsync(temp_tar.fileno())  # Ensure data is physically written to disk
+
+        # Step 4: Extract tar file
+        with tarfile.open(temp_tar_path, "r") as tar:
+            extracted_files = tar.getnames()
+            tar.extractall(path=os.path.dirname(dest_path))
+
+        # Step 5: Move extracted file to the final destination
+        extracted_file = os.path.join(os.path.dirname(dest_path), extracted_files[0])
         os.rename(extracted_file, dest_path)
 
-    # Clean up the temporary tar file
-    os.remove("/tmp/temp.tar")
-    # print(f"Copied {src_path} from {container_name} to {dest_path}")
-    print(f"Received model params")
+        # Step 6: Verify file integrity by checking size
+        for _ in range(max_retries):
+            if os.path.exists(dest_path) and os.path.getsize(dest_path) == container_file_size:
+                print(f"✅ Successfully copied {src_path} from {container_name} to {dest_path}")
+                os.remove(temp_tar_path)  # Cleanup temporary tar file
+                return True
+            time.sleep(wait_time)
 
-def read_file(edgelake_node_url, file_path, dest, ip_port):
+        print(
+            f"❌ Verification failed: Expected {container_file_size} bytes, Got {os.path.getsize(dest_path) if os.path.exists(dest_path) else 'Missing'}")
+        return False
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
+
+    finally:
+        # Clean up temp tar file if it exists
+        if os.path.exists(temp_tar_path):
+            os.remove(temp_tar_path)
+
+
+def read_file(edgelake_node_url, file_path, dest, ip_port, container_name = None):
     filename = file_path.split('/')[-1]
     headers = {
         'User-Agent': 'AnyLog/1.23',
@@ -118,7 +171,13 @@ def read_file(edgelake_node_url, file_path, dest, ip_port):
     # print(f"FILE GET COMMAND: headers: {headers['command']}")
     try:
         response = requests.post(edgelake_node_url, headers=headers, data='')
-        return response
+        if response.status_code == 200:
+            if container_name:
+                while not file_exists_in_container(container_name, dest):
+                    time.sleep(3)
+            return response
+        else:
+            raise
     except:
         errno, value = sys.exc_info()[:2]
         print(f'Error: {errno}: {value}')
