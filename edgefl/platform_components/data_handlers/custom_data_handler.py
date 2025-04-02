@@ -12,19 +12,30 @@ import numpy as np
 from tensorflow.python import keras
 from keras import layers, optimizers, models
 from sklearn.metrics import accuracy_score
-
+import tensorflow as tf
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 
+from tensorflow.python.client import device_lib
+print(device_lib.list_local_devices())
+print(tf.sysconfig.get_build_info())
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        # Restrict Tensorflow to only use the first GPU
+        tf.config.set_visible_devices(gpus[0], 'GPU')
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+    except RuntimeError as e:
+        print(e)
 
 class MnistDataHandler():
     def __init__(self, node_name):
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
-        self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+        self.edgelake_node_url = f'http://192.168.1.148:32049'
 
         # Data Handler Initialization
         self.x_train = None
@@ -116,7 +127,8 @@ class MnistDataHandler():
         # acc = accuracy_score(y_true, y_pred) * 100
 
         # Get predictions
-        predictions = self.fl_model.predict(x_test_images)
+        with tf.device("/GPU:0"):
+            predictions = self.fl_model.predict(x_test_images)
         y_pred = np.argmax(predictions, axis=1)
 
         # Calculate accuracy
@@ -135,14 +147,15 @@ class MnistDataHandler():
             mode='min'
         )
 
-        self.fl_model.fit(
-            x_train,
-            y_train,
-            batch_size=128, # can also be 32
-            epochs=1,
-            verbose=1,
-            callbacks=[early_stopping]
-        )
+        with tf.device('/GPU:0'):
+            self.fl_model.fit(
+                x_train,
+                y_train,
+                batch_size=128, # can also be 32
+                epochs=1,
+                verbose=1,
+                callbacks=[early_stopping]
+            )
 
         return self.get_weights()
 
@@ -167,8 +180,8 @@ class MnistDataHandler():
         row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
         num_rows = row_count["Query"][0].get('count(*)')
         # fetch in offsets of 50
-        for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+        for offset in range(1):
+            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50"
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
