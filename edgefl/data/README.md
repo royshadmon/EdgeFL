@@ -161,7 +161,10 @@ in [mnist](mnist/publish_data.py)
 
 The following is supposed to generate the ability to select images and labels (for viewing) via Remote-CLI. However, 
 I'm not 100% sure we support `gz` files and/or I'm missing something. Sample publish process for blobs can be found [here](https://github.com/AnyLog-co/Sample-Data-Generator/blob/master/data_generator/video_processing.py).
+The other reason is beecause we're processing a gzip file, which we aren't able to view. 
+```anylog
 sql new_company extend=(+node_name, @ip, @port, @dbms_name, @table_name) and format = json and timezone=Europe/Dublin  select  timestamp, image_name, image, label_name, label from mnist order by timestamp desc --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and image using file and label using file)
+```
 
 To view expected behaivor check out the `demo` section in http://23.239.12.151:31800. 
 
