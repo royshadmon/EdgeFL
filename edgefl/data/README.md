@@ -69,6 +69,11 @@ to the location of the blob(s), and store them either in (local) file or in Mong
 A _PUT_ command is simply specifying the logical information as the REST HEADERS and pre-mapped data in the payload.
 An example can be found in [winniio](winniio-rooms/publish_data.py). 
 
+**Sample Call**:
+```shell
+python3 $HOME/Anylog-Edgelake-Federated-Learning-Platform/edgefl/data/winniio-rooms/publish_data.py 74.207.235.89:32149 $HOME/Anylog-Edgelake-Federated-Learning-Platform/edgefl/data/winniio-rooms/room_12004.csv --db-name new_company  
+```
+
 ### non-PUT 
 All other processes (_POST_, Kafka, MQTT, etc.) require an extra steps **before** publishing data - declaring th mapping
 
@@ -150,4 +155,13 @@ When data is not complex (ie without blobs), users can utilize the command with 
 
 3. Once a message client is set, data can be sent into AnyLog/EdgeLake. An example for publishing via POST can be found 
 in [mnist](mnist/publish_data.py)
+
+   
+### Query examples
+
+The following is supposed to generate the ability to select images and labels (for viewing) via Remote-CLI. However, 
+I'm not 100% sure we support `gz` files and/or I'm missing something. Sample publish process for blobs can be found [here](https://github.com/AnyLog-co/Sample-Data-Generator/blob/master/data_generator/video_processing.py).
+sql new_company extend=(+node_name, @ip, @port, @dbms_name, @table_name) and format = json and timezone=Europe/Dublin  select  timestamp, image_name, image, label_name, label from mnist order by timestamp desc --> selection (columns: ip using ip and port using port and dbms using dbms_name and table using table_name and image using file and label using file)
+
+To view expected behaivor check out the `demo` section in http://23.239.12.151:31800. 
 
