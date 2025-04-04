@@ -1,0 +1,24 @@
+services:
+  ${NODE_NAME}:
+    image: anylogco/edgelake:${TAG}
+    restart: always
+    env_file:
+      -  ../docker_makefile/edgelake_${NODE_NAME}.env
+      -  ${NODE_NAME}.env
+    container_name: ${NODE_NAME}
+    stdin_open: true
+    tty: true
+    network_mode: host
+#    ports:
+#      - ${EDGELAKE_SERVER_PORT}:${EDGELAKE_SERVER_PORT}
+#      - ${EDGELAKE_REST_PORT}:${EDGELAKE_REST_PORT}
+    volumes:
+      - ${NODE_NAME}-anylog:/app/EdgeLake/anylog
+      - ${NODE_NAME}-blockchain:/app/EdgeLake/blockchain
+      - ${NODE_NAME}-data:/app/EdgeLake/data
+      - ${NODE_NAME}-local-scripts:/app/deployment-scripts
+volumes:
+  ${NODE_NAME}-anylog:
+  ${NODE_NAME}-blockchain:
+  ${NODE_NAME}-data:
+  ${NODE_NAME}-local-scripts:
