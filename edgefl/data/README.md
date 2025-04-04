@@ -149,5 +149,5 @@ When data is not complex (ie without blobs), users can utilize the command with 
 ```
 
 3. Once a message client is set, data can be sent into AnyLog/EdgeLake. An example for publishing via POST can be found 
-in [mnist](mnist/store_data.py)
+in [mnist](mnist/publish_data.py)
 
