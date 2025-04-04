@@ -48,7 +48,7 @@ The table definition is based on the JSON object(s) being analyzed from the user
              "source" : "Processing JSON file",
              "id" : "1ef91f4b46560e289a9e6be869ccfe7c",
              "date" : "2025-04-03T16:31:24.861749Z",
-             "ledger" : "global"}}]
+             "ledger" : "global"}}
 ```
 3. If DNE - create  a table definition, based on the blockchain policy, on the appropriate operator(s).
 
