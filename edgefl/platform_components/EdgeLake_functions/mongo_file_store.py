@@ -51,7 +51,7 @@ def create_directory_in_container(container_name, directory_path):
         print(f"Failed to create directory. Error: {output.decode('utf-8')}")
 
 
-def copy_file_to_container(container_name, src_path, dest_path):
+def copy_file_to_container(tmp_dir, container_name, src_path, dest_path):
     """
     Copies a file from the host to a container.
 
@@ -63,19 +63,19 @@ def copy_file_to_container(container_name, src_path, dest_path):
     container = client.containers.get(container_name)
 
     # Create a tar archive for the file
-    with tarfile.open("/tmp/temp.tar", mode="w") as tar:
+    with tarfile.open(f"{tmp_dir}/temp.tar", mode="w") as tar:
         tar.add(src_path, arcname=os.path.basename(src_path))
 
     # Open the tar file and send it to the container
-    with open("/tmp/temp.tar", "rb") as tar_file:
+    with open(f"{tmp_dir}/temp.tar", "rb") as tar_file:
         container.put_archive(os.path.dirname(dest_path), tar_file)
 
     # Clean up the temporary tar file
-    os.remove("/tmp/temp.tar")
+    os.remove(f"{tmp_dir}/temp.tar")
     # print(f"Copied {src_path} to {container_name}:{dest_path}")
     # print(f"Received model params")
 
-def copy_file_from_container(container_name, src_path, dest_path):
+def copy_file_from_container(tmp_dir, container_name, src_path, dest_path):
     """
     Copies a file from a container to the host machine.
 
@@ -90,18 +90,18 @@ def copy_file_from_container(container_name, src_path, dest_path):
     tar_stream, _ = container.get_archive(src_path)
 
     # Extract the tar stream to the host
-    with open("/tmp/temp.tar", "wb") as temp_tar:
+    with open(f"{tmp_dir}/temp.tar", "wb") as temp_tar:
         for chunk in tar_stream:
             temp_tar.write(chunk)
 
-    with tarfile.open("/tmp/temp.tar", mode="r") as tar:
+    with tarfile.open(f"{tmp_dir}/temp.tar", mode="r") as tar:
         # Extract the file to the desired host location
         tar.extractall(path=os.path.dirname(dest_path), filter='fully_trusted')
         extracted_file = os.path.join(os.path.dirname(dest_path), os.path.basename(src_path))
         os.rename(extracted_file, dest_path)
 
     # Clean up the temporary tar file
-    os.remove("/tmp/temp.tar")
+    os.remove(f"{tmp_dir}/temp.tar")
     # print(f"Copied {src_path} from {container_name} to {dest_path}")
     print(f"Received model params")
 

@@ -31,6 +31,9 @@ class Aggregator:
     def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
         self.server_ip = ip
         self.server_port = port
         # Initialize Firebase database connection
@@ -138,7 +141,7 @@ class Aggregator:
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, path,
                                          f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i])
-                    copy_file_from_container(self.docker_container_name,
+                    copy_file_from_container(self.tmp_dir, self.docker_container_name,
                                         f'{self.docker_file_write_destination}/aggregator/{filename}',
                                         f'{self.file_write_destination}/aggregator/{filename}')
                 else:
@@ -190,7 +193,7 @@ class Aggregator:
         # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
             # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
-            copy_file_to_container(self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
+            copy_file_to_container(self.tmp_dir, self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
             return f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json'
 
         return f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json'
