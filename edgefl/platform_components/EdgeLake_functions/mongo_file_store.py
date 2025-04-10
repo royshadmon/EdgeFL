@@ -53,7 +53,7 @@ def create_directory_in_container(container_name, directory_path):
         print(f"Failed to create directory. Error: {output.decode('utf-8')}")
 
 
-def copy_file_to_container(container_name, src_path, dest_path):
+def copy_file_to_container(tmp_dir, container_name, src_path, dest_path):
     """
     Copies a file from the host to a container.
 
@@ -65,17 +65,18 @@ def copy_file_to_container(container_name, src_path, dest_path):
     container = client.containers.get(container_name)
 
     # Create a tar archive for the file
-    with tarfile.open("/tmp/temp.tar", mode="w") as tar:
+    with tarfile.open(f"{tmp_dir}/temp.tar", mode="w") as tar:
         tar.add(src_path, arcname=os.path.basename(src_path))
 
     # Open the tar file and send it to the container
-    with open("/tmp/temp.tar", "rb") as tar_file:
+    with open(f"{tmp_dir}/temp.tar", "rb") as tar_file:
         container.put_archive(os.path.dirname(dest_path), tar_file)
 
     # Clean up the temporary tar file
-    os.remove("/tmp/temp.tar")
+    os.remove(f"{tmp_dir}/temp.tar")
     # print(f"Copied {src_path} to {container_name}:{dest_path}")
     # print(f"Received model params")
+
 
 
 def file_exists_in_container(container_name, file_path):
@@ -107,7 +108,6 @@ def copy_file_from_container(container_name, src_path, dest_path, max_retries=5,
     """
     client = docker.from_env()
     container = client.containers.get(container_name)
-    temp_tar_path = "/tmp/temp_copy.tar"
 
     try:
         # Step 1: Get file size inside the container for verification
@@ -121,27 +121,28 @@ def copy_file_from_container(container_name, src_path, dest_path, max_retries=5,
         tar_stream, _ = container.get_archive(src_path)
 
         # Step 3: Write tar stream to a temp file
-        with open(temp_tar_path, "wb") as temp_tar:
+        with open(f"{tmp_dir}/temp.tar", "wb") as temp_tar:
             for chunk in tar_stream:
                 temp_tar.write(chunk)
             temp_tar.flush()
             os.fsync(temp_tar.fileno())  # Ensure data is physically written to disk
 
         # Step 4: Extract tar file
-        with tarfile.open(temp_tar_path, "r") as tar:
-            extracted_files = tar.getnames()
-            tar.extractall(path=os.path.dirname(dest_path))
+        with tarfile.open(f"{tmp_dir}/temp.tar", mode="r") as tar:
+            # Extract the file to the desired host location
+            tar.extractall(path=os.path.dirname(dest_path), filter='fully_trusted')
+            extracted_file = os.path.join(os.path.dirname(dest_path), os.path.basename(src_path))
+            os.rename(extracted_file, dest_path)
 
-        # Step 5: Move extracted file to the final destination
-        extracted_file = os.path.join(os.path.dirname(dest_path), extracted_files[0])
-        os.rename(extracted_file, dest_path)
+#         # Step 5: Move extracted file to the final destination
+#         extracted_file = os.path.join(os.path.dirname(dest_path), extracted_files[0])
+#         os.rename(extracted_file, dest_path)
 
-        # Step 6: Verify file integrity by checking size
+        # Step 5: Verify file integrity by checking size
         for _ in range(max_retries):
             if os.path.exists(dest_path) and os.path.getsize(dest_path) == container_file_size:
                 print(f"✅ Successfully copied {src_path} from {container_name} to {dest_path}")
-                os.remove(temp_tar_path)  # Cleanup temporary tar file
-                return True
+                
             time.sleep(wait_time)
 
         print(
@@ -154,8 +155,11 @@ def copy_file_from_container(container_name, src_path, dest_path, max_retries=5,
 
     finally:
         # Clean up temp tar file if it exists
-        if os.path.exists(temp_tar_path):
-            os.remove(temp_tar_path)
+        if os.path.exists(f"{tmp_dir}/temp.tar"):
+            os.remove(f"{tmp_dir}/temp.tar")
+        print("Received model params")
+            
+                
 
 
 def read_file(edgelake_node_url, file_path, dest, ip_port, container_name = None):

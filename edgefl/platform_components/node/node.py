@@ -30,6 +30,10 @@ class Node:
         self.node_ip = ip
         self.node_port = port
 
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
+
         configure_logging(f"node_server_{port}")
         self.logger = logging.getLogger(__name__)
         self.logger.debug("Node initializing")
@@ -125,8 +129,11 @@ class Node:
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports, self.docker_container_name)
-                    copy_file_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', 
+                                         ip_ports, self.docker_container_name)
+
+                    copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+
                 else:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
 
@@ -177,7 +184,7 @@ class Node:
         self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
             self.logger.debug(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
-            copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
+            copy_file_to_container(self.tmp_dir, self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name
 
