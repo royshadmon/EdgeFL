@@ -55,7 +55,7 @@ With this IP, we can now deploy our three EdgeLake operator nodes. For example, 
 ## Deploy EdgeLake Operator node
 Update line 61 (LEDGER_CONN) value in the file `edgefl/EdgeLake/docker_makefile/edgelake_operator1.env`
 to be `LEDGER_CONN=192.1.1.1:32048` (note that you do not need to change the port).
-In addition, update the `DB_IP` in line 31 with the `192.1.1.1` IP. 
+In addition, update the `DB_IP` in line 31 with the Docker network IP of the Postgres container. 
 
 Do the same for the following files:
 - `edgefl/EdgeLake/docker_makefile/edgelake_operator2.env`
