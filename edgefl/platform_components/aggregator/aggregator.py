@@ -31,15 +31,16 @@ class Aggregator:
     def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
+
         self.server_ip = ip
         self.server_port = port
-        # Initialize Firebase database connection
-        self.database_url = os.getenv('DATABASE_URL')
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
         module_name = os.getenv('MODULE_NAME')
+
         TrainingApp_class = load_class_from_file(training_app_path, module_name)
+
         self.training_app = TrainingApp_class('aggregator')  # Create an instance
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -54,36 +55,11 @@ class Aggregator:
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
-        # Correctly instantiate the Fusion model here (using IterAvg as placeholder for now)
-        # Define or obtain hyperparameters and protocol handler for the fusion model
-        hyperparams = {}  # Replace with actual hyperparameters as required
-        # protocol_handler = None  # Replace with an appropriate protocol handler instance or object
-
-    def get_contract_address(self):
-        headers = {
-            'User-Agent': 'AnyLog/1.23',
-            'Content-Type': 'text/plain',
-            'command': 'get !contract'
-        }
-
-        response = requests.get(self.edgelake_node_url, headers=headers, data="")
-        if response.status_code == 200:
-            print(f"Contract address: {response.text}")
-            return response.text
-        else:
-            print(f"Failed to retrieve contract, check for active EdgeLake node")
-            exit(-1)
 
     # function to call the start round function from the smart contract
     def start_round(self, initParamsLink, roundNumber):
         try:
-            # headers = {
-            #     'User-Agent': 'AnyLog/1.23',
-            #     'Content-Type': 'text/plain',
-            #     'command': 'edgefl insert where policy = !my_policy and local = true and edgefl = optimism'
-            # }
 
-            # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
             data = f'''<my_policy = {{"r{roundNumber}" : {{
                                         "initParams": "{initParamsLink}",
@@ -203,11 +179,8 @@ class Aggregator:
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)
-
         return serialized_data
 
     def decode_params(self, encoded_model_update):
-        print(f"encoded_model_update: {encoded_model_update}")
         model_weights = pickle.loads(encoded_model_update)
-        print(f"model_weights: {model_weights}")
         return model_weights
