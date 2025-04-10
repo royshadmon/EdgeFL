@@ -22,7 +22,6 @@ from platform_components.lib.modules.local_model_update import LocalModelUpdate
 
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
-CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
 
 load_dotenv()
 
@@ -57,35 +56,9 @@ class Aggregator:
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
-        # Correctly instantiate the Fusion model here (using IterAvg as placeholder for now)
-        # Define or obtain hyperparameters and protocol handler for the fusion model
-        hyperparams = {}  # Replace with actual hyperparameters as required
-        # protocol_handler = None  # Replace with an appropriate protocol handler instance or object
-
-    def get_contract_address(self):
-        headers = {
-            'User-Agent': 'AnyLog/1.23',
-            'Content-Type': 'text/plain',
-            'command': 'get !contract'
-        }
-
-        response = requests.get(self.edgelake_node_url, headers=headers, data="")
-        if response.status_code == 200:
-            print(f"Contract address: {response.text}")
-            return response.text
-        else:
-            print(f"Failed to retrieve contract, check for active EdgeLake node")
-            exit(-1)
-
-    # function to call the start round function from the smart contract
+    # function to call the start round function
     def start_round(self, initParamsLink, roundNumber):
         try:
-            # headers = {
-            #     'User-Agent': 'AnyLog/1.23',
-            #     'Content-Type': 'text/plain',
-            #     'command': 'edgefl insert where policy = !my_policy and local = true and edgefl = optimism'
-            # }
-
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
             data = f'''<my_policy = {{"r{roundNumber}" : {{
@@ -103,10 +76,6 @@ class Aggregator:
 
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
-
-            # print(f"Training initialized with {roundNumber} rounds")
-
-            # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             if success:
                 return {
                     'status': 'success',
@@ -200,14 +169,8 @@ class Aggregator:
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)
-        # compressed_data = zlib.compress(serialized_data)
-        # encoded_model_update = base64.b64encode(compressed_data).decode('utf-8')
         return serialized_data
 
     def decode_params(self, encoded_model_update):
-        # compressed_data = base64.b64decode(encoded_model_update)
-        # serialized_data = zlib.decompress(compressed_data)
-        print(f"encoded_model_update: {encoded_model_update}")
         model_weights = pickle.loads(encoded_model_update)
-        print(f"model_weights: {model_weights}")
         return model_weights
