@@ -22,7 +22,6 @@ from platform_components.lib.modules.local_model_update import LocalModelUpdate
 
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
-CONTRACT_ADDRESS = os.getenv('CONTRACT_ADDRESS')
 
 load_dotenv()
 
@@ -31,20 +30,18 @@ class Aggregator:
     def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
-
         self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
         if not os.path.exists(self.tmp_dir):
             os.makedirs(self.tmp_dir)
-
         self.server_ip = ip
         self.server_port = port
+        # Initialize Firebase database connection
+        self.database_url = os.getenv('DATABASE_URL')
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
         module_name = os.getenv('MODULE_NAME')
-
         TrainingApp_class = load_class_from_file(training_app_path, module_name)
-
         self.training_app = TrainingApp_class('aggregator')  # Create an instance
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -59,11 +56,10 @@ class Aggregator:
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
-
-    # function to call the start round function from the smart contract
+    # function to call the start round function
     def start_round(self, initParamsLink, roundNumber):
         try:
-
+            # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
             data = f'''<my_policy = {{"r{roundNumber}" : {{
                                         "initParams": "{initParamsLink}",
@@ -80,10 +76,6 @@ class Aggregator:
 
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
-
-            # print(f"Training initialized with {roundNumber} rounds")
-
-            # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             if success:
                 return {
                     'status': 'success',
@@ -117,9 +109,7 @@ class Aggregator:
 
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, path,
-                                         f'{self.docker_file_write_destination}/aggregator/{filename}', 
-                                         ip_ports[i], self.docker_container_name)
-
+                                         f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i])
                     copy_file_from_container(self.tmp_dir, self.docker_container_name,
                                         f'{self.docker_file_write_destination}/aggregator/{filename}',
                                         f'{self.file_write_destination}/aggregator/{filename}')
@@ -129,14 +119,8 @@ class Aggregator:
 
                 if response.status_code == 200:
                     sleep(1)
-                    # with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
-                    #     data = pickle.load(f)
-
                     with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
-                        data = bytearray()
-                        while chunk := f.read(1024):
-                            data.extend(chunk)
-                        data = pickle.loads(data)
+                        data = pickle.load(f)
 
                     if not data:
                         raise ValueError(f"Missing model_weights in data from file: {filename}")
@@ -149,10 +133,14 @@ class Aggregator:
                     raise ValueError(
                         f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
             except Exception as e:
-                if os.path.exists(f'{self.file_write_destination}/aggregator/{filename}'):
-                    os.remove(f'{self.file_write_destination}/aggregator/{filename}')
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
 
+        # do aggregation function here (doesn't return anything)
+        # self.fusion_model.update_weights(decoded_params)
+        # aggregate_params_weights2 = self.fusion_model.current_model_weights
+        #
+        # # aggregate_params_weights = FedMax_aggregate(decoded_params)
+        # aggregate_params_weights = PBA_aggregate(decoded_params)
 
         aggregate_params_weights = self.training_app.aggregate_model_weights(decoded_params)
 
@@ -167,13 +155,9 @@ class Aggregator:
             'newUpdates': encoded_params
         }
 
-
         # push agg data
         with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
-            f.flush()  # Ensure data is written to buffer
-            os.fsync(f.fileno())  # Ensure data is written to disk
-
 
         # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
