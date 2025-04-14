@@ -44,6 +44,7 @@ class InitNodeRequest(BaseModel):
     replica_name: str
     replica_ip: str
     replica_port: str
+    replica_index: str
 
 
 @app.post('/init-node')
@@ -54,8 +55,8 @@ def init_node(request: InitNodeRequest):
         ip = get_local_ip()
 
         port = request.replica_port
-
         replica_name = request.replica_name
+        index = request.replica_index
 
         # logger.debug(f"Replica name " + replica_name)
 
@@ -68,7 +69,7 @@ def init_node(request: InitNodeRequest):
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port)
+        node_instance = Node(replica_name, ip, port, index)
         configure_logging(f"node_server_{port}")
         node_instance.currentRound = 1
 
@@ -119,16 +120,19 @@ def receive_data(request: ReceiveDataRequest):
     )
 
 def listen_for_start_round(nodeInstance, stop_event):
-    logger.debug(f"listening for start round {nodeInstance.currentRound}")
+    current_round = nodeInstance.currentRound
+    index = nodeInstance.index
+
+    logger.debug(f"listening for start round {current_round}")
     while True:
         try:
-            # next_round = nodeInstance.currentRound + 1
+            # next_round = current_round + 1
 
-            # logger.debug(f"listening for start round {nodeInstance.currentRound}")
+            # logger.debug(f"listening for start round {current_round}")
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'blockchain get r{nodeInstance.currentRound}'
+                'command': f'blockchain get {index}-r{current_round}'
             }
             response = requests.get(edgelake_node_url, headers=headers)
 
@@ -139,20 +143,20 @@ def listen_for_start_round(nodeInstance, stop_event):
                 round_data = None
                 for item in data:
                     # Check if the key exists in the current dictionary
-                    if f'r{nodeInstance.currentRound}' in item:
-                        round_data = item[f'r{nodeInstance.currentRound}']
+                    if f'{index}-r{current_round}' in item:
+                        round_data = item[f'{index}-r{current_round}']
                         break  # Stop searching once the current round's data is found
 
                 if round_data:
                     logger.debug(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
-                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound, ip_port)
-                    nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate_metadata)
-                    logger.info(f"[Round {nodeInstance.currentRound}] Step 3 Complete: Model parameters published")
-                    nodeInstance.currentRound += 1
+                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, index)
+                    nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
+                    logger.info(f"[Round {current_round}] Step 3 Complete: Model parameters published")
+                    current_round += 1
                 # else: # Debugging line
-                #     logger.error(f"No data found for round r{nodeInstance.currentRound}")
+                #     logger.error(f"No data found for round r{current_round}")
 
             time.sleep(5)  # Poll every 2 seconds
         except Exception as e:
