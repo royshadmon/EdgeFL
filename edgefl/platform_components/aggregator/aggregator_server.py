@@ -59,6 +59,7 @@ def init(request: InitRequest):
         aggregator.index = index
 
         initialize_nodes(node_urls, index)
+        aggregator.initialize_index_on_blockchain(index)
         logger.info(f"Initialized nodes with index ({index}): {request.nodeUrls}")
         return {
             "status": "success"

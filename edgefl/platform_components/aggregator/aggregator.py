@@ -58,14 +58,47 @@ class Aggregator:
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
+    def initialize_index_on_blockchain(self, index):
+        try:
+            data = f'''<my_policy = {{"index" : {{
+                                        "name": "{index}"
+                              }} }}>'''
+            success = False
+            while not success:
+                response = insert_policy(self.edgelake_node_url, data)
+                if response.status_code == 200:
+                    success = True
+                else:
+                    sleep(np.random.randint(2, 5))
+
+                    if check_policy_inserted(self.edgelake_node_url, data):
+                        success = True
+
+            if success:
+                return {
+                    'status': 'success',
+                    'message': 'index initialized onto the blockchain' # reword
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Request failed with status code: {response.status_code}'
+                }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+
     # function to call the start round function
     def start_round(self, initParamsLink, roundNumber, index):
         try:
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
             data = f'''<my_policy = {{"{index}-r{roundNumber}" : {{
+                                        "node_type": "aggregator",
                                         "initParams": "{initParamsLink}",
-                                        "ip_port": "{self.edgelake_tcp_node_ip_port}"                                
+                                        "ip_port": "{self.edgelake_tcp_node_ip_port}"
                               }} }}>'''
             success = False
             while not success:
