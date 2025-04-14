@@ -24,11 +24,12 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, replica_name, ip, port):
+    def __init__(self, replica_name, ip, port, index):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
         self.node_port = port
+        self.index = index # index specified *only* on init; tracked for entire training process
 
         self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
         if not os.path.exists(self.tmp_dir):
@@ -74,12 +75,12 @@ class Node:
 
     '''
     add_node_params()
-        - Returns current node nodel parameters to edgefl via event listener
+        - Returns current node model parameters to edgefl via event listener
     '''
-    def add_node_params(self, round_number, model_metadata):
+    def add_node_params(self, round_number, model_metadata, index):
         self.logger.debug("in add_node_params")
         try:
-            data = f'''<my_policy = {{"a{round_number}" : {{
+            data = f'''<my_policy = {{"{index}-a{round_number}" : {{
                                 "node" : "{self.replicaName}",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
                                 "trained_params_local_path": "{model_metadata}"
@@ -112,10 +113,10 @@ class Node:
 
     '''
     train_model_params(aggregator_model_params)
-        - Uses updated aggreagtor model params and updates local model
+        - Uses updated aggregator model params and updates local model
         - Gets local data and runs training on updated model
     '''
-    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
+    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
         self.logger.debug(f"in train_model_params for round {round_number}")
 
         # First round initialization
@@ -161,7 +162,7 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
-        file = f"{round_number}-replica-{self.replicaName}.pkl"
+        file = f"{index}-{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
         os.makedirs(os.path.dirname(f"{self.file_write_destination}/{self.replicaName}/"), exist_ok=True)
         file_name = f"{self.file_write_destination}/{self.replicaName}/{file}"

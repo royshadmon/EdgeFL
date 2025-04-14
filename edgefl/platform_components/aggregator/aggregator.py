@@ -35,6 +35,8 @@ class Aggregator:
             os.makedirs(self.tmp_dir)
         self.server_ip = ip
         self.server_port = port
+        self.index = '' # right now, specified *only* on init; tracked for entire training process
+
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
 
@@ -57,11 +59,11 @@ class Aggregator:
             create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
     # function to call the start round function
-    def start_round(self, initParamsLink, roundNumber):
+    def start_round(self, initParamsLink, roundNumber, index):
         try:
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
-            data = f'''<my_policy = {{"r{roundNumber}" : {{
+            data = f'''<my_policy = {{"{index}-r{roundNumber}" : {{
                                         "initParams": "{initParamsLink}",
                                         "ip_port": "{self.edgelake_tcp_node_ip_port}"                                
                               }} }}>'''
@@ -92,7 +94,7 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def aggregate_model_params(self, node_param_download_links, ip_ports, round_number):
+    def aggregate_model_params(self, node_param_download_links, ip_ports, round_number, index):
         # use the node_param_download_links to get all the file
         # in the form of tuples, like ["('blobs_admin', 'node_model_updates', '1-replica-node1.pkl')"]
         # node_ref = db.reference('node_model_updates')
@@ -156,16 +158,16 @@ class Aggregator:
         }
 
         # push agg data
-        with open(f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', 'wb') as f:
+        with open(f'{self.file_write_destination}/aggregator/{index}-{round_number}-agg_update.json', 'wb') as f:
             f.write(self.encode_params(data_entry))
 
         # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
             # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
-            copy_file_to_container(self.tmp_dir, self.docker_container_name, f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json')
-            return f'{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json'
+            copy_file_to_container(self.tmp_dir, self.docker_container_name, f'{self.file_write_destination}/aggregator/{index}-{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{index}-{round_number}-agg_update.json')
+            return f'{self.docker_file_write_destination}/aggregator/{index}-{round_number}-agg_update.json'
 
-        return f'{self.file_write_destination}/aggregator/{round_number}-agg_update.json'
+        return f'{self.file_write_destination}/aggregator/{index}-{round_number}-agg_update.json'
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)

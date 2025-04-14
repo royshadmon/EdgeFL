@@ -154,7 +154,8 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8081",
     "http://localhost:8082",
     "http://localhost:8083"
-  ]
+  ],
+  "index": "test-index"
 }'
 ```
 After, start the training process:
