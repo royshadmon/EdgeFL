@@ -42,7 +42,7 @@ docker compose up -d
 ## Deploy EdgeLake Master node
 ```bash
 cd edgefl/EdgeLake
-make up EDGELAKE_TYPE=master TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
+make up EDGELAKE_TYPE=master TAG=1.3.2501 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
 ```
 Now we need to determine the Master node's Docker IP address. Issue the following command
 ```bash
@@ -55,7 +55,7 @@ With this IP, we can now deploy our three EdgeLake operator nodes. For example, 
 ## Deploy EdgeLake Operator node
 Update line 61 (LEDGER_CONN) value in the file `edgefl/EdgeLake/docker_makefile/edgelake_operator1.env`
 to be `LEDGER_CONN=192.1.1.1:32048` (note that you do not need to change the port).
-In addition, update the `DB_IP` in line 31 with the `192.1.1.1` IP. 
+In addition, update the `DB_IP` in line 31 with the Docker network IP of the Postgres container. 
 
 Do the same for the following files:
 - `edgefl/EdgeLake/docker_makefile/edgelake_operator2.env`
@@ -64,9 +64,9 @@ Do the same for the following files:
 Now we can start the operator nodes.
 ```bash
 cd edgefl/EdgeLake
-make up EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
-make up EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
-make up EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
+make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
+make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
+make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
 ```
 
 ## Validating your EdgeLake network is properly setup
@@ -154,7 +154,8 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8081",
     "http://localhost:8082",
     "http://localhost:8083"
-  ]
+  ],
+  "index": "test-index"
 }'
 ```
 After, start the training process:
@@ -234,10 +235,10 @@ In addition, you need to kill and restart the EdgeLake operators and master node
 To do so, follow the following instructions:
 ```bash
 cd edgefl/EdgeLake
-make clean EDGELAKE_TYPE=master TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
-make clean EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
-make clean EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
-make clean EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
+make clean EDGELAKE_TYPE=master TAG=1.3.2501 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
+make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
+make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
+make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
 ```
 Note that you do not need to restart Postgres.
 After this step, if you want to restart the simulation follow the Deploy EdgeLake Operator/Master Node from above.

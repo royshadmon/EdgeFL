@@ -24,14 +24,20 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, replica_name, ip, port):
+    def __init__(self, replica_name, ip, port, index, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
         self.node_port = port
+        self.index = index # index specified *only* on init; tracked for entire training process
 
-        configure_logging(f"node_server_{port}")
-        self.logger = logging.getLogger(__name__)
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
+
+        # configure_logging(f"node_server_{port}")
+        # self.logger = logging.getLogger(__name__)
+        self.logger = logger
         self.logger.debug("Node initializing")
 
         self.database_url = os.getenv("DATABASE_URL")
@@ -70,13 +76,14 @@ class Node:
 
     '''
     add_node_params()
-        - Returns current node nodel parameters to edgefl via event listener
+        - Returns current node model parameters to edgefl via event listener
     '''
-    def add_node_params(self, round_number, model_metadata):
+    def add_node_params(self, round_number, model_metadata, index):
         self.logger.debug("in add_node_params")
         try:
-            data = f'''<my_policy = {{"a{round_number}" : {{
+            data = f'''<my_policy = {{"{index}-a{round_number}" : {{
                                 "node" : "{self.replicaName}",
+                                "node_type": "training",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
                                 "trained_params_local_path": "{model_metadata}"
             }} }}>'''
@@ -108,10 +115,10 @@ class Node:
 
     '''
     train_model_params(aggregator_model_params)
-        - Uses updated aggreagtor model params and updates local model
+        - Uses updated aggregator model params and updates local model
         - Gets local data and runs training on updated model
     '''
-    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
+    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
         self.logger.debug(f"in train_model_params for round {round_number}")
 
         # First round initialization
@@ -126,7 +133,7 @@ class Node:
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
                                          f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-                    copy_file_from_container(self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                    copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
                 else:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
 
@@ -157,7 +164,7 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
-        file = f"{round_number}-replica-{self.replicaName}.pkl"
+        file = f"{index}-{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
         os.makedirs(os.path.dirname(f"{self.file_write_destination}/{self.replicaName}/"), exist_ok=True)
         file_name = f"{self.file_write_destination}/{self.replicaName}/{file}"
@@ -167,7 +174,7 @@ class Node:
         self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
             self.logger.debug(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
-            copy_file_to_container(self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
+            copy_file_to_container(self.tmp_dir, self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name
 

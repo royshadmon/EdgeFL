@@ -30,32 +30,19 @@ load_dotenv()
 
 configure_logging("aggregator_server")
 logger = logging.getLogger(__name__)
-
-# Use environment variables for sensitive data
-PROVIDER_URL = os.getenv("PROVIDER_URL")
-PRIVATE_KEY =  os.getenv("PRIVATE_KEY")
+logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 
 # Initialize the Aggregator instance
 ip = get_local_ip()
 port = os.getenv("SERVER_PORT", "8080")
-aggregator = Aggregator(PROVIDER_URL, PRIVATE_KEY, ip, port)
+aggregator = Aggregator(ip, port)
 
-'''
-CURL REQUEST FOR DEPLOYING CONTRACT
-curl -X POST http://localhost:8080/init \
--H "Content-Type: application/json" \
--d '{
-  "nodeUrls": [
-    "http://localhost:8081", 
-    "http://localhost:8082"
-  ]  
-}'
-'''
 
 #######  FASTAPI IMPLEMENTATION  #######
 
 class InitRequest(BaseModel):
     nodeUrls: list[str]
+    index: str
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -64,30 +51,39 @@ class TrainingRequest(BaseModel):
 # @app.route('/init', methods=['POST'])
 
 @app.post("/init")
-def deploy_contract(request: InitRequest):
+def init(request: InitRequest):
     """Deploy the smart contract with predefined nodes."""
     try:
-        # Initialize the nodes and send the contract address
-        initialize_nodes(request.nodeUrls)
-        logger.info(f"Initialized nodes: {request.nodeUrls}")
+        # Initialize the nodes on specified index and send the contract address
+        node_urls, index = request.nodeUrls, request.index
+        aggregator.index = index
+
+        initialize_nodes(node_urls, index)
+        aggregator.initialize_index_on_blockchain(index)
+        logger.info(f"Initialized nodes with index ({index}): {request.nodeUrls}")
         return {
             "status": "success"
         }
     except Exception as e:
-        logger.error(f"Failed to initialize nodes: {str(e)}")
+        logger.error(f"Failed to initialize nodes with index ({index}): {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-def initialize_nodes(node_urls: list[str]):
+
+def initialize_nodes(node_urls: list[str], index):
     """Send the deployed contract address to multiple node servers."""
-    for urlCount in range(len(node_urls)):
+    for urlCount, url in enumerate(node_urls):
         try:
-            url = node_urls[urlCount]
+            my_url = node_urls[urlCount].split('/')[-1]
+            my_url = my_url.split(':')
             logger.info(f"Initializing model at {url}")
 
             response = requests.post(f'{url}/init-node', json={
+                'replica_ip': my_url[0],
+                'replica_port': my_url[1],
                 'replica_name': f"node{urlCount+1}",
+                'replica_index': index
             })
 
             if response.status_code == 200:
@@ -97,27 +93,16 @@ def initialize_nodes(node_urls: list[str]):
                     f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
 
         except Exception as e:
-            logger.critical(f"Error sending contract address: {str(e)}")
+            logger.critical(f"Error initializing node: {str(e)}")
 
 
-'''
-EXAMPLE CURL REQUEST FOR STARTING TRAINING
-curl -X POST http://localhost:8080/start-training \
--H "Content-Type: application/json" \
--d '{
-  "totalRounds": 5, 
-  "minParams": 2
-}'
-'''
-
-
-# @app.route('/start-training', methods=['POST'])
 @app.post('/start-training')
 async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
     try:
         num_rounds = request.totalRounds
         min_params = request.minParams
+        index = aggregator.index
 
         if num_rounds <= 0:
             raise HTTPException(
@@ -131,11 +116,11 @@ async def init_training(request: TrainingRequest):
 
         for r in range(1, num_rounds + 1):
             logger.info(f"Starting training round {r}")
-            aggregator.start_round(initial_params, r)
+            aggregator.start_round(initial_params, r, index)
             logger.debug("Sent initial parameters to nodes")
 
             # Listen for updates from nodes
-            new_aggregator_params = await listen_for_update_agg(min_params, r)
+            new_aggregator_params = await listen_for_update_agg(min_params, r, index)
             logger.debug("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
@@ -153,7 +138,7 @@ async def init_training(request: TrainingRequest):
         )
 
         
-async def listen_for_update_agg(min_params, roundNumber):
+async def listen_for_update_agg(min_params, roundNumber, index):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     logger.info("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -163,7 +148,7 @@ async def listen_for_update_agg(min_params, roundNumber):
             # Check parameter count
             count_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"blockchain get a{roundNumber} count"
+                "command": f"blockchain get {index}-a{roundNumber} count"
             })
 
             if count_response.status_code == 200:
@@ -174,7 +159,7 @@ async def listen_for_update_agg(min_params, roundNumber):
                 if count >= min_params:
                     params_response = requests.get(url, headers={
                         'User-Agent': 'AnyLog/1.23',
-                        "command": f"blockchain get a{roundNumber}"
+                        "command": f"blockchain get {index}-a{roundNumber}"
                     })
 
                     if params_response.status_code == 200:
@@ -183,22 +168,23 @@ async def listen_for_update_agg(min_params, roundNumber):
                             # Extract all trained_params into a list
 
                             node_params_links = [
-                                item[f'a{roundNumber}']['trained_params_local_path']
+                                item[f'{index}-a{roundNumber}']['trained_params_local_path']
                                 for item in result
-                                if f'a{roundNumber}' in item
+                                if f'{index}-a{roundNumber}' in item
                             ]
 
                             ip_ports = [
-                                item[f'a{roundNumber}']['ip_port']
+                                item[f'{index}-a{roundNumber}']['ip_port']
                                 for item in result
-                                if f'a{roundNumber}' in item
+                                if f'{index}-a{roundNumber}' in item
                             ]
 
                             # Aggregate the parameters
                             aggregated_params_link = aggregator.aggregate_model_params(
                                 node_param_download_links=node_params_links,
                                 ip_ports=ip_ports,
-                                round_number=roundNumber
+                                round_number=roundNumber,
+                                index=index
                             )
                             return aggregated_params_link
 

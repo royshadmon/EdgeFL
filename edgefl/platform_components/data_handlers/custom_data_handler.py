@@ -12,12 +12,25 @@ import numpy as np
 from tensorflow.python import keras
 from keras import layers, optimizers, models
 from sklearn.metrics import accuracy_score
-
+import tensorflow as tf
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 
+from tensorflow.python.client import device_lib
+
+device = "/GPU:0" if tf.config.list_physical_devices('GPU') else "/CPU:0"
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    print(device_lib.list_local_devices())
+    print(tf.sysconfig.get_build_info())
+    try:
+        # Restrict Tensorflow to only use the first GPU
+        tf.config.set_visible_devices(gpus[0], 'GPU')
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+    except RuntimeError as e:
+        print(e)
 
 class MnistDataHandler():
     def __init__(self, node_name):
@@ -107,16 +120,9 @@ class MnistDataHandler():
     def run_inference(self):
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
 
-        # SAMPLE CODE FOR HOW TO RUN PREDICT AND GET NON VECTOR OUTPUT: https://github.com/IBM/federated-learning-lib/blob/main/notebooks/crypto_fhe_pytorch/pytorch_classifier_p0.ipynb
-        # y_pred = np.array([])
-        # for i_samples in range(sample_count):
-        #     pred = party.fl_model.predict(
-        #         torch.unsqueeze(torch.from_numpy(test_digits[i_samples]), 0))
-        #     y_pred = np.append(y_pred, pred.argmax())
-        # acc = accuracy_score(y_true, y_pred) * 100
-
         # Get predictions
-        predictions = self.fl_model.predict(x_test_images)
+        with tf.device(device):
+            predictions = self.fl_model.predict(x_test_images)
         y_pred = np.argmax(predictions, axis=1)
 
         # Calculate accuracy
@@ -135,14 +141,15 @@ class MnistDataHandler():
             mode='min'
         )
 
-        self.fl_model.fit(
-            x_train,
-            y_train,
-            batch_size=128, # can also be 32
-            epochs=1,
-            verbose=1,
-            callbacks=[early_stopping]
-        )
+        with tf.device(device):
+            self.fl_model.fit(
+                x_train,
+                y_train,
+                batch_size=128, # can also be 32
+                epochs=1,
+                verbose=1,
+                callbacks=[early_stopping]
+            )
 
         return self.get_weights()
 
@@ -167,8 +174,10 @@ class MnistDataHandler():
         row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
         num_rows = row_count["Query"][0].get('count(*)')
         # fetch in offsets of 50
-        for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
+        # TODO: Get row offset queries to work
+        for offset in range(1):
+        # for offset in range(0, num_rows, batch_amount):
+            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50"
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
