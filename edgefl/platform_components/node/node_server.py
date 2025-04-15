@@ -5,7 +5,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
 
 # from dotenv import load_dotenv
-from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
+from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, fetch_data_from_db
 from platform_components.node.node import Node
 import numpy as np
 import logging
@@ -19,6 +19,7 @@ import warnings
 
 from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
 from platform_components.lib.logger.logger_config import configure_logging
@@ -26,9 +27,12 @@ from platform_components.lib.logger.logger_config import configure_logging
 
 warnings.filterwarnings("ignore")
 
-app = FastAPI()
 load_dotenv()
 
+edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+edgelake_node_port = edgelake_node_url.split(":")[2]
+
+configure_logging(f"node_server_{edgelake_node_port}")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 
@@ -38,7 +42,23 @@ listener_thread = None
 stop_listening_thread = False
 
 
-edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(f"Node server on port {edgelake_node_port} starting up.")
+
+    node_name = "node1" ##### TODO: make table names dynamic
+    db_name = os.getenv("PSQL_DB_NAME")
+    query = f"sql {db_name} SELECT * FROM node_{node_name} LIMIT 1"
+    try:
+        _ = fetch_data_from_db(edgelake_node_url, query)
+    except Exception as e:
+        raise ConnectionError(f"Unable to access the database tables: {str(e)}")
+
+    yield
+    logger.info("Node server shutting down.")
+
+app = FastAPI(lifespan=lifespan)
+
 
 class InitNodeRequest(BaseModel):
     replica_name: str
@@ -69,8 +89,8 @@ def init_node(request: InitNodeRequest):
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port, index)
-        configure_logging(f"node_server_{port}")
+        node_instance = Node(replica_name, ip, port, index, logger)
+        # configure_logging(f"node_server_{port}")
         node_instance.currentRound = 1
 
         logger.info(f"{replica_name} successfully initialized")

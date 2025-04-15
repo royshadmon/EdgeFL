@@ -24,7 +24,7 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, replica_name, ip, port, index):
+    def __init__(self, replica_name, ip, port, index, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
@@ -35,8 +35,9 @@ class Node:
         if not os.path.exists(self.tmp_dir):
             os.makedirs(self.tmp_dir)
 
-        configure_logging(f"node_server_{port}")
-        self.logger = logging.getLogger(__name__)
+        # configure_logging(f"node_server_{port}")
+        # self.logger = logging.getLogger(__name__)
+        self.logger = logger
         self.logger.debug("Node initializing")
 
         self.database_url = os.getenv("DATABASE_URL")
