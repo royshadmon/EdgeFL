@@ -48,6 +48,10 @@ class TrainingRequest(BaseModel):
     totalRounds: int
     minParams: int
 
+class ContinueTrainingRequest(BaseModel):
+    additionalRounds: int
+    minParams: int
+
 # @app.route('/init', methods=['POST'])
 
 @app.post("/init")
@@ -193,6 +197,131 @@ async def listen_for_update_agg(min_params, roundNumber, index):
 
         await asyncio.sleep(2)
 
+
+# FIXING =====
+@app.post('/continue-training')
+async def continue_training(request: ContinueTrainingRequest):
+    """Continue training from the last completed round."""
+    try:
+        additional_rounds = request.additionalRounds
+        min_params = request.minParams
+        index = aggregator.index
+
+        if additional_rounds <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid number of additional rounds"
+            )
+
+        # Get the last round number from the blockchain layer
+        last_round = get_last_round_number()
+        if last_round is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No previous training found"
+            )
+        logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more rounds.")
+
+        # Fetch the most recent aggregated model parameters
+        initial_params = get_last_aggregated_params(last_round)
+        if not initial_params:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to fetch aggregated parameters from round {last_round}"
+            )
+
+        # Continue training for the specified number of additional rounds
+        for r in range(last_round + 1, last_round + additional_rounds + 1):
+            logger.info(f"Starting training round {r}")
+            aggregator.start_round(initial_params, r, index)
+            logger.debug("Sent initial parameters to nodes")
+
+            # Listen for updates from nodes
+            new_aggregator_params = await listen_for_update_agg(min_params, r, index)
+            logger.debug("Received aggregated parameters")
+
+            # Set initial params to newly aggregated params for the next round
+            initial_params = new_aggregator_params
+            print(f"[Round {r}] Step 4 Complete: model parameters aggregated")
+        return {
+            'status': 'success',
+            'message': f'Training continued successfully from round {last_round + 1} to {last_round + additional_rounds}'
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+def get_last_round_number():
+    """Get the last completed round number from the blockchain."""
+    url = f'http://{os.getenv("EXTERNAL_IP")}'
+
+    try:
+        # Query the blockchain for all 'r' prefixed keys to find the highest round number
+        index = aggregator.index
+        response = requests.get(url, headers={
+            'User-Agent': 'AnyLog/1.23',
+            "command": f"blockchain get * where [index] = {index} and [node_type] = aggregator"
+        })
+
+        if response.status_code == 200:
+            policies = response.json()
+            if not policies or not isinstance(policies, list):
+                return None
+
+            # Extract round numbers from keys like '{index}-r1', '{index}-r2', etc.
+            highest_round_number = 0
+            for policy in policies:
+                # if key.startswith('a') and key[1:].isdigit():
+                #     round_numbers.append(int(key[1:]))
+                key = next(iter(policy)) # it is dict form at first
+                _, number = key.rsplit("-r", 1)
+                highest_round_number = max(highest_round_number, int(number))
+
+            if highest_round_number == 0:
+                return None
+
+            return highest_round_number
+        else:
+            logger.error(f"Error fetching keys: {response.status_code}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error fetching last round number: {str(e)}")
+        return None
+
+
+def get_last_aggregated_params(round_number):
+    """Get the aggregated parameters from the specified round."""
+    url = f'http://{os.getenv("EXTERNAL_IP")}'
+    try:
+        # Get the aggregated parameters for the specified round
+        index = aggregator.index
+        response = requests.get(url, headers={
+            'User-Agent': 'AnyLog/1.23',
+            "command": f"blockchain get {index}-r{round_number}"
+        })
+
+        if response.status_code == 200:
+            result = response.json()
+            if result and isinstance(result, list) and len(result) > 0:
+                for item in result:
+                    if f'{index}-r{round_number}' in item and 'initParams' in item[f'{index}-r{round_number}']:
+                        return item[f'{index}-r{round_number}']['initParams']
+
+            logger.info(f"No aggregated parameters found for round {round_number}")
+            return None
+
+        else:
+            logger.error(f"Error fetching aggregated parameters: {response.status_code}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error fetching aggregated parameters: {str(e)}")
+        return None
+# END FIX =====
 
 if __name__ == '__main__':
     # Add argument parsing to make the port configurable

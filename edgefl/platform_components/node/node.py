@@ -83,6 +83,7 @@ class Node:
         try:
             data = f'''<my_policy = {{"{index}-a{round_number}" : {{
                                 "node" : "{self.replicaName}",
+                                "index": "{index}",
                                 "node_type": "training",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
                                 "trained_params_local_path": "{model_metadata}"
