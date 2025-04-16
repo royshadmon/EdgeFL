@@ -96,6 +96,7 @@ class Aggregator:
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
             data = f'''<my_policy = {{"{index}-r{roundNumber}" : {{
+                                        "index" : "{index}",
                                         "node_type": "aggregator",
                                         "initParams": "{initParamsLink}",
                                         "ip_port": "{self.edgelake_tcp_node_ip_port}"
