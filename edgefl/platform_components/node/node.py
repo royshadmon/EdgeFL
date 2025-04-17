@@ -26,14 +26,10 @@ load_dotenv()
 class Node:
     def __init__(self, replica_name, ip, port, index, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
-        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
+        self.module_name = os.getenv('MODULE_NAME')
         self.node_ip = ip
         self.node_port = port
         self.index = index # index specified *only* on init; tracked for entire training process
-
-        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
-        if not os.path.exists(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
 
         # configure_logging(f"node_server_{port}")
         # self.logger = logging.getLogger(__name__)
@@ -48,15 +44,21 @@ class Node:
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        module_name = os.getenv('MODULE_NAME')
-        TrainingApp_class = load_class_from_file(training_app_path, module_name)
+        TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
         self.data_handler = TrainingApp_class(self.replicaName)  # Create an instance
+
+        # init file write paths
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
+                                                   self.module_name, self.index)
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
+            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_name, self.index)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/")

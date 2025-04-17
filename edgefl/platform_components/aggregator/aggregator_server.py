@@ -62,6 +62,7 @@ def init(request: InitRequest):
         node_urls, index = request.nodeUrls, request.index
         aggregator.index = index
 
+        aggregator.initialize_file_write_paths(index) # this done here; check why in aggregator.py
         initialize_nodes(node_urls, index)
         aggregator.initialize_index_on_blockchain(index)
         logger.info(f"Initialized nodes with index ({index}): {request.nodeUrls}")

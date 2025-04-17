@@ -29,10 +29,11 @@ load_dotenv()
 class Aggregator:
     def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
-        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
-        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
-        if not os.path.exists(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
+        self.module_name = os.getenv('MODULE_NAME')
+        # self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.module_name)
+        # self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name)
+        # if not os.path.exists(self.tmp_dir):
+        #     os.makedirs(self.tmp_dir)
         self.server_ip = ip
         self.server_port = port
         self.index = '' # right now, specified *only* on init; tracked for entire training process
@@ -42,21 +43,52 @@ class Aggregator:
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        module_name = os.getenv('MODULE_NAME')
-        TrainingApp_class = load_class_from_file(training_app_path, module_name)
+        TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
         self.training_app = TrainingApp_class('aggregator')  # Create an instance
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 
+        self.file_write_destination = None
+        self.tmp_dir = None
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
-            self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-            create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
-            create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
+        #     self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_name)
+        #     self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
+        #     create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
+        #     create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
+
+    # Originally initialized in __init__, but moved due to the index currently being requested in '/init' (after agg. instance)
+    def initialize_file_write_paths(self, index):
+        try:
+            if self.index != index:
+                self.index = index
+
+            self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
+                                                       self.module_name, self.index)
+
+            self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
+            if not os.path.exists(self.tmp_dir):
+                os.makedirs(self.tmp_dir)
+
+            if self.docker_running:
+                self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"),
+                                                                  self.module_name, self.index)
+                self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
+                create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
+                create_directory_in_container(self.docker_container_name,
+                                              f"{self.docker_file_write_destination}/aggregator/")
+            return {
+                    'status': 'success',
+                    'message': 'file write paths initialized' # TODO: reword
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
 
     def initialize_index_on_blockchain(self, index):
         try:
@@ -77,7 +109,7 @@ class Aggregator:
             if success:
                 return {
                     'status': 'success',
-                    'message': 'index initialized onto the blockchain' # reword
+                    'message': 'index initialized onto the blockchain' # TODO: reword
                 }
             else:
                 return {
