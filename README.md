@@ -171,6 +171,16 @@ curl -X POST http://localhost:8080/start-training \
 `totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
 the aggregator should wait for before starting the next round. 
 
+Once the training process is complete, you may choose to do additional rounds of training on the same model.
+```bash
+curl -X POST http://localhost:8080/continue-training \
+ -H "Content-Type: application/json" \
+ -d '{
+   "additionalRounds": 3, 
+   "minParams": 3
+ }'
+ ```
+
 At any point, you can execute edge inference directly on the node.
 This can be done on each training node. The output will be the accuracy based on the local test data
 held out from training.
