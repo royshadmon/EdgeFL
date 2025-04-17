@@ -194,7 +194,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     uvicorn.run(
-        "aggregator_server:app",
+        "platform_components.aggregator.aggregator_server:app",
         host="0.0.0.0",
         port=args.port,
         reload=False  # Enable auto-reload on code changes (optional)
