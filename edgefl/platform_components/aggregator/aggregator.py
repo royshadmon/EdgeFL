@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, \
-    check_policy_inserted
+    check_policy_inserted, delete_policy, get_policy_id_by_name
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
@@ -122,15 +122,64 @@ class Aggregator:
                 'message': str(e)
             }
 
+    # Deletes and inserts index-rx with updated initParams ('blockchain update to' not working)
+    def store_most_recent_agg_params(self, initParams_link, index):
+        try:
+            policy_name = f"{index}-r"
+            old_policy_id = get_policy_id_by_name(self.edgelake_node_url, policy_name)
+
+            # Deleting old policy
+            delete_success = False
+            while old_policy_id and not delete_success:
+                response = delete_policy(self.edgelake_node_url, old_policy_id)
+                if response.status_code == 200:
+                    delete_success = True
+                else:
+                    sleep(np.random.randint(1,3))
+
+            # Inserting policy back in with updated initParams link
+            data = f'''<my_policy = {{"{policy_name}" : {{
+                                                    "index" : "{index}",
+                                                    "node_type": "aggregator",
+                                                    "initParams": "{initParams_link}",
+                                                    "ip_port": "{self.edgelake_tcp_node_ip_port}"
+                                          }} }}>'''
+            insert_success = False
+            while not insert_success:
+                response = insert_policy(self.edgelake_node_url, data)
+                if response.status_code == 200:
+                    insert_success = True
+                else:
+                    sleep(np.random.randint(2, 5))
+
+                    if check_policy_inserted(self.edgelake_node_url, data):
+                        insert_success = True
+
+            if insert_success:
+                return {
+                    'status': 'success',
+                    'message': f'Successfully updated most recent aggregated model file at policy {index}-r'
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'message': f'Request failed with status code: {response.status_code}'
+                }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': str(e)
+            }
+
     # function to call the start round function
-    def start_round(self, initParamsLink, roundNumber, index):
+    def start_round(self, initParams_link, round_number, index):
         try:
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
-            data = f'''<my_policy = {{"{index}-r{roundNumber}" : {{
+            data = f'''<my_policy = {{"{index}-r{round_number}" : {{
                                         "index" : "{index}",
                                         "node_type": "aggregator",
-                                        "initParams": "{initParamsLink}",
+                                        "initParams": "{initParams_link}",
                                         "ip_port": "{self.edgelake_tcp_node_ip_port}"
                               }} }}>'''
             success = False

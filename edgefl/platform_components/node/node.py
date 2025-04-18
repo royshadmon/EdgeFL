@@ -125,7 +125,7 @@ class Node:
         self.logger.debug(f"in train_model_params for round {round_number}")
 
         # First round initialization
-        if round_number == 1:
+        if round_number == 1 and not aggregator_model_params_db_link:
             # weights = self.local_training_handler.fl_model.get_model_update()
             weights = self.data_handler.get_weights()
             # model_update = self.data_handler.get_model_update()

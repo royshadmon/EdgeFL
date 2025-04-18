@@ -21,6 +21,16 @@ def insert_policy(el_url, policy):
     response = requests.post(el_url, headers=headers, data=policy)
     return response
 
+# TODO: fix proper blockchain update command
+# def update_policy(el_url, policy_id, policy):
+#     headers = {
+#         'User-Agent': 'AnyLog/1.23',
+#         'Content-Type': 'text/plain',
+#         'command': f'blockchain update to master {policy_id} !my_policy'
+#     }
+#     response = requests.post(el_url, headers=headers, data=policy)
+#     return response
+
 def delete_policy(el_url, policy_id):
     headers = {
         'User-Agent': 'AnyLog/1.23',
@@ -62,6 +72,20 @@ def check_policy_inserted(el_url, policy):
             return True
 
         return False
+
+
+def get_policy_id_by_name(el_url, policy_name):
+    headers = {
+        'User-Agent': 'AnyLog/1.23',
+        'Content-Type': 'text/plain',
+        'command': f'blockchain get {policy_name}'
+    }
+    response = requests.get(el_url, headers=headers)
+    data = response.json()
+    if not data:
+        return None
+    policy_id = data[0][policy_name]['id'] # [{policy_name: {..., 'id': ..., ...}}]
+    return policy_id
 
 
 def fetch_data_from_db(edgelake_node_url, query):

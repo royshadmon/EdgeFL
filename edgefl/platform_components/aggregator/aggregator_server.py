@@ -115,7 +115,7 @@ async def init_training(request: TrainingRequest):
                 detail="Number of rounds must be positive"
             )
 
-        logger.info(f"{num_rounds} rounds of training started.")
+        logger.info(f"{num_rounds} {'round' if num_rounds == 1 else 'rounds'} of training started.")
 
         initial_params = ''
 
@@ -131,6 +131,10 @@ async def init_training(request: TrainingRequest):
             # Set initial params to newly aggregated params for the next round
             initial_params = new_aggregator_params
             logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
+
+        # Track the last agg model file because it's not stored in a policy after the last round
+        aggregator.store_most_recent_agg_params(initial_params, index)
+
         return {
             "status": "success",
             "message": "Training completed successfully"
@@ -224,7 +228,7 @@ async def continue_training(request: ContinueTrainingRequest):
         logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more rounds.")
 
         # Fetch the most recent aggregated model parameters
-        initial_params = get_last_aggregated_params(last_round)
+        initial_params = get_last_aggregated_params()
         if not initial_params:
             raise HTTPException(
                 status_code=500,
@@ -243,7 +247,11 @@ async def continue_training(request: ContinueTrainingRequest):
 
             # Set initial params to newly aggregated params for the next round
             initial_params = new_aggregator_params
-            print(f"[Round {r}] Step 4 Complete: model parameters aggregated")
+            logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
+
+        # Track the last agg model file because it's not stored in a policy after the last round
+        aggregator.store_most_recent_agg_params(initial_params, index)
+
         return {
             'status': 'success',
             'message': f'Training continued successfully from round {last_round + 1} to {last_round + additional_rounds}'
@@ -278,6 +286,9 @@ def get_last_round_number():
                 # if key.startswith('a') and key[1:].isdigit():
                 #     round_numbers.append(int(key[1:]))
                 key = next(iter(policy)) # it is dict form at first
+                if key[-1] == 'r':
+                    break
+
                 _, number = key.rsplit("-r", 1)
                 highest_round_number = max(highest_round_number, int(number))
 
@@ -294,25 +305,25 @@ def get_last_round_number():
         return None
 
 
-def get_last_aggregated_params(round_number):
+def get_last_aggregated_params():
     """Get the aggregated parameters from the specified round."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
     try:
-        # Get the aggregated parameters for the specified round
+        # Get the aggregated parameters from index-r
         index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
-            "command": f"blockchain get {index}-r{round_number}"
+            "command": f"blockchain get {index}-r"
         })
 
         if response.status_code == 200:
             result = response.json()
             if result and isinstance(result, list) and len(result) > 0:
                 for item in result:
-                    if f'{index}-r{round_number}' in item and 'initParams' in item[f'{index}-r{round_number}']:
-                        return item[f'{index}-r{round_number}']['initParams']
+                    if f'{index}-r' in item and 'initParams' in item[f'{index}-r']:
+                        return item[f'{index}-r']['initParams']
 
-            logger.info(f"No aggregated parameters found for round {round_number}")
+            logger.info(f"No aggregated parameters found in policy {index}-r")
             return None
 
         else:
