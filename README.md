@@ -130,10 +130,10 @@ Now that data is loaded into the database continue to the next step.
 Note to execute the below commands in a new terminal. 
 ```bash
 cd edgefl
-dotenv -f env_files/mnist-agg.env run -- python -m platform_components.aggregator.aggregator_server
-dotenv -f env_files/mnist1.env run -- python -m platform_components.node.node_server --p 8081
-dotenv -f env_files/mnist2.env run -- python -m platform_components.node.node_server --p 8082
-dotenv -f env_files/mnist3.env run -- python -m platform_components.node.node_server --p 8083
+dotenv -f env_files/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
+dotenv -f env_files/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
+dotenv -f env_files/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
+dotenv -f env_files/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 

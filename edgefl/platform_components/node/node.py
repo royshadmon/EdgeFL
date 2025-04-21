@@ -31,8 +31,6 @@ class Node:
         self.node_port = port
         self.index = index # index specified *only* on init; tracked for entire training process
 
-        # configure_logging(f"node_server_{port}")
-        # self.logger = logging.getLogger(__name__)
         self.logger = logger
         self.logger.debug("Node initializing")
 

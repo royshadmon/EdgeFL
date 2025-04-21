@@ -30,10 +30,7 @@ class Aggregator:
     def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
         self.module_name = os.getenv('MODULE_NAME')
-        # self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.module_name)
-        # self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name)
-        # if not os.path.exists(self.tmp_dir):
-        #     os.makedirs(self.tmp_dir)
+
         self.server_ip = ip
         self.server_port = port
         self.index = '' # right now, specified *only* on init; tracked for entire training process
@@ -55,10 +52,6 @@ class Aggregator:
             self.docker_running = False
         else:
             self.docker_running = True
-        #     self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_name)
-        #     self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-        #     create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
-        #     create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
     # Originally initialized in __init__, but moved due to the index currently being requested in '/init' (after agg. instance)
     def initialize_file_write_paths(self, index):
@@ -251,13 +244,6 @@ class Aggregator:
                         f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
             except Exception as e:
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
-
-        # do aggregation function here (doesn't return anything)
-        # self.fusion_model.update_weights(decoded_params)
-        # aggregate_params_weights2 = self.fusion_model.current_model_weights
-        #
-        # # aggregate_params_weights = FedMax_aggregate(decoded_params)
-        # aggregate_params_weights = PBA_aggregate(decoded_params)
 
         aggregate_params_weights = self.training_app.aggregate_model_weights(decoded_params)
 
