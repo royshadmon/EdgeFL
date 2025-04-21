@@ -130,10 +130,10 @@ Now that data is loaded into the database continue to the next step.
 Note to execute the below commands in a new terminal. 
 ```bash
 cd edgefl
-dotenv -f env_files/mnist-agg.env run -- python -m platform_components.aggregator.aggregator_server
-dotenv -f env_files/mnist1.env run -- python -m platform_components.node.node_server --p 8081
-dotenv -f env_files/mnist2.env run -- python -m platform_components.node.node_server --p 8082
-dotenv -f env_files/mnist3.env run -- python -m platform_components.node.node_server --p 8083
+dotenv -f env_files/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
+dotenv -f env_files/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
+dotenv -f env_files/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
+dotenv -f env_files/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
@@ -154,7 +154,8 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8081",
     "http://localhost:8082",
     "http://localhost:8083"
-  ]
+  ],
+  "index": "test-index"
 }'
 ```
 After, start the training process:
@@ -169,6 +170,16 @@ curl -X POST http://localhost:8080/start-training \
 
 `totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
 the aggregator should wait for before starting the next round. 
+
+Once the training process is complete, you may choose to do additional rounds of training on the same model.
+```bash
+curl -X POST http://localhost:8080/continue-training \
+ -H "Content-Type: application/json" \
+ -d '{
+   "additionalRounds": 3, 
+   "minParams": 3
+ }'
+ ```
 
 At any point, you can execute edge inference directly on the node.
 This can be done on each training node. The output will be the accuracy based on the local test data
