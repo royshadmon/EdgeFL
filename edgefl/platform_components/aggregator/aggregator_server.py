@@ -117,14 +117,17 @@ def initialize_nodes(node_urls: list[str], index):
 async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
     try:
+        index = aggregator.index
+        node_count = aggregator.node_count[index]
+        additional_params_added = 0 # accounts for nodes added during training
+
         num_rounds = request.totalRounds
         min_params = request.minParams
-        index = aggregator.index
-
-        # When nodes are dynamically added during training, min_params will also
-        # account for those new nodes
-        old_node_count = aggregator.node_count[index]
-        additional_params_added = 0
+        if min_params > node_count: # prevents stalling when minParams > # of active nodes; warns user
+            logger.info(
+                f"minParams ({min_params}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+            )
+            min_params = node_count
 
         if num_rounds <= 0:
             raise HTTPException(
@@ -143,9 +146,9 @@ async def init_training(request: TrainingRequest):
 
             # Listen for updates from nodes
             new_node_count = aggregator.node_count[index]
-            if new_node_count > old_node_count: # detects newly added nodes
-                additional_params_added += (new_node_count - old_node_count)
-                old_node_count = new_node_count
+            if new_node_count > node_count: # detects newly added nodes
+                additional_params_added += (new_node_count - node_count)
+                node_count = new_node_count
             new_aggregator_params = await listen_for_update_agg(min_params + additional_params_added, r, index)
             logger.debug("Received aggregated parameters")
 
@@ -225,19 +228,21 @@ async def listen_for_update_agg(min_params, roundNumber, index):
         await asyncio.sleep(2)
 
 
-# FIXING =====
 @app.post('/continue-training')
 async def continue_training(request: ContinueTrainingRequest):
     """Continue training from the last completed round."""
     try:
+        index = aggregator.index
+        node_count = aggregator.node_count[index]
+        additional_params_added = 0 # accounts for nodes added during training
+
         additional_rounds = request.additionalRounds
         min_params = request.minParams
-        index = aggregator.index
-
-        # When nodes are dynamically added during training, min_params will also
-        # account for those new nodes
-        old_node_count = aggregator.node_count[index]
-        additional_params_added = 0
+        if min_params > node_count: # prevents stalling when minParams > # of active nodes; warns user
+            logger.info(
+                f"minParams ({min_params}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+            )
+            min_params = node_count
 
         if additional_rounds <= 0:
             raise HTTPException(
@@ -270,9 +275,9 @@ async def continue_training(request: ContinueTrainingRequest):
 
             # Listen for updates from nodes
             new_node_count = aggregator.node_count[index]
-            if new_node_count > old_node_count:  # detects newly added nodes
-                additional_params_added += (new_node_count - old_node_count)
-                old_node_count = new_node_count
+            if new_node_count > node_count:  # detects newly added nodes
+                additional_params_added += (new_node_count - node_count)
+                node_count = new_node_count
             new_aggregator_params = await listen_for_update_agg(min_params + additional_params_added, r, index)
             logger.debug("Received aggregated parameters")
 
@@ -364,7 +369,6 @@ def get_last_aggregated_params():
     except Exception as e:
         logger.error(f"Error fetching aggregated parameters: {str(e)}")
         return None
-# END FIX =====
 
 if __name__ == '__main__':
     # Add argument parsing to make the port configurable
