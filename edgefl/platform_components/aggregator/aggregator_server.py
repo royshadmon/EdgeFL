@@ -62,7 +62,7 @@ def init(request: InitRequest):
         node_urls, index = request.nodeUrls, request.index
         aggregator.index = index
 
-        aggregator.initialize_file_write_paths(index) # this done here; check why in aggregator.py
+        aggregator.initialize_file_write_paths(index) # this is done here; check why in aggregator.py
         initialize_nodes(node_urls, index)
         aggregator.initialize_index_on_blockchain(index)
         logger.info(f"Initialized nodes with index ({index}): {request.nodeUrls}")
@@ -78,20 +78,32 @@ def init(request: InitRequest):
 
 def initialize_nodes(node_urls: list[str], index):
     """Send the deployed contract address to multiple node servers."""
+    if index not in aggregator.node_count:
+        aggregator.node_count[index] = 0
+
+    if index not in aggregator.node_urls:
+        aggregator.node_urls[index] = set()
+
     for urlCount, url in enumerate(node_urls):
         try:
             my_url = node_urls[urlCount].split('/')[-1]
             my_url = my_url.split(':')
             logger.info(f"Initializing model at {url}")
 
+            if url in aggregator.node_urls[index]: # don't initialize for an existing node url
+                logger.info(f"Model at {url} already exists for index {index}.")
+                continue
+
             response = requests.post(f'{url}/init-node', json={
                 'replica_ip': my_url[0],
                 'replica_port': my_url[1],
-                'replica_name': f"node{urlCount+1}",
+                'replica_name': f"node{aggregator.node_count[index] + 1}",
                 'replica_index': index
             })
 
             if response.status_code == 200:
+                aggregator.node_count[index] += 1
+                aggregator.node_urls[index].add(url)
                 logger.info(f"Node at {url} initialized successfully.")
             else:
                 logger.error(
@@ -109,6 +121,11 @@ async def init_training(request: TrainingRequest):
         min_params = request.minParams
         index = aggregator.index
 
+        # When nodes are dynamically added during training, min_params will also
+        # account for those new nodes
+        old_node_count = aggregator.node_count[index]
+        additional_params_added = 0
+
         if num_rounds <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -125,15 +142,20 @@ async def init_training(request: TrainingRequest):
             logger.debug("Sent initial parameters to nodes")
 
             # Listen for updates from nodes
-            new_aggregator_params = await listen_for_update_agg(min_params, r, index)
+            new_node_count = aggregator.node_count[index]
+            if new_node_count > old_node_count: # detects newly added nodes
+                additional_params_added += (new_node_count - old_node_count)
+                old_node_count = new_node_count
+            new_aggregator_params = await listen_for_update_agg(min_params + additional_params_added, r, index)
             logger.debug("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
             initial_params = new_aggregator_params
             logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
 
-        # Track the last agg model file because it's not stored in a policy after the last round
-        aggregator.store_most_recent_agg_params(initial_params, index)
+            # Track the last agg model file because it's not stored in a policy after the last round
+            aggregator.store_most_recent_agg_params(initial_params, index)
+
 
         return {
             "status": "success",
@@ -212,6 +234,11 @@ async def continue_training(request: ContinueTrainingRequest):
         min_params = request.minParams
         index = aggregator.index
 
+        # When nodes are dynamically added during training, min_params will also
+        # account for those new nodes
+        old_node_count = aggregator.node_count[index]
+        additional_params_added = 0
+
         if additional_rounds <= 0:
             raise HTTPException(
                 status_code=400,
@@ -242,15 +269,19 @@ async def continue_training(request: ContinueTrainingRequest):
             logger.debug("Sent initial parameters to nodes")
 
             # Listen for updates from nodes
-            new_aggregator_params = await listen_for_update_agg(min_params, r, index)
+            new_node_count = aggregator.node_count[index]
+            if new_node_count > old_node_count:  # detects newly added nodes
+                additional_params_added += (new_node_count - old_node_count)
+                old_node_count = new_node_count
+            new_aggregator_params = await listen_for_update_agg(min_params + additional_params_added, r, index)
             logger.debug("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
             initial_params = new_aggregator_params
             logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
 
-        # Track the last agg model file because it's not stored in a policy after the last round
-        aggregator.store_most_recent_agg_params(initial_params, index)
+            # Track the last agg model file because it's not stored in a policy after the last round
+            aggregator.store_most_recent_agg_params(initial_params, index)
 
         return {
             'status': 'success',
