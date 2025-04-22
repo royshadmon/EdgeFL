@@ -35,6 +35,11 @@ class Aggregator:
         self.server_port = port
         self.index = '' # right now, specified *only* on init; tracked for entire training process
 
+        # Track nodes in play so that node training data doesn't get overwritten
+        # Index-specific
+        self.node_urls = {}
+        self.node_count = {}
+
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
 
