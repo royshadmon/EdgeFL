@@ -261,7 +261,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     run(
-    "node_server:app",
+    "platform_components.node.node_server:app",
         host="0.0.0.0",
         port=args.port,
         reload=False  # Enable auto-reload on code changes (optional)
