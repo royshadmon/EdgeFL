@@ -24,18 +24,14 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, replica_name, ip, port):
+    def __init__(self, replica_name, ip, port, index, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
-        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
+        self.module_name = os.getenv('MODULE_NAME')
         self.node_ip = ip
         self.node_port = port
+        self.index = index # index specified *only* on init; tracked for entire training process
 
-        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
-        if not os.path.exists(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
-
-        configure_logging(f"node_server_{port}")
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
         self.logger.debug("Node initializing")
 
         self.database_url = os.getenv("DATABASE_URL")
@@ -46,15 +42,21 @@ class Node:
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        module_name = os.getenv('MODULE_NAME')
-        TrainingApp_class = load_class_from_file(training_app_path, module_name)
+        TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
         self.data_handler = TrainingApp_class(self.replicaName)  # Create an instance
+
+        # init file write paths
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
+                                                   self.module_name, self.index)
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
+            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_name, self.index)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/")
@@ -74,13 +76,15 @@ class Node:
 
     '''
     add_node_params()
-        - Returns current node nodel parameters to edgefl via event listener
+        - Returns current node model parameters to edgefl via event listener
     '''
-    def add_node_params(self, round_number, model_metadata):
+    def add_node_params(self, round_number, model_metadata, index):
         self.logger.debug("in add_node_params")
         try:
-            data = f'''<my_policy = {{"a{round_number}" : {{
+            data = f'''<my_policy = {{"{index}-a{round_number}" : {{
                                 "node" : "{self.replicaName}",
+                                "index": "{index}",
+                                "node_type": "training",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
                                 "trained_params_local_path": "{model_metadata}"
             }} }}>'''
@@ -112,14 +116,14 @@ class Node:
 
     '''
     train_model_params(aggregator_model_params)
-        - Uses updated aggreagtor model params and updates local model
+        - Uses updated aggregator model params and updates local model
         - Gets local data and runs training on updated model
     '''
-    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports):
+    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
         self.logger.debug(f"in train_model_params for round {round_number}")
 
         # First round initialization
-        if round_number == 1:
+        if round_number == 1 and not aggregator_model_params_db_link:
             # weights = self.local_training_handler.fl_model.get_model_update()
             weights = self.data_handler.get_weights()
             # model_update = self.data_handler.get_model_update()
@@ -161,7 +165,7 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
-        file = f"{round_number}-replica-{self.replicaName}.pkl"
+        file = f"{index}-{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
         os.makedirs(os.path.dirname(f"{self.file_write_destination}/{self.replicaName}/"), exist_ok=True)
         file_name = f"{self.file_write_destination}/{self.replicaName}/{file}"

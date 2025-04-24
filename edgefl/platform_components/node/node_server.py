@@ -5,7 +5,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
 
 # from dotenv import load_dotenv
-from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
+from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, fetch_data_from_db
 from platform_components.node.node import Node
 import numpy as np
 import logging
@@ -19,6 +19,7 @@ import warnings
 
 from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
 from platform_components.lib.logger.logger_config import configure_logging
@@ -26,9 +27,12 @@ from platform_components.lib.logger.logger_config import configure_logging
 
 warnings.filterwarnings("ignore")
 
-app = FastAPI()
 load_dotenv()
 
+edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+edgelake_node_port = edgelake_node_url.split(":")[2]
+
+configure_logging(f"node_server_{edgelake_node_port}")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 
@@ -37,25 +41,41 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
+## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB  for each one.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(f"Node server on port {edgelake_node_port} starting up.")
 
-edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+    node_name = "node1" ##### TODO: make table names dynamic
+    db_name = os.getenv("PSQL_DB_NAME")
+    query = f"sql {db_name} SELECT * FROM node_{node_name} LIMIT 1"
+    try:
+        _ = fetch_data_from_db(edgelake_node_url, query)
+    except Exception as e:
+        raise ConnectionError(f"Unable to access the database tables: {str(e)}")
+
+    yield
+    logger.info("Node server shutting down.")
+
+app = FastAPI(lifespan=lifespan)
+
 
 class InitNodeRequest(BaseModel):
     replica_name: str
     replica_ip: str
     replica_port: str
+    replica_index: str
 
 
 @app.post('/init-node')
 def init_node(request: InitNodeRequest):
-    """Receive the contract address from the aggregator server."""
     global node_instance, listener_thread, stop_listening_thread
     try:
         ip = get_local_ip()
 
         port = request.replica_port
-
         replica_name = request.replica_name
+        index = request.replica_index
 
         # logger.debug(f"Replica name " + replica_name)
 
@@ -68,8 +88,8 @@ def init_node(request: InitNodeRequest):
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port)
-        configure_logging(f"node_server_{port}")
+        node_instance = Node(replica_name, ip, port, index, logger)
+        # configure_logging(f"node_server_{port}")
         node_instance.currentRound = 1
 
         logger.info(f"{replica_name} successfully initialized")
@@ -84,7 +104,7 @@ def init_node(request: InitNodeRequest):
 
         return {
             'status': 'success',
-            'message': 'Contract address set and Node initialized successfully'
+            'message': 'Node initialized successfully'
         }
     except Exception as e:
         raise HTTPException(
@@ -119,16 +139,16 @@ def receive_data(request: ReceiveDataRequest):
     )
 
 def listen_for_start_round(nodeInstance, stop_event):
-    logger.debug(f"listening for start round {nodeInstance.currentRound}")
+    current_round = nodeInstance.currentRound
+    index = nodeInstance.index
+
+    logger.debug(f"listening for start round {current_round}")
     while True:
         try:
-            # next_round = nodeInstance.currentRound + 1
-
-            # logger.debug(f"listening for start round {nodeInstance.currentRound}")
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'blockchain get r{nodeInstance.currentRound}'
+                'command': f'blockchain get {index}-r{current_round}'
             }
             response = requests.get(edgelake_node_url, headers=headers)
 
@@ -139,20 +159,18 @@ def listen_for_start_round(nodeInstance, stop_event):
                 round_data = None
                 for item in data:
                     # Check if the key exists in the current dictionary
-                    if f'r{nodeInstance.currentRound}' in item:
-                        round_data = item[f'r{nodeInstance.currentRound}']
+                    if f'{index}-r{current_round}' in item:
+                        round_data = item[f'{index}-r{current_round}']
                         break  # Stop searching once the current round's data is found
 
                 if round_data:
                     logger.debug(f"Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
-                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, nodeInstance.currentRound, ip_port)
-                    nodeInstance.add_node_params(nodeInstance.currentRound, modelUpdate_metadata)
-                    logger.info(f"[Round {nodeInstance.currentRound}] Step 3 Complete: Model parameters published")
-                    nodeInstance.currentRound += 1
-                # else: # Debugging line
-                #     logger.error(f"No data found for round r{nodeInstance.currentRound}")
+                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, index)
+                    nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
+                    logger.info(f"[Round {current_round}] Step 3 Complete: Model parameters published")
+                    current_round += 1
 
             time.sleep(5)  # Poll every 2 seconds
         except Exception as e:

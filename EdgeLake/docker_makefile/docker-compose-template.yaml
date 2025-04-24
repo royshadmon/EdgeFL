@@ -8,7 +8,6 @@ services:
     container_name: ${NODE_NAME}
     stdin_open: true
     tty: true
-#    network_mode: host
     ports:
       - ${EDGELAKE_SERVER_PORT}:${EDGELAKE_SERVER_PORT}
       - ${EDGELAKE_REST_PORT}:${EDGELAKE_REST_PORT}
