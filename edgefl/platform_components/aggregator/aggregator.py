@@ -39,7 +39,7 @@ class Aggregator:
         # Index-specific
         self.node_urls = {}
         self.node_count = {}
-
+        
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
 
