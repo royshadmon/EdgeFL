@@ -12,6 +12,8 @@ from platform_components.aggregator.aggregator import Aggregator
 import logging
 import requests
 import os
+import threading
+import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
@@ -65,7 +67,7 @@ def init(request: InitRequest):
         aggregator.initialize_file_write_paths(index) # this is done here; check why in aggregator.py
         initialize_nodes(node_urls, index)
         aggregator.initialize_index_on_blockchain(index)
-        logger.info(f"Initialized nodes with index ({index}): {request.nodeUrls}")
+        logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls}")
         return {
             "status": "success"
         }
@@ -78,39 +80,60 @@ def init(request: InitRequest):
 
 def initialize_nodes(node_urls: list[str], index):
     """Send the deployed contract address to multiple node servers."""
+    def init_node(node_url: str):
+        try:
+            ip_port = node_url.split('/')[-1].split(':')
+            logger.info(f"Initializing model at {node_url}")
+
+            with aggregator.lock:
+                if node_url in aggregator.node_urls[index]:  # don't initialize for an existing node url
+                    logger.info(f"Model at {url} already exists for index {index}.")
+                    return
+
+                # Generate name and reserve count before sending POST request
+                replica_number = aggregator.node_count[index] + 1
+                replica_name = f"node{replica_number}"
+                aggregator.node_count[index] = replica_number
+
+            response = requests.post(f'{node_url}/init-node', json={
+                'replica_ip': ip_port[0],
+                'replica_port': ip_port[1],
+                'replica_name': replica_name,
+                'replica_index': index
+            })
+
+            with aggregator.lock:
+                if response.status_code == 200:
+                    aggregator.node_urls[index].add(node_url)
+                    logger.info(f"Node at {node_url} initialized successfully.")
+                else:
+                    # Rollback node count if request fails
+                    aggregator.node_count[index] -= 1
+                    logger.error(
+                        f"Failed to initialize node at {node_url}. HTTP Status: {response.status_code}. Response: {response.text}"
+                    )
+        except Exception as e:
+            with aggregator.lock:
+                aggregator.node_count[index] -= 1 # Rollback on exception
+            logger.critical(f"Error initializing node: {str(e)}")
+
     if index not in aggregator.node_count:
         aggregator.node_count[index] = 0
 
     if index not in aggregator.node_urls:
         aggregator.node_urls[index] = set()
 
-    for urlCount, url in enumerate(node_urls):
-        try:
-            my_url = node_urls[urlCount].split('/')[-1]
-            my_url = my_url.split(':')
-            logger.info(f"Initializing model at {url}")
+    threads = []
+    for url in node_urls:
+        thread = threading.Thread(target=init_node, args=(url,), daemon=True)
+        thread.start()
+        threads.append(thread)
+        time.sleep(0.1)
 
-            if url in aggregator.node_urls[index]: # don't initialize for an existing node url
-                logger.info(f"Model at {url} already exists for index {index}.")
-                continue
-
-            response = requests.post(f'{url}/init-node', json={
-                'replica_ip': my_url[0],
-                'replica_port': my_url[1],
-                'replica_name': f"node{aggregator.node_count[index] + 1}",
-                'replica_index': index
-            })
-
-            if response.status_code == 200:
-                aggregator.node_count[index] += 1
-                aggregator.node_urls[index].add(url)
-                logger.info(f"Node at {url} initialized successfully.")
-            else:
-                logger.error(
-                    f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
-
-        except Exception as e:
-            logger.critical(f"Error initializing node: {str(e)}")
+    for i, thread in enumerate(threads):
+        thread.join(timeout=60) # Adjust timeout as necessary
+        if thread.is_alive():
+            logger.warning(f"Node {i} thread timed out. Failed to initialize a node.")
 
 
 @app.post('/start-training')
