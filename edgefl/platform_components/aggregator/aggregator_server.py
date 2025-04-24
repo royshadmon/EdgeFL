@@ -12,6 +12,8 @@ from platform_components.aggregator.aggregator import Aggregator
 import logging
 import requests
 import os
+import threading
+import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
@@ -67,26 +69,27 @@ def init(request: InitRequest):
 
 def initialize_nodes(node_urls: list[str]):
     """Send the deployed contract address to multiple node servers."""
-    for urlCount, url in enumerate(node_urls):
+    def init_node(node_url: str, index: int):
         try:
-            my_url = node_urls[urlCount].split('/')[-1]
-            my_url = my_url.split(':')
-            logger.info(f"Initializing model at {url}")
+            ip_port = node_url.split('/')[-1].split(':')
+            logger.info(f"Initializing model at {node_url}")
 
-            response = requests.post(f'{url}/init-node', json={
-                'replica_ip': my_url[0],
-                'replica_port': my_url[1],
-                'replica_name': f"node{urlCount+1}",
+            response = requests.post(f'{node_url}/init-node', json={
+                'replica_ip': ip_port[0],
+                'replica_port': ip_port[1],
+                'replica_name': f"node{index+1}",
             })
 
             if response.status_code == 200:
-                logger.info(f"Node at {url} initialized successfully.")
+                logger.info(f"Node at {node_url} initialized successfully.")
             else:
                 logger.error(
-                    f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
+                    f"Failed to initialize node at {node_url}. HTTP Status: {response.status_code}. Response: {response.text}")
 
         except Exception as e:
             logger.critical(f"Error initializing node: {str(e)}")
+    for i, url in enumerate(node_urls):
+        threading.Thread(target=init_node, args=(url, i), daemon=True).start()
 
 
 
