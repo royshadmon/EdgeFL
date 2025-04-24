@@ -4,7 +4,6 @@ import argparse
 import uvicorn
 from dotenv import load_dotenv
 
-
 def main():
     parser = argparse.ArgumentParser(description="Run server based on environment variables")
     parser.add_argument('--env-file', type=str, help='Path to .env file to load')

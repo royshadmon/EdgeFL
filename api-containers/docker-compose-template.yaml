@@ -1,6 +1,6 @@
 services:
   ${NODE_NAME}:
-#    image: python:3.10-slim
+#    image: image_${NODE_TYPE}
     restart: always
     env_file:
       - /platform_${NODE_NAME}.env

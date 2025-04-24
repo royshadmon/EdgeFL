@@ -5,11 +5,10 @@ services:
     image: python:3.10-slim
     restart: always
     env_file:
-      - aggregator_server_${PORT}.env
+      - ${}.env
     container_name: aggregator_server_${PORT}
     ports:
       - ${SERVER_PORT}:${SERVER_PORT}
     volumes:
-        - ./aggregator_server.py:/app/aggregator_server.py
-        - ./aggregator_server_${PORT}.env:/app/aggregator_server_${PORT}.env
-    command: sh -c "uvicorn main:app --reload --port=${PORT} --host=0.0.0.0"
+        - .:/app
+    command: ["python", "app.py", "--env-file", "/app/${}.env"]
