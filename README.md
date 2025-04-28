@@ -169,7 +169,7 @@ curl -X POST http://localhost:8080/start-training \
 ```
 
 `totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
-the aggregator should wait for before starting the next round. 
+the aggregator should wait for before starting the next round.
 
 At any point during the training process, you can add additional nodes to the process by calling initialization again on the new nodes 
 (must use the same `index`) and `minParams` will be dynamically adjusted as necessary.
@@ -180,6 +180,17 @@ curl -X POST http://localhost:8080/init \
   "nodeUrls": [
     "http://localhost:8084"
   ],
+  "index": "test-index"
+}'
+```
+
+You can also update `minParams` as well during the training process (or anytime after node initialization). The specified `index`
+must exist in order to update `minParams`.
+```bash
+curl -X POST http://localhost:8080/update-minParams \
+-H "Content-Type: application/json" \
+-d '{
+  "updatedMinParams": 3,
   "index": "test-index"
 }'
 ```
