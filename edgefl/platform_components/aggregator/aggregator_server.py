@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 # Initialize the Aggregator instance
 ip = get_local_ip()
 port = os.getenv("SERVER_PORT", "8080")
-aggregator = Aggregator(ip, port)
+aggregator = Aggregator(ip, port, logger)
 
 
 #######  FASTAPI IMPLEMENTATION  #######
@@ -45,6 +45,8 @@ aggregator = Aggregator(ip, port)
 class InitRequest(BaseModel):
     nodeUrls: list[str]
     index: str
+    module: str
+    module_path: str
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -68,14 +70,16 @@ def init(request: InitRequest):
     try:
         # Initialize the nodes on specified index and send the contract address
         node_urls, index = request.nodeUrls, request.index
+        module_name, module_path = request.module, request.module_path
         aggregator.indexes.add(index)
 
-        if not index in aggregator.round_number:
-            aggregator.round_number[index] = 1
+        initialize_nodes(node_urls, index, module_name, module_path)
 
+        aggregator.set_module_at_index(index, module_name, module_path)
+        aggregator.initialize_index_on_blockchain(index, module_name, module_path)
+        aggregator.initialize_training_app(index)
         aggregator.initialize_file_write_paths(index)
-        initialize_nodes(node_urls, index)
-        aggregator.initialize_index_on_blockchain(index)
+
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
         return {
             "status": "success"
@@ -83,11 +87,12 @@ def init(request: InitRequest):
     except Exception as e:
         logger.error(f"Failed to initialize nodes with index ({index}): {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
 
-def initialize_nodes(node_urls: list[str], index):
+def initialize_nodes(node_urls: list[str], index, module_name, module_path):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -109,7 +114,8 @@ def initialize_nodes(node_urls: list[str], index):
                 'replica_port': ip_port[1],
                 'replica_name': replica_name,
                 'replica_index': index,
-                'round_number': aggregator.round_number[index],
+                'module_name': module_name,
+                'module_path': module_path
             })
 
             with aggregator.lock:
@@ -119,13 +125,14 @@ def initialize_nodes(node_urls: list[str], index):
                 else:
                     # Rollback node count if request fails
                     aggregator.node_count[index] -= 1
-                    logger.error(
-                        f"Failed to initialize node at {node_url}. HTTP Status: {response.status_code}. Response: {response.text}"
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Failed to initialize node at {node_url}."
                     )
         except Exception as e:
             with aggregator.lock:
                 aggregator.node_count[index] -= 1 # Rollback on exception
-            logger.critical(f"Error initializing node: {str(e)}")
+            logger.critical(f"{str(e)}")
 
     if index not in aggregator.node_count:
         aggregator.node_count[index] = 0
@@ -141,7 +148,7 @@ def initialize_nodes(node_urls: list[str], index):
         time.sleep(0.1)
 
     for i, thread in enumerate(threads):
-        thread.join(timeout=60) # Adjust timeout as necessary
+        thread.join(timeout=180) # Adjust timeout as necessary
         if thread.is_alive():
             logger.warning(f"Node {i} thread timed out. Failed to initialize a node.")
 
@@ -150,13 +157,7 @@ def initialize_nodes(node_urls: list[str], index):
 async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
     try:
-        index = request.index
-        if index not in aggregator.indexes:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Index {index} not found (not yet initialized)."
-            )
-
+        index = aggregator.index
         node_count = aggregator.node_count[index]
         num_rounds = request.totalRounds
         aggregator.minParams[index] = request.minParams
@@ -177,9 +178,7 @@ async def init_training(request: TrainingRequest):
 
         initial_params = ''
 
-
         for r in range(1, num_rounds + 1):
-            aggregator.round_number[index] = r
             logger.info(f"Starting training round {r}")
             aggregator.start_round(initial_params, r, index)
             logger.debug("Sent initial parameters to nodes")
@@ -194,7 +193,6 @@ async def init_training(request: TrainingRequest):
 
             # Track the last agg model file because it's not stored in a policy after the last round
             aggregator.store_most_recent_agg_params(initial_params, index)
-
 
         return {
             "status": "success",
@@ -214,12 +212,6 @@ async def update_minParams(request: UpdatedMinParamsRequest):
 
     try:
         index = request.index
-        if index not in aggregator.indexes:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Index {index} not found (not yet initialized)."
-            )
-
         check_index_response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get index where name = {index}"
@@ -313,13 +305,7 @@ async def listen_for_update_agg(min_params, roundNumber, index):
 async def continue_training(request: ContinueTrainingRequest):
     """Continue training from the last completed round."""
     try:
-        index = request.index
-        if index not in aggregator.indexes:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Index {index} not found (not yet initialized)."
-            )
-
+        index = aggregator.index
         node_count = aggregator.node_count[index]
         additional_rounds = request.additionalRounds
         aggregator.minParams[index] = request.minParams
@@ -337,7 +323,7 @@ async def continue_training(request: ContinueTrainingRequest):
             )
 
         # Get the last round number from the blockchain layer
-        last_round = get_last_round_number(index)
+        last_round = get_last_round_number()
         if last_round is None:
             raise HTTPException(
                 status_code=400,
@@ -346,7 +332,7 @@ async def continue_training(request: ContinueTrainingRequest):
         logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more {'round' if additional_rounds == 1 else 'rounds'}.")
 
         # Fetch the most recent aggregated model parameters
-        initial_params = get_last_aggregated_params(index)
+        initial_params = get_last_aggregated_params()
         if not initial_params:
             raise HTTPException(
                 status_code=500,
@@ -381,12 +367,13 @@ async def continue_training(request: ContinueTrainingRequest):
         )
 
 
-def get_last_round_number(index):
+def get_last_round_number():
     """Get the last completed round number from the blockchain."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     try:
         # Query the blockchain for all 'r' prefixed keys to find the highest round number
+        index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get * where [index] = {index} and [node_type] = aggregator"
@@ -422,11 +409,12 @@ def get_last_round_number(index):
         return None
 
 
-def get_last_aggregated_params(index):
+def get_last_aggregated_params():
     """Get the aggregated parameters from the specified round."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
     try:
         # Get the aggregated parameters from index-r
+        index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get {index}-r"
