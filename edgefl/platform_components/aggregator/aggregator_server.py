@@ -12,6 +12,8 @@ from platform_components.aggregator.aggregator import Aggregator
 import logging
 import requests
 import os
+import threading
+import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
@@ -48,6 +50,10 @@ class TrainingRequest(BaseModel):
     totalRounds: int
     minParams: int
 
+class UpdatedMinParamsRequest(BaseModel):
+    updatedMinParams: int
+    index: str
+
 class ContinueTrainingRequest(BaseModel):
     additionalRounds: int
     minParams: int
@@ -65,7 +71,7 @@ def init(request: InitRequest):
         aggregator.initialize_file_write_paths(index) # this is done here; check why in aggregator.py
         initialize_nodes(node_urls, index)
         aggregator.initialize_index_on_blockchain(index)
-        logger.info(f"Initialized nodes with index ({index}): {request.nodeUrls}")
+        logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
         return {
             "status": "success"
         }
@@ -78,39 +84,60 @@ def init(request: InitRequest):
 
 def initialize_nodes(node_urls: list[str], index):
     """Send the deployed contract address to multiple node servers."""
+    def init_node(node_url: str):
+        try:
+            ip_port = node_url.split('/')[-1].split(':')
+            logger.info(f"Initializing model at {node_url}")
+
+            with aggregator.lock:
+                if node_url in aggregator.node_urls[index]:  # don't initialize for an existing node url
+                    logger.info(f"Model at {url} already exists for index {index}.")
+                    return
+
+                # Generate name and reserve count before sending POST request
+                replica_number = aggregator.node_count[index] + 1
+                replica_name = f"node{replica_number}"
+                aggregator.node_count[index] = replica_number
+
+            response = requests.post(f'{node_url}/init-node', json={
+                'replica_ip': ip_port[0],
+                'replica_port': ip_port[1],
+                'replica_name': replica_name,
+                'replica_index': index
+            })
+
+            with aggregator.lock:
+                if response.status_code == 200:
+                    aggregator.node_urls[index].add(node_url)
+                    logger.info(f"Node at {node_url} initialized successfully.")
+                else:
+                    # Rollback node count if request fails
+                    aggregator.node_count[index] -= 1
+                    logger.error(
+                        f"Failed to initialize node at {node_url}. HTTP Status: {response.status_code}. Response: {response.text}"
+                    )
+        except Exception as e:
+            with aggregator.lock:
+                aggregator.node_count[index] -= 1 # Rollback on exception
+            logger.critical(f"Error initializing node: {str(e)}")
+
     if index not in aggregator.node_count:
         aggregator.node_count[index] = 0
 
     if index not in aggregator.node_urls:
         aggregator.node_urls[index] = set()
 
-    for urlCount, url in enumerate(node_urls):
-        try:
-            my_url = node_urls[urlCount].split('/')[-1]
-            my_url = my_url.split(':')
-            logger.info(f"Initializing model at {url}")
+    threads = []
+    for url in node_urls:
+        thread = threading.Thread(target=init_node, args=(url,), daemon=True)
+        thread.start()
+        threads.append(thread)
+        time.sleep(0.1)
 
-            if url in aggregator.node_urls[index]: # don't initialize for an existing node url
-                logger.info(f"Model at {url} already exists for index {index}.")
-                continue
-
-            response = requests.post(f'{url}/init-node', json={
-                'replica_ip': my_url[0],
-                'replica_port': my_url[1],
-                'replica_name': f"node{aggregator.node_count[index] + 1}",
-                'replica_index': index
-            })
-
-            if response.status_code == 200:
-                aggregator.node_count[index] += 1
-                aggregator.node_urls[index].add(url)
-                logger.info(f"Node at {url} initialized successfully.")
-            else:
-                logger.error(
-                    f"Failed to initialize node at {url}. HTTP Status: {response.status_code}. Response: {response.text}")
-
-        except Exception as e:
-            logger.critical(f"Error initializing node: {str(e)}")
+    for i, thread in enumerate(threads):
+        thread.join(timeout=60) # Adjust timeout as necessary
+        if thread.is_alive():
+            logger.warning(f"Node {i} thread timed out. Failed to initialize a node.")
 
 
 @app.post('/start-training')
@@ -119,15 +146,14 @@ async def init_training(request: TrainingRequest):
     try:
         index = aggregator.index
         node_count = aggregator.node_count[index]
-        additional_params_added = 0 # accounts for nodes added during training
-
         num_rounds = request.totalRounds
-        min_params = request.minParams
-        if min_params > node_count: # prevents stalling when minParams > # of active nodes; warns user
+        aggregator.minParams[index] = request.minParams
+
+        if aggregator.minParams[index] > node_count: # prevents stalling when minParams > # of active nodes; warns user
             logger.info(
-                f"minParams ({min_params}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+                f"minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
             )
-            min_params = node_count
+            aggregator.minParams[index] = node_count
 
         if num_rounds <= 0:
             raise HTTPException(
@@ -145,11 +171,7 @@ async def init_training(request: TrainingRequest):
             logger.debug("Sent initial parameters to nodes")
 
             # Listen for updates from nodes
-            new_node_count = aggregator.node_count[index]
-            if new_node_count > node_count: # detects newly added nodes
-                additional_params_added += (new_node_count - node_count)
-                node_count = new_node_count
-            new_aggregator_params = await listen_for_update_agg(min_params + additional_params_added, r, index)
+            new_aggregator_params = await listen_for_update_agg(aggregator.minParams[index], r, index)
             logger.debug("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round
@@ -159,19 +181,57 @@ async def init_training(request: TrainingRequest):
             # Track the last agg model file because it's not stored in a policy after the last round
             aggregator.store_most_recent_agg_params(initial_params, index)
 
-
         return {
             "status": "success",
             "message": "Training completed successfully"
         }
-
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e)
         )
 
-        
+
+@app.post('/update-minParams')
+async def update_minParams(request: UpdatedMinParamsRequest):
+    """Update minParams at an existing index. Note that indices are specified on node initialization."""
+    url = f'http://{os.getenv("EXTERNAL_IP")}'
+
+    try:
+        index = request.index
+        check_index_response = requests.get(url, headers={
+            'User-Agent': 'AnyLog/1.23',
+            "command": f"blockchain get index where name = {index}"
+        })
+
+        if check_index_response.status_code != 200:
+            raise HTTPException(
+                status_code=check_index_response.status_code,
+                detail=check_index_response.text
+            )
+
+        index_data = check_index_response.json()
+        if not index_data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Index {index} not found in the blockchain."
+            )
+
+        node_count = aggregator.node_count[index]
+        aggregator.minParams[index] = request.updatedMinParams
+
+        if aggregator.minParams[index] > node_count: # prevents stalling when minParams > # of active nodes; warns user
+            logger.info(
+                f"minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+            )
+            aggregator.minParams[index] = node_count
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to set minParams at index {index}. Have the nodes and index been initialized?"
+        )
+
+
 async def listen_for_update_agg(min_params, roundNumber, index):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     logger.info("listening for updates...")
@@ -234,15 +294,14 @@ async def continue_training(request: ContinueTrainingRequest):
     try:
         index = aggregator.index
         node_count = aggregator.node_count[index]
-        additional_params_added = 0 # accounts for nodes added during training
-
         additional_rounds = request.additionalRounds
-        min_params = request.minParams
-        if min_params > node_count: # prevents stalling when minParams > # of active nodes; warns user
+        aggregator.minParams[index] = request.minParams
+
+        if aggregator.minParams[index] > node_count: # prevents stalling when minParams > # of active nodes; warns user
             logger.info(
-                f"minParams ({min_params}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+                f"minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
             )
-            min_params = node_count
+            aggregator.minParams[index] = node_count
 
         if additional_rounds <= 0:
             raise HTTPException(
@@ -257,7 +316,7 @@ async def continue_training(request: ContinueTrainingRequest):
                 status_code=400,
                 detail="No previous training found"
             )
-        logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more rounds.")
+        logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more {'round' if additional_rounds == 1 else 'rounds'}.")
 
         # Fetch the most recent aggregated model parameters
         initial_params = get_last_aggregated_params()
@@ -274,11 +333,7 @@ async def continue_training(request: ContinueTrainingRequest):
             logger.debug("Sent initial parameters to nodes")
 
             # Listen for updates from nodes
-            new_node_count = aggregator.node_count[index]
-            if new_node_count > node_count:  # detects newly added nodes
-                additional_params_added += (new_node_count - node_count)
-                node_count = new_node_count
-            new_aggregator_params = await listen_for_update_agg(min_params + additional_params_added, r, index)
+            new_aggregator_params = await listen_for_update_agg(aggregator.minParams[index], r, index)
             logger.debug("Received aggregated parameters")
 
             # Set initial params to newly aggregated params for the next round

@@ -11,6 +11,7 @@ import ast
 import numpy as np
 import requests
 import pickle
+from threading import Lock
 from dotenv import load_dotenv
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
@@ -35,10 +36,12 @@ class Aggregator:
         self.server_port = port
         self.index = '' # right now, specified *only* on init; tracked for entire training process
 
-        # Track nodes in play so that node training data doesn't get overwritten
+        # Track nodes in play so that node training data doesn't get overwritten + minParams
         # Index-specific
         self.node_urls = {}
         self.node_count = {}
+        self.lock = Lock()
+        self.minParams = {}
         
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')

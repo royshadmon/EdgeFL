@@ -28,42 +28,42 @@ Assumptions:
 Install all necessary Python packages. Tested on Python3.12.
 ```bash
 cd Anylog-Edgelake-Federated-Learning-Platform
-pip install -r edgefl/requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Deploy Postgres container
 Postgres will become available on your inet IP address. You can determine this through the `ifconfig` command. 
 ```bash
 * Start Docker *
-cd edgefl/EdgeLake/postgres
+cd EdgeLake/postgres
 docker compose up -d
 ```
 
 ## Deploy EdgeLake Master node
 ```bash
-cd edgefl/EdgeLake
+cd EdgeLake/
 make up EDGELAKE_TYPE=master TAG=1.3.2501 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
 ```
 Now we need to determine the Master node's Docker IP address. Issue the following command
 ```bash
-cd edgefl/EdgeLake
+cd EdgeLake/
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' master
 ```
 
 With this IP, we can now deploy our three EdgeLake operator nodes. For example, let's assume it's `192.1.1.1`.
 
 ## Deploy EdgeLake Operator node
-Update line 61 (LEDGER_CONN) value in the file `edgefl/EdgeLake/docker_makefile/edgelake_operator1.env`
+Update line 61 (LEDGER_CONN) value in the file `EdgeLake/docker_makefile/edgelake_operator1.env`
 to be `LEDGER_CONN=192.1.1.1:32048` (note that you do not need to change the port).
 In addition, update the `DB_IP` in line 31 with the Docker network IP of the Postgres container. 
 
 Do the same for the following files:
-- `edgefl/EdgeLake/docker_makefile/edgelake_operator2.env`
-- `edgefl/EdgeLake/docker_makefile/edgelake_operator3.env`
+- `EdgeLake/docker_makefile/edgelake_operator2.env`
+- `EdgeLake/docker_makefile/edgelake_operator3.env`
 
 Now we can start the operator nodes.
 ```bash
-cd edgefl/EdgeLake
+cd EdgeLake/
 make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
 make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
 make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
@@ -97,7 +97,7 @@ please contact the EdgeLake maintainers through [EdgeLake's Slack Channel](https
 (the join link is at the bottom of the page).
 
 ## Setting up training node and aggregator configurations
-We now need to update the env files in the `edgefl/env_files/` directory. To do this, we need to update
+We now need to update the env files in the `edgefl/env_files/mnist/` directory. To do this, we need to update
 the listed variables in the following files `mnist1.env`, `mnist2.env`, `mnist3.env` with the inet IP (e.g., `192.1.1.1`):
 - `EXTERNAL_IP`
 - `EXTERNAL_TCP_IP_PORT`
@@ -117,7 +117,7 @@ Note that this only needs to be done once. This will create 3 tables `node_node1
 in the `mnist_fl` database. 
 ```bash
 cd edgefl
-dotenv -f env_files/mnist1.env run -- python -m data.mnist.mnist_db_script
+dotenv -f env_files/mnist/mnist1.env run -- python -m data.mnist.mnist_db_script
 ```
 
 If you want to train on more (or less) data edit lines `153` and `154` in `edgefl/data/mnist/mnist_db_script.py`.
@@ -130,10 +130,10 @@ Now that data is loaded into the database continue to the next step.
 Note to execute the below commands in a new terminal. 
 ```bash
 cd edgefl
-dotenv -f env_files/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
-dotenv -f env_files/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
-dotenv -f env_files/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
-dotenv -f env_files/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
+dotenv -f env_files/mnist/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
+dotenv -f env_files/mnist/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
+dotenv -f env_files/mnist/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
+dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
@@ -169,7 +169,31 @@ curl -X POST http://localhost:8080/start-training \
 ```
 
 `totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
-the aggregator should wait for before starting the next round. 
+the aggregator should wait for before starting the next round.
+
+At any point during the training process, you can add additional nodes to the process by calling initialization again on the new nodes 
+(must use the same `index`) and `minParams` will be dynamically adjusted as necessary.
+```bash
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [
+    "http://localhost:8084"
+  ],
+  "index": "test-index"
+}'
+```
+
+You can also update `minParams` as well during the training process (or anytime after node initialization). The specified `index`
+must exist in order to update `minParams`.
+```bash
+curl -X POST http://localhost:8080/update-minParams \
+-H "Content-Type: application/json" \
+-d '{
+  "updatedMinParams": 3,
+  "index": "test-index"
+}'
+```
 
 Once the training process is complete, you may choose to do additional rounds of training on the same model.
 ```bash
@@ -177,7 +201,7 @@ curl -X POST http://localhost:8080/continue-training \
  -H "Content-Type: application/json" \
  -d '{
    "additionalRounds": 3, 
-   "minParams": 3
+   "minParams": 4
  }'
  ```
 
@@ -188,14 +212,16 @@ held out from training.
 curl -X POST http://localhost:8081/inference
 curl -X POST http://localhost:8082/inference
 curl -X POST http://localhost:8083/inference
+curl -X POST http://localhost:8084/inference
 ```
 
 An example output looks like this:
 ```bash
-curl -X POST http://localhost:8081/inference ; curl -X POST http://localhost:8082/inference ; curl -X POST http://localhost:8083/inference
+curl -X POST http://localhost:8081/inference ; curl -X POST http://localhost:8082/inference ; curl -X POST http://localhost:8083/inference ; curl -X POST http://localhost:8084/inference
 {"message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
 {"message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
 {"message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
+{"message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
 ```
 
 ## Resolving common issues
@@ -244,7 +270,7 @@ To redo the simulation, you need to delete the `edgefl/file_write` directory.
 In addition, you need to kill and restart the EdgeLake operators and master node.
 To do so, follow the following instructions:
 ```bash
-cd edgefl/EdgeLake
+cd EdgeLake/
 make clean EDGELAKE_TYPE=master TAG=1.3.2501 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
 make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
 make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
@@ -255,7 +281,7 @@ After this step, if you want to restart the simulation follow the Deploy EdgeLak
 
 To stop Postgres:
 ```bash
-cd edgefl/EdgeLake/postgres
+cd EdgeLake/postgres
 docker compose down
 ```
 
