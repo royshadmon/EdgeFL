@@ -201,7 +201,8 @@ curl -X POST http://localhost:8080/continue-training \
  -H "Content-Type: application/json" \
  -d '{
    "additionalRounds": 3, 
-   "minParams": 4
+   "minParams": 4,
+   "index": "test-index"
  }'
  ```
 
