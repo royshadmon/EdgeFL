@@ -45,6 +45,7 @@ class Aggregator:
         self.node_count = {}
         self.lock = Lock()
         self.minParams = {}
+        self.round_number = {}
         
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
@@ -67,6 +68,7 @@ class Aggregator:
     # Originally initialized in __init__, but moved due to the index currently being requested in '/init' (after agg. instance)
     def initialize_file_write_paths(self, index):
         try:
+
             self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
 
             if not os.path.exists(os.path.join(self.file_write_destination, index)):
