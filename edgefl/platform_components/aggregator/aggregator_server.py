@@ -70,6 +70,9 @@ def init(request: InitRequest):
         node_urls, index = request.nodeUrls, request.index
         aggregator.indexes.add(index)
 
+        if not index in aggregator.round_number:
+            aggregator.round_number[index] = 1
+
         aggregator.initialize_file_write_paths(index)
         initialize_nodes(node_urls, index)
         aggregator.initialize_index_on_blockchain(index)
@@ -105,7 +108,8 @@ def initialize_nodes(node_urls: list[str], index):
                 'replica_ip': ip_port[0],
                 'replica_port': ip_port[1],
                 'replica_name': replica_name,
-                'replica_index': index
+                'replica_index': index,
+                'round_number': aggregator.round_number[index],
             })
 
             with aggregator.lock:
@@ -173,7 +177,9 @@ async def init_training(request: TrainingRequest):
 
         initial_params = ''
 
+
         for r in range(1, num_rounds + 1):
+            aggregator.round_number[index] = r
             logger.info(f"Starting training round {r}")
             aggregator.start_round(initial_params, r, index)
             logger.debug("Sent initial parameters to nodes")
@@ -188,6 +194,7 @@ async def init_training(request: TrainingRequest):
 
             # Track the last agg model file because it's not stored in a policy after the last round
             aggregator.store_most_recent_agg_params(initial_params, index)
+
 
         return {
             "status": "success",
