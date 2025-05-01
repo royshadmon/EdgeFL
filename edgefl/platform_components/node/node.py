@@ -46,20 +46,19 @@ class Node:
         self.data_handler = TrainingApp_class(self.replicaName)  # Create an instance
 
         # init file write paths
-        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
-                                                   self.module_name, self.index)
-        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
-        if not os.path.exists(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replicaName)
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replicaName)
+        if not os.path.exists(os.path.join(self.tmp_dir,index)):
+            os.makedirs(os.path.join(self.tmp_dir,index))
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_name, self.index)
+            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replicaName)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-            create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
-            create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/")
+            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
+            # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/{self.index}/")
 
         # Node local data batches
         self.data_batches = []
@@ -133,16 +132,16 @@ class Node:
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-                    copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                                         f'{self.docker_file_write_destination}/{index}/{filename}', ip_ports)
+                    copy_file_from_container(os.path.join(self.tmp_dir,index), self.docker_container_name, f'{self.docker_file_write_destination}/{index}/{filename}', f'{self.file_write_destination}/{index}/{filename}')
                 else:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{index}/{filename}', ip_ports)
 
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
                     with open(
-                            f'{self.file_write_destination}/{self.replicaName}/{filename}',
+                            f'{self.file_write_destination}/{index}/{filename}',
                             'rb') as f:
                         data = pickle.load(f)
 
@@ -165,18 +164,18 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
-        file = f"{index}-{round_number}-replica-{self.replicaName}.pkl"
+        file = f"{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
-        os.makedirs(os.path.dirname(f"{self.file_write_destination}/{self.replicaName}/"), exist_ok=True)
-        file_name = f"{self.file_write_destination}/{self.replicaName}/{file}"
+        os.makedirs(os.path.dirname(f"{self.file_write_destination}/{index}/"), exist_ok=True)
+        file_name = f"{self.file_write_destination}/{index}/{file}"
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
         self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
-            self.logger.debug(f'written to container at {f"{self.docker_file_write_destination}/{self.replicaName}/{file}"}')
-            copy_file_to_container(self.tmp_dir, self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
-            return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
+            self.logger.debug(f'written to container at {f"{self.docker_file_write_destination}/{index}/{file}"}')
+            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
+            return f'{self.docker_file_write_destination}/{index}/{file}'
         return file_name
 
     def encode_model(self, model_update):
