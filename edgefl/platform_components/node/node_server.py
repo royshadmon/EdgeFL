@@ -104,7 +104,7 @@ def init_node(request: InitNodeRequest):
         # Start event listener for start round
         listener_thread = threading.Thread(
             target=listen_for_start_round,
-            args=(node_instance, lambda: stop_listening_thread)
+            args=(node_instance, index, lambda: stop_listening_thread)
         )
         listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
         listener_thread.start()
@@ -145,9 +145,8 @@ def receive_data(request: ReceiveDataRequest):
         detail="No Data Provided"
     )
 
-def listen_for_start_round(nodeInstance, stop_event):
+def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.currentRound
-    index = nodeInstance.index
 
     logger.debug(f"listening for start round {current_round}")
     while True:

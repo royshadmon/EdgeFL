@@ -49,6 +49,7 @@ class InitRequest(BaseModel):
 class TrainingRequest(BaseModel):
     totalRounds: int
     minParams: int
+    index: str
 
 class UpdatedMinParamsRequest(BaseModel):
     updatedMinParams: int
@@ -67,9 +68,9 @@ def init(request: InitRequest):
     try:
         # Initialize the nodes on specified index and send the contract address
         node_urls, index = request.nodeUrls, request.index
-        aggregator.index = index
+        aggregator.indexes.add(index)
 
-        aggregator.initialize_file_write_paths(index) # this is done here; check why in aggregator.py
+        aggregator.initialize_file_write_paths(index)
         initialize_nodes(node_urls, index)
         aggregator.initialize_index_on_blockchain(index)
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
@@ -145,7 +146,13 @@ def initialize_nodes(node_urls: list[str], index):
 async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
     try:
-        index = aggregator.index
+        index = request.index
+        if index not in aggregator.indexes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index {index} not found (not yet initialized)."
+            )
+
         node_count = aggregator.node_count[index]
         num_rounds = request.totalRounds
         aggregator.minParams[index] = request.minParams
@@ -200,6 +207,12 @@ async def update_minParams(request: UpdatedMinParamsRequest):
 
     try:
         index = request.index
+        if index not in aggregator.indexes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index {index} not found (not yet initialized)."
+            )
+
         check_index_response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get index where name = {index}"
@@ -294,6 +307,12 @@ async def continue_training(request: ContinueTrainingRequest):
     """Continue training from the last completed round."""
     try:
         index = request.index
+        if index not in aggregator.indexes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index {index} not found (not yet initialized)."
+            )
+
         node_count = aggregator.node_count[index]
         additional_rounds = request.additionalRounds
         aggregator.minParams[index] = request.minParams
@@ -311,7 +330,7 @@ async def continue_training(request: ContinueTrainingRequest):
             )
 
         # Get the last round number from the blockchain layer
-        last_round = get_last_round_number()
+        last_round = get_last_round_number(index)
         if last_round is None:
             raise HTTPException(
                 status_code=400,
@@ -320,7 +339,7 @@ async def continue_training(request: ContinueTrainingRequest):
         logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more {'round' if additional_rounds == 1 else 'rounds'}.")
 
         # Fetch the most recent aggregated model parameters
-        initial_params = get_last_aggregated_params()
+        initial_params = get_last_aggregated_params(index)
         if not initial_params:
             raise HTTPException(
                 status_code=500,
@@ -355,13 +374,12 @@ async def continue_training(request: ContinueTrainingRequest):
         )
 
 
-def get_last_round_number():
+def get_last_round_number(index):
     """Get the last completed round number from the blockchain."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     try:
         # Query the blockchain for all 'r' prefixed keys to find the highest round number
-        index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get * where [index] = {index} and [node_type] = aggregator"
@@ -397,12 +415,11 @@ def get_last_round_number():
         return None
 
 
-def get_last_aggregated_params():
+def get_last_aggregated_params(index):
     """Get the aggregated parameters from the specified round."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
     try:
         # Get the aggregated parameters from index-r
-        index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get {index}-r"
