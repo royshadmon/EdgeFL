@@ -57,6 +57,7 @@ class UpdatedMinParamsRequest(BaseModel):
 class ContinueTrainingRequest(BaseModel):
     additionalRounds: int
     minParams: int
+    index: str
 
 # @app.route('/init', methods=['POST'])
 
@@ -292,7 +293,7 @@ async def listen_for_update_agg(min_params, roundNumber, index):
 async def continue_training(request: ContinueTrainingRequest):
     """Continue training from the last completed round."""
     try:
-        index = aggregator.index
+        index = request.index
         node_count = aggregator.node_count[index]
         additional_rounds = request.additionalRounds
         aggregator.minParams[index] = request.minParams
