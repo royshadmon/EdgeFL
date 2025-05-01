@@ -2,13 +2,13 @@ version: "3"
 
 services:
   server:
-    image: python:3.10-slim
+    build: .
     restart: always
     env_file:
-      - ${}.env
-    container_name: aggregator_server_${PORT}
+      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist-agg.env
+    container_name: aggregator_server_8080
     ports:
-      - ${SERVER_PORT}:${SERVER_PORT}
+      - 8080:8080
     volumes:
         - .:/app
-    command: ["python", "app.py", "--env-file", "/app/${}.env"]
+#    command: ["python", "app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]

@@ -4,6 +4,11 @@ import argparse
 import uvicorn
 from dotenv import load_dotenv
 
+# Add edgefl directory to Python path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EDGEFL_PATH = os.path.join(PROJECT_ROOT, "edgefl")
+sys.path.append(EDGEFL_PATH)
+
 def main():
     parser = argparse.ArgumentParser(description="Run server based on environment variables")
     parser.add_argument('--env-file', type=str, help='Path to .env file to load')
