@@ -65,6 +65,7 @@ class InitNodeRequest(BaseModel):
     replica_ip: str
     replica_port: str
     replica_index: str
+    method: str = "CFL"  # ✅ NEW
 
 
 @app.post('/init-node')
@@ -101,9 +102,11 @@ def init_node(request: InitNodeRequest):
 
         logger.info(f"{replica_name} successfully initialized")
 
-        # Start event listener for start round
-        listener_thread = threading.Thread(
-            target=listen_for_start_round,
+        is_dfl = request.method.upper() == "DFL"
+        logger.info(f"[INIT] Node running in {request.method.upper()} mode")
+        listener_func = dfl_listen if is_dfl else listen_for_start_round
+        listener_thread = threading.Thread( # Start event listener
+            target=listener_func,
             args=(node_instance, lambda: stop_listening_thread)
         )
         listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
@@ -111,7 +114,7 @@ def init_node(request: InitNodeRequest):
 
         return {
             'status': 'success',
-            'message': 'Node initialized successfully'
+            'message': f'Node initialized successfully in {request.method.upper()} mode.'
         }
     except Exception as e:
         raise HTTPException(

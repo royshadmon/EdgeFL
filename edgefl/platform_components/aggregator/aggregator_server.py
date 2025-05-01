@@ -45,6 +45,7 @@ aggregator = Aggregator(ip, port)
 class InitRequest(BaseModel):
     nodeUrls: list[str]
     index: str
+    method: str = "CFL"  # default to CFL if not provided
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -64,9 +65,10 @@ class ContinueTrainingRequest(BaseModel):
 def init(request: InitRequest):
     """Deploy the smart contract with predefined nodes."""
     try:
-        # Initialize the nodes on specified index and send the contract address
+        # Initialize the nodes on specified index and training mode, then send the contract address
         node_urls, index = request.nodeUrls, request.index
         aggregator.index = index
+        aggregator.method = request.method.upper()
 
         aggregator.initialize_file_write_paths(index) # this is done here; check why in aggregator.py
         initialize_nodes(node_urls, index)
@@ -103,7 +105,8 @@ def initialize_nodes(node_urls: list[str], index):
                 'replica_ip': ip_port[0],
                 'replica_port': ip_port[1],
                 'replica_name': replica_name,
-                'replica_index': index
+                'replica_index': index,
+                'method': aggregator.method
             })
 
             with aggregator.lock:
@@ -161,30 +164,37 @@ async def init_training(request: TrainingRequest):
                 detail="Number of rounds must be positive"
             )
 
-        logger.info(f"{num_rounds} {'round' if num_rounds == 1 else 'rounds'} of training started.")
+        logger.info(f"{num_rounds} {'round' if num_rounds == 1 else 'rounds'} of training started in {aggregator.method} mode.")
 
         initial_params = ''
 
-        for r in range(1, num_rounds + 1):
-            logger.info(f"Starting training round {r}")
-            aggregator.start_round(initial_params, r, index)
-            logger.debug("Sent initial parameters to nodes")
+        if aggregator.method == "CFL":
+            for r in range(1, num_rounds + 1):
+                logger.info(f"Starting training round {r}")
+                aggregator.start_round(initial_params, r, index)
+                logger.debug("Sent initial parameters to nodes")
 
-            # Listen for updates from nodes
-            new_aggregator_params = await listen_for_update_agg(aggregator.minParams[index], r, index)
-            logger.debug("Received aggregated parameters")
+                # Listen for updates from nodes
+                new_aggregator_params = await listen_for_update_agg(aggregator.minParams[index], r, index)
+                logger.debug("Received aggregated parameters")
 
-            # Set initial params to newly aggregated params for the next round
-            initial_params = new_aggregator_params
-            logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
+                # Set initial params to newly aggregated params for the next round
+                initial_params = new_aggregator_params
+                logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
 
-            # Track the last agg model file because it's not stored in a policy after the last round
-            aggregator.store_most_recent_agg_params(initial_params, index)
+                # Track the last agg model file because it's not stored in a policy after the last round
+                aggregator.store_most_recent_agg_params(initial_params, index)
 
-        return {
-            "status": "success",
-            "message": "Training completed successfully"
-        }
+            return {
+                "status": "success",
+                "message": "CFL Training completed successfully"
+            }
+        else:
+            logger.info("[DFL] DFL mode: training is handled by nodes (no central aggregator)")
+            return {
+                "status": "success",
+                "message": "DFL mode triggered. Training will be performed by nodes and no central aggregator."
+            }
     except Exception as e:
         raise HTTPException(
             status_code=500,

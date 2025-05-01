@@ -42,7 +42,7 @@ class Aggregator:
         self.node_count = {}
         self.lock = Lock()
         self.minParams = {}
-        
+        self.method = "CFL"  # Default federation mode
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
 
