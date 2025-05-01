@@ -29,7 +29,9 @@ class Node:
         self.module_name = os.getenv('MODULE_NAME')
         self.node_ip = ip
         self.node_port = port
-        self.index = index # index specified *only* on init; tracked for entire training process
+        # self.index = index # index specified *only* on init; tracked for entire training process
+        self.indexes = set()
+        self.indexes.add(index)
 
         self.logger = logger
         self.logger.debug("Node initializing")

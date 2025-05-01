@@ -36,10 +36,11 @@ class Aggregator:
 
         self.server_ip = ip
         self.server_port = port
-        self.index = '' # right now, specified *only* on init; tracked for entire training process
+        # self.index = '' # right now, specified *only* on init; tracked for entire training process
 
         # Track nodes in play so that node training data doesn't get overwritten + minParams
         # Index-specific
+        self.indexes = set()
         self.node_urls = {}
         self.node_count = {}
         self.lock = Lock()
@@ -66,9 +67,6 @@ class Aggregator:
     # Originally initialized in __init__, but moved due to the index currently being requested in '/init' (after agg. instance)
     def initialize_file_write_paths(self, index):
         try:
-            if self.index != index:
-                self.index = index
-
             self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
 
             if not os.path.exists(os.path.join(self.file_write_destination, index)):
