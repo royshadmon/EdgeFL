@@ -41,7 +41,7 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
-## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB  for each one.
+## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB for each one.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Node server on port {edgelake_node_port} starting up.")
@@ -66,6 +66,8 @@ class InitNodeRequest(BaseModel):
     replica_port: str
     replica_index: str
     round_number: int
+    module_name: str
+    module_path: str
 
 
 @app.post('/init-node')
@@ -78,6 +80,8 @@ def init_node(request: InitNodeRequest):
         port = request.replica_port
         replica_name = request.replica_name
         index = request.replica_index
+        module_name = request.module_name
+        module_path = request.module_path
 
         # logger.debug(f"Replica name " + replica_name)
 
@@ -90,9 +94,8 @@ def init_node(request: InitNodeRequest):
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port, index, logger)
+        node_instance = Node(replica_name, ip, port, index, module_name, module_path, logger)
         # configure_logging(f"node_server_{port}")
-
         node_instance.currentRound = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized")
@@ -112,7 +115,7 @@ def init_node(request: InitNodeRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail=f"/init-node - {str(e)}"
         )
 
 '''
@@ -120,6 +123,7 @@ def init_node(request: InitNodeRequest):
     - Endpoint to receive data block from the simulated data stream
 '''
 class ReceiveDataRequest(BaseModel):
+    index: str
     data: list
 
 # @app.route('/receive_data', methods=['POST'])
@@ -131,7 +135,7 @@ def receive_data(request: ReceiveDataRequest):
             detail="Node instance not initialized"
         )
     if request.data:
-        node_instance.add_data_batch(np.array(request.data))
+        node_instance.add_data_batch(request.index, np.array(request.data))
         return {
             "status": "data_received",
             "batch_size": len(request.data)
@@ -205,13 +209,18 @@ def get_most_recent_agg_params(index):
         logger.error(f"Error in extracting round number: {str(e)}")
 
 # @app.route('/inference', methods=['POST'])
-@app.post('/inference')
-def inference():
+@app.post('/inference/{index}')
+def inference(index):
     """Inference on current model w/ data passed in."""
     try:
 
         logger.info("received inference request")
-        results = node_instance.inference()
+        if not index:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Index must be specified."
+            )
+        results = node_instance.inference(index)
         response = {
             'status': 'success',
             'message': 'Inference completed successfully',

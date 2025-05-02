@@ -37,7 +37,7 @@ logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 # Initialize the Aggregator instance
 ip = get_local_ip()
 port = os.getenv("SERVER_PORT", "8080")
-aggregator = Aggregator(ip, port)
+aggregator = Aggregator(ip, port, logger)
 
 
 #######  FASTAPI IMPLEMENTATION  #######
@@ -45,6 +45,8 @@ aggregator = Aggregator(ip, port)
 class InitRequest(BaseModel):
     nodeUrls: list[str]
     index: str
+    module: str
+    module_path: str
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -68,14 +70,19 @@ def init(request: InitRequest):
     try:
         # Initialize the nodes on specified index and send the contract address
         node_urls, index = request.nodeUrls, request.index
+        module_name, module_path = request.module, request.module_path
         aggregator.indexes.add(index)
 
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
+        initialize_nodes(node_urls, index, module_name, module_path)
+
+        aggregator.set_module_at_index(index, module_name, module_path)
+        aggregator.initialize_index_on_blockchain(index, module_name, module_path)
+        aggregator.initialize_training_app(index)
         aggregator.initialize_file_write_paths(index)
-        initialize_nodes(node_urls, index)
-        aggregator.initialize_index_on_blockchain(index)
+
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
         return {
             "status": "success"
@@ -83,11 +90,12 @@ def init(request: InitRequest):
     except Exception as e:
         logger.error(f"Failed to initialize nodes with index ({index}): {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
 
 
-def initialize_nodes(node_urls: list[str], index):
+def initialize_nodes(node_urls: list[str], index, module_name, module_path):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -110,6 +118,8 @@ def initialize_nodes(node_urls: list[str], index):
                 'replica_name': replica_name,
                 'replica_index': index,
                 'round_number': aggregator.round_number[index],
+                'module_name': module_name,
+                'module_path': module_path
             })
 
             with aggregator.lock:
@@ -119,13 +129,14 @@ def initialize_nodes(node_urls: list[str], index):
                 else:
                     # Rollback node count if request fails
                     aggregator.node_count[index] -= 1
-                    logger.error(
-                        f"Failed to initialize node at {node_url}. HTTP Status: {response.status_code}. Response: {response.text}"
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Failed to initialize node at {node_url}."
                     )
         except Exception as e:
             with aggregator.lock:
                 aggregator.node_count[index] -= 1 # Rollback on exception
-            logger.critical(f"Error initializing node: {str(e)}")
+            logger.critical(f"{str(e)}")
 
     if index not in aggregator.node_count:
         aggregator.node_count[index] = 0
@@ -141,7 +152,7 @@ def initialize_nodes(node_urls: list[str], index):
         time.sleep(0.1)
 
     for i, thread in enumerate(threads):
-        thread.join(timeout=60) # Adjust timeout as necessary
+        thread.join(timeout=180) # Adjust timeout as necessary
         if thread.is_alive():
             logger.warning(f"Node {i} thread timed out. Failed to initialize a node.")
 

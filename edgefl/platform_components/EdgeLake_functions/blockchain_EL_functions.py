@@ -56,14 +56,13 @@ def check_policy_inserted(el_url, policy):
 
         response = requests.post(el_url, headers=headers, data=policy)
 
-
         headers = {
             'User-Agent': 'AnyLog/1.23',
             'Content-Type': 'text/plain',
             'command': 'get !my_policy'
         }
-        print(response.status_code)
-
+        print(f"check_policy_inserted: {response.status_code}")
+        # print(response.status_code)
 
         response = requests.get(el_url, headers=headers)
         retrieved_policy = json.loads(response.content.decode('utf-8'))
@@ -72,6 +71,24 @@ def check_policy_inserted(el_url, policy):
             return True
 
         return False
+
+
+def get_policies(el_url, policy_type='*', condition=None):
+    command = f'blockchain get {policy_type} {condition if condition else ""}'
+    headers = {
+        'User-Agent': 'AnyLog/1.23',
+        'Content-Type': 'text/plain',
+        'command': command
+    }
+    response = requests.get(el_url, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f"Request failed with status code {response.status_code}: {response.reason}. Command: {command}")
+
+    data = response.json() # [{policy_name: {..., 'id': ..., ...}}]
+    policies = []
+    for policy in data:
+        policies.append(policy[policy_type])
+    return policies # [{'attr1': ..., 'attr2': ..., ...}, {'attr1': ..., 'attr2': ..., ...}, ...]
 
 
 def get_policy_id_by_name(el_url, policy_name):
