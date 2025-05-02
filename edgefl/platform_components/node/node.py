@@ -34,7 +34,9 @@ class Node:
         self.replica_name = replica_name
         self.node_ip = ip
         self.node_port = port
-        # self.index = index  # todo: modularize# index specified *only* on init; tracked for entire training process
+        # self.index = index # index specified *only* on init; tracked for entire training process
+        self.indexes = set()
+        self.indexes.add(index)
 
         self.logger = logger
         self.logger.debug("Node initializing")
@@ -81,21 +83,20 @@ class Node:
         self.indexes.add(index)
 
     def initialize_file_write_paths(self, index):
-        self.file_write_destination[index] = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
-                                                   self.module_names[index], index)
-        self.tmp_dir[index] = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_names[index], index)
-        if not os.path.exists(self.tmp_dir[index]):
-            os.makedirs(self.tmp_dir[index])
+        self.file_write_destination[index] = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replicaName)
+        self.tmp_dir[index] = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replicaName)
+        if not os.path.exists(os.path.join(self.tmp_dir[index], index)):
+            os.makedirs(os.path.join(self.tmp_dir[index], index))
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination[index] = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_names[index], index)
+            self.docker_file_write_destination[index] = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replicaName)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-            create_directory_in_container(self.docker_container_name, self.docker_file_write_destination[index])
-            create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination[index]}/{self.replica_name}/")
-
+            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination[index], index))
+            # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/{self.index}/")
+            
     def initialize_training_app(self, index):
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
@@ -219,16 +220,17 @@ class Node:
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination[index]}/{self.replica_name}/{filename}', ip_ports)
-                    copy_file_from_container(self.tmp_dir[index], self.docker_container_name, f'{self.docker_file_write_destination[index]}/{self.replica_name}/{filename}', f'{self.file_write_destination[index]}/{self.replica_name}/{filename}')
+                                         f'{self.docker_file_write_destination[index]}/{index}/{filename}', ip_ports)
+                    copy_file_from_container(os.path.join(self.tmp_dir[index], index), self.docker_container_name, f'{self.docker_file_write_destination[index]}/{index}/{filename}', f'{self.file_write_destination[index]}/{index}/{filename}')
                 else:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination[index]}/{self.replica_name}/{filename}', ip_ports)
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link, f'{self.file_write_destination[index]}/{index}/{filename}', ip_ports)
+
 
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
                     with open(
-                            f'{self.file_write_destination[index]}/{self.replica_name}/{filename}',
+                            f'{self.file_write_destination[index}/{index}/{filename}',
                             'rb') as f:
                         data = pickle.load(f)
 
@@ -251,18 +253,18 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
-        file = f"{index}-{round_number}-replica-{self.replica_name}.pkl"
+        file = f"{round_number}-replica-{self.replicaName}.pkl"
         # make sure directory exists
-        os.makedirs(os.path.dirname(f"{self.file_write_destination[index]}/{self.replica_name}/"), exist_ok=True)
-        file_name = f"{self.file_write_destination[index]}/{self.replica_name}/{file}"
+        os.makedirs(os.path.dirname(f"{self.file_write_destination[index]}/{index}/"), exist_ok=True)
+        file_name = f"{self.file_write_destination[index]}/{index}/{file}"
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
         self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
-            self.logger.debug(f'written to container at {f"{self.docker_file_write_destination[index]}/{self.replica_name}/{file}"}')
-            copy_file_to_container(self.tmp_dir[index], self.docker_container_name, file_name, f"{self.docker_file_write_destination[index]}/{self.replica_name}/{file}")
-            return f'{self.docker_file_write_destination[index]}/{self.replica_name}/{file}'
+            self.logger.debug(f'written to container at {f"{self.docker_file_write_destination[index]}/{index}/{file}"}')
+            copy_file_to_container(os.path.join(self.tmp_dir[index], index), self.docker_container_name, file_name, f"{self.docker_file_write_destination[index]}/{index}/{file}")
+            return f'{self.docker_file_write_destination[index]}/{index}/{file}'
         return file_name
 
     def encode_model(self, model_update):

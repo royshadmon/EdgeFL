@@ -7,7 +7,7 @@ consisting of three training nodes and one aggregator node. Each node will utili
 own EdgeLake node, such that we will deploy four EdgeLake nodes, three of which have 
 operator roles and one with the master role. The master role is a normal EdgeLake operator
 node but also emulates the same blockchain-like functionality of the blockchain-back shared
-metadata layer. For more infomation about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
+metadata layer. For more information about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
 
 The simulation includes the MNIST dataset, where three nodes collaboratively train a global model
 with MNIST data local to each node (i.e., there is no data movement.). Since the simulation instructions
@@ -16,7 +16,7 @@ so emulate physically distributed data. Nevertheless, each node will utilize its
 operator node (running in a Docker container) to truly simulate a distributed environment.
 
 In addition, there is another example custom data handle from our Winniio partners. This dataset
-is comprised of room temperature data used to predict the temperature of a classroom in two hours.
+consists of room temperature data used to predict the temperature of a classroom in two hours.
 
 Before you get started, please follow the configuration steps precisely.
 
@@ -164,7 +164,8 @@ curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
 -d '{
   "totalRounds": 10,
-  "minParams": 3
+  "minParams": 3,
+  "index": "test-index"
 }'
 ```
 
@@ -201,7 +202,8 @@ curl -X POST http://localhost:8080/continue-training \
  -H "Content-Type: application/json" \
  -d '{
    "additionalRounds": 3, 
-   "minParams": 4
+   "minParams": 4,
+   "index": "test-index"
  }'
  ```
 
