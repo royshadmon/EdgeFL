@@ -137,7 +137,7 @@ dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.nod
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
-predefined training application file here: `custom_data_handler.py`.
+predefined training application file here: `edgefl/platform_components/data_handlers/custom_data_handler.py`.
 
 ## Initialize model parameters and training application, start training, executing inference
 Execute the following `curl` command to initialize training. As a result of this command,
@@ -156,9 +156,6 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8083"
   ],
   "index": "test-index"
-  "module": "MnistDataHandler",
-  "module_file": "mnist_data_handler.py",
-  "db_name": "mnist_fl"
 }'
 ```
 After, start the training process:
@@ -185,9 +182,6 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8084"
   ],
   "index": "test-index"
-  "module": "MnistDataHandler",
-  "module_file": "mnist_data_handler.py",
-  "db_name": "mnist_fl"
 }'
 ```
 
@@ -217,19 +211,19 @@ At any point, you can execute edge inference directly on the node.
 This can be done on each training node. The output will be the accuracy based on the local test data
 held out from training.
 ```bash
-curl -X POST http://localhost:8081/inference/test-index
-curl -X POST http://localhost:8082/inference/test-index
-curl -X POST http://localhost:8083/inference/test-index
-curl -X POST http://localhost:8084/inference/test-index
+curl -X POST http://localhost:8081/inference
+curl -X POST http://localhost:8082/inference
+curl -X POST http://localhost:8083/inference
+curl -X POST http://localhost:8084/inference
 ```
 
 An example output looks like this:
 ```bash
-curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index ; curl -X POST http://localhost:8084/inference/test-index
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
+curl -X POST http://localhost:8081/inference ; curl -X POST http://localhost:8082/inference ; curl -X POST http://localhost:8083/inference ; curl -X POST http://localhost:8084/inference
+{"message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
+{"message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
+{"message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
+{"message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
 ```
 
 ## Resolving common issues
@@ -293,21 +287,16 @@ cd EdgeLake/postgres
 docker compose down
 ```
 
-# Running Visualization
-Change the ips of the prometheus.yml file. You can obtain it by entering ifconfig into terminal. Apply the ip address to all of the nodes and the master node.
 
-Example:
-```bash
-  - job_name: 'master'
-    static_configs:
-      - targets: ['Your IP:8000']
-```
-Need to start the docker container for grafana and prometheus 
-```bash
-cd EdgeLake/docker_makefile/monitoring
-docker compose up -d
-```
-Load up http://localhost:3000/ in your browser and enter username: admin password: admin
+
+
+
+
+
+
+
+
+
 
 
 
