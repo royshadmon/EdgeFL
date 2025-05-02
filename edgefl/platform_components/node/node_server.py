@@ -41,6 +41,8 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
+node_list = []
+
 ## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB for each one.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,6 +67,7 @@ class InitNodeRequest(BaseModel):
     replica_ip: str
     replica_port: str
     replica_index: str
+    round_number: int
     module_name: str
     module_path: str
 
@@ -74,7 +77,7 @@ def init_node(request: InitNodeRequest):
     global node_instance, listener_thread, stop_listening_thread
     try:
         ip = get_local_ip()
-        most_recent_round = 1
+        most_recent_round = request.round_number
 
         port = request.replica_port
         replica_name = request.replica_name
@@ -84,6 +87,8 @@ def init_node(request: InitNodeRequest):
 
         # logger.debug(f"Replica name " + replica_name)
 
+        # TODO: remove this so that when another training process starts, it doesn't kill existing training nodes
+        # Maybe use a thread pool or a dict?
         if listener_thread and listener_thread.is_alive():
             stop_listening_thread = True
             listener_thread.join(timeout=1)
@@ -93,15 +98,9 @@ def init_node(request: InitNodeRequest):
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port, index, module_name, module_path, logger)
+        node_instance = Node(replica_name, ip, port, index, module_name, module_path, logger) # TODO: make one Node object for every thread to access (for their stuff)
         # configure_logging(f"node_server_{port}")
-
-        aggregated_params_link = get_most_recent_agg_params(index) # for dynamically added nodes
-        if aggregated_params_link:
-            filename = aggregated_params_link.split('/')[-1] # separate filename from full path
-            most_recent_round = int(filename.split('-')[-2]) # extract only the round number
-
-        node_instance.current_round[index] = most_recent_round # 1 or current round
+        node_instance.round_number[index] = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized")
 
@@ -151,7 +150,7 @@ def receive_data(request: ReceiveDataRequest):
     )
 
 def listen_for_start_round(nodeInstance, index, stop_event):
-    current_round = nodeInstance.current_round
+    current_round = nodeInstance.round_number[index]
 
     logger.debug(f"listening for start round {current_round}")
     while True:
