@@ -11,6 +11,7 @@ import ast
 import numpy as np
 import requests
 import pickle
+from threading import Lock
 from dotenv import load_dotenv
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
@@ -31,10 +32,21 @@ class Aggregator:
         self.github_dir = os.getenv('GITHUB_DIR')
         self.module_name = os.getenv('MODULE_NAME')
 
+        self.agg_name = os.getenv("AGG_NAME")
+
         self.server_ip = ip
         self.server_port = port
-        self.index = '' # right now, specified *only* on init; tracked for entire training process
+        # self.index = '' # right now, specified *only* on init; tracked for entire training process
 
+        # Track nodes in play so that node training data doesn't get overwritten + minParams
+        # Index-specific
+        self.indexes = set()
+        self.node_urls = {}
+        self.node_count = {}
+        self.lock = Lock()
+        self.minParams = {}
+        self.round_number = {}
+        
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
 
@@ -56,23 +68,24 @@ class Aggregator:
     # Originally initialized in __init__, but moved due to the index currently being requested in '/init' (after agg. instance)
     def initialize_file_write_paths(self, index):
         try:
-            if self.index != index:
-                self.index = index
 
-            self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
-                                                       self.module_name, self.index)
+            self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
 
-            self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
-            if not os.path.exists(self.tmp_dir):
-                os.makedirs(self.tmp_dir)
+            if not os.path.exists(os.path.join(self.file_write_destination, index)):
+                os.makedirs(os.path.dirname(
+                    f"{self.file_write_destination}/{index}/"),
+                    exist_ok=True)
+
+            self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.agg_name)
+            if not os.path.exists(os.path.join(self.tmp_dir, index)):
+                os.makedirs(os.path.join(self.tmp_dir, index), exist_ok=True)
 
             if self.docker_running:
-                self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"),
-                                                                  self.module_name, self.index)
+                self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.agg_name)
                 self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-                create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
-                create_directory_in_container(self.docker_container_name,
-                                              f"{self.docker_file_write_destination}/aggregator/")
+                create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination,index))
+                # create_directory_in_container(self.docker_container_name,
+                #                               f"{self.docker_file_write_destination}/aggregator/")
             return {
                     'status': 'success',
                     'message': 'file write paths initialized' # TODO: reword
@@ -213,23 +226,23 @@ class Aggregator:
             try:
                 # make sure directory exists
                 filename = path.split('/')[-1]
-                os.makedirs(os.path.dirname(
-                    f"{self.file_write_destination}/aggregator/"),
-                            exist_ok=True)
 
+
+                local_path = f'{self.file_write_destination}/{index}/{filename}'
                 if self.docker_running:
+                    docker_file_path = f'{self.docker_file_write_destination}/{index}/{filename}'
                     response = read_file(self.edgelake_node_url, path,
-                                         f'{self.docker_file_write_destination}/aggregator/{filename}', ip_ports[i])
-                    copy_file_from_container(self.tmp_dir, self.docker_container_name,
-                                        f'{self.docker_file_write_destination}/aggregator/{filename}',
-                                        f'{self.file_write_destination}/aggregator/{filename}')
+                                         docker_file_path, ip_ports[i])
+                    copy_file_from_container(os.path.join(self.tmp_dir,index), self.docker_container_name,
+                                        docker_file_path,
+                                        local_path)
                 else:
                     response = read_file(self.edgelake_node_url, path,
-                                     f'{self.file_write_destination}/aggregator/{filename}', ip_ports[i])
+                                     local_path, ip_ports[i])
 
                 if response.status_code == 200:
                     sleep(1)
-                    with open(f'{self.file_write_destination}/aggregator/{filename}', 'rb') as f:
+                    with open(local_path, 'rb') as f:
                         data = pickle.load(f)
 
                     if not data:
@@ -259,16 +272,21 @@ class Aggregator:
         }
 
         # push agg data
-        with open(f'{self.file_write_destination}/aggregator/{index}-{round_number}-agg_update.json', 'wb') as f:
+        # TODO: will this work on windows?
+        file_write_path = f'{self.file_write_destination}/{index}/{round_number}-{self.agg_name}_update.json'
+
+
+        with open(file_write_path, 'wb') as f:
             f.write(self.encode_params(data_entry))
 
         # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
+            docker_file_write_path = f'{self.docker_file_write_destination}/{index}/{round_number}-{self.agg_name}_update.json'
             # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
-            copy_file_to_container(self.tmp_dir, self.docker_container_name, f'{self.file_write_destination}/aggregator/{index}-{round_number}-agg_update.json', f'{self.docker_file_write_destination}/aggregator/{index}-{round_number}-agg_update.json')
-            return f'{self.docker_file_write_destination}/aggregator/{index}-{round_number}-agg_update.json'
+            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name, file_write_path, docker_file_write_path)
+            return docker_file_write_path
 
-        return f'{self.file_write_destination}/aggregator/{index}-{round_number}-agg_update.json'
+        return file_write_path
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)

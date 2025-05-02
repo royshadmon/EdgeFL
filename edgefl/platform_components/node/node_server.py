@@ -65,6 +65,7 @@ class InitNodeRequest(BaseModel):
     replica_ip: str
     replica_port: str
     replica_index: str
+    round_number: int
 
 
 @app.post('/init-node')
@@ -72,6 +73,7 @@ def init_node(request: InitNodeRequest):
     global node_instance, listener_thread, stop_listening_thread
     try:
         ip = get_local_ip()
+        most_recent_round = request.round_number
 
         port = request.replica_port
         replica_name = request.replica_name
@@ -90,14 +92,15 @@ def init_node(request: InitNodeRequest):
         logger.info(f"{replica_name} before initialized")
         node_instance = Node(replica_name, ip, port, index, logger)
         # configure_logging(f"node_server_{port}")
-        node_instance.currentRound = 1
+
+        node_instance.currentRound = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized")
 
         # Start event listener for start round
         listener_thread = threading.Thread(
             target=listen_for_start_round,
-            args=(node_instance, lambda: stop_listening_thread)
+            args=(node_instance, index, lambda: stop_listening_thread)
         )
         listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
         listener_thread.start()
@@ -138,9 +141,8 @@ def receive_data(request: ReceiveDataRequest):
         detail="No Data Provided"
     )
 
-def listen_for_start_round(nodeInstance, stop_event):
+def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.currentRound
-    index = nodeInstance.index
 
     logger.debug(f"listening for start round {current_round}")
     while True:
@@ -176,6 +178,31 @@ def listen_for_start_round(nodeInstance, stop_event):
         except Exception as e:
             logger.error(f"Error in listener thread: {str(e)}")
             time.sleep(2)
+
+# TODO: move to a (helper) file (i.e. 'node_helpers.py'?)
+# Extracts initParams from the policy 'index-r' at the specified index
+def get_most_recent_agg_params(index):
+    policy_name = f"{index}-r"
+    agg_params = None
+
+    try:
+        headers = {
+            'User-Agent': 'AnyLog/1.23',
+            'command': f'blockchain get {policy_name}'
+        }
+        response = requests.get(edgelake_node_url, headers=headers)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data:
+                policy = data[0]
+                policy_data = policy[policy_name]
+                agg_params = policy_data["initParams"]
+
+        return agg_params
+    except Exception as e:
+        logger.error(f"Error in extracting round number: {str(e)}")
 
 # @app.route('/inference', methods=['POST'])
 @app.post('/inference')
