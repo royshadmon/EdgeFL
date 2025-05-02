@@ -46,12 +46,12 @@ class Node:
         self.indexes = set()
         # self.replica_names = {}
         self.data_batches = {} # {'index1': [], 'index2': [], ...}
-        self.current_round = {}
+        self.round_number = {}
 
         self.module_names = {}
         self.module_paths = {}
         self.data_handlers = {}
-        self.fetch_indexes_and_modules()
+        self.fetch_indexes_and_modules() # TODO: maybe not do this, if user inputs existing index but different module, just warn them and use existing module
 
         self.file_write_destination = {}
         self.tmp_dir = {}
@@ -60,12 +60,12 @@ class Node:
 
         self.database_url = os.getenv("DATABASE_URL")
         self.mongo_db_name = os.getenv('MONGO_DB_NAME')
-        # self.replicaName = replica_name # todo: modularize
+        # self.replica_name = replica_name # todo: modularize
 
         # init training application class reference # todo: modularize
         # training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
         # TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
-        # self.data_handler = TrainingApp_class(self.replicaName) # Create an instance
+        # self.data_handler = TrainingApp_class(self.replica_name) # Create an instance
 
         # init file write paths # todo: modularize
 
@@ -83,8 +83,8 @@ class Node:
         self.indexes.add(index)
 
     def initialize_file_write_paths(self, index):
-        self.file_write_destination[index] = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replicaName)
-        self.tmp_dir[index] = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replicaName)
+        self.file_write_destination[index] = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replica_name)
+        self.tmp_dir[index] = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replica_name)
         if not os.path.exists(os.path.join(self.tmp_dir[index], index)):
             os.makedirs(os.path.join(self.tmp_dir[index], index))
 
@@ -92,10 +92,10 @@ class Node:
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination[index] = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replicaName)
+            self.docker_file_write_destination[index] = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replica_name)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination[index], index))
-            # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/{self.index}/")
+            # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replica_name}/{self.index}/")
             
     def initialize_training_app(self, index):
         try:
@@ -230,7 +230,7 @@ class Node:
                 if response.status_code == 200:
                     sleep(1)
                     with open(
-                            f'{self.file_write_destination[index}/{index}/{filename}',
+                            f'{self.file_write_destination[index]}/{index}/{filename}',
                             'rb') as f:
                         data = pickle.load(f)
 
@@ -253,7 +253,7 @@ class Node:
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
-        file = f"{round_number}-replica-{self.replicaName}.pkl"
+        file = f"{round_number}-replica-{self.replica_name}.pkl"
         # make sure directory exists
         os.makedirs(os.path.dirname(f"{self.file_write_destination[index]}/{index}/"), exist_ok=True)
         file_name = f"{self.file_write_destination[index]}/{index}/{file}"

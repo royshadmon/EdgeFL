@@ -41,6 +41,8 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
+node_list = []
+
 ## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB for each one.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -85,6 +87,8 @@ def init_node(request: InitNodeRequest):
 
         # logger.debug(f"Replica name " + replica_name)
 
+        # TODO: remove this so that when another training process starts, it doesn't kill existing training nodes
+        # Maybe use a thread pool or a dict?
         if listener_thread and listener_thread.is_alive():
             stop_listening_thread = True
             listener_thread.join(timeout=1)
@@ -94,9 +98,9 @@ def init_node(request: InitNodeRequest):
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port, index, module_name, module_path, logger)
+        node_instance = Node(replica_name, ip, port, index, module_name, module_path, logger) # TODO: make one Node object for every thread to access (for their stuff)
         # configure_logging(f"node_server_{port}")
-        node_instance.currentRound = most_recent_round # 1 or current round
+        node_instance.round_number[index] = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized")
 
@@ -146,7 +150,7 @@ def receive_data(request: ReceiveDataRequest):
     )
 
 def listen_for_start_round(nodeInstance, index, stop_event):
-    current_round = nodeInstance.currentRound
+    current_round = nodeInstance.round_number[index]
 
     logger.debug(f"listening for start round {current_round}")
     while True:

@@ -55,10 +55,10 @@ class Aggregator:
         self.module_names = {}
         self.module_paths = {}
         self.training_apps = {}
-        self.fetch_indexes_and_modules()
+        self.fetch_indexes_and_modules() # TODO: maybe not do this, if user inputs existing index but different module, just warn them and use existing module
 
         # Multi-training means processes write to their own file write paths
-        self.file_write_destination = {}
+        self.file_write_destination = {} # TODO: they are all the same, so no need for dict (including the two below)
         self.tmp_dir = {}
         self.docker_file_write_destination = {}
         # =====

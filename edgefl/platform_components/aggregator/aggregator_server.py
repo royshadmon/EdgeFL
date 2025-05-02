@@ -83,6 +83,7 @@ def init(request: InitRequest):
         aggregator.initialize_training_app(index)
         aggregator.initialize_file_write_paths(index)
 
+        # TODO: here, create a thread which will be for its own training process. For init'ing dynamic nodes, that would also create its own thread...so find a way to attach to its main agg. thread (index)
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
         return {
             "status": "success"
@@ -264,7 +265,7 @@ async def update_minParams(request: UpdatedMinParamsRequest):
         )
 
 
-async def listen_for_update_agg(min_params, roundNumber, index):
+async def listen_for_update_agg(min_params, round_number, index):
     """Asynchronously poll for aggregated parameters from the blockchain."""
     logger.info("listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -274,7 +275,7 @@ async def listen_for_update_agg(min_params, roundNumber, index):
             # Check parameter count
             count_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"blockchain get {index}-a{roundNumber} count"
+                "command": f"blockchain get {index}-a{round_number} count"
             })
 
             if count_response.status_code == 200:
@@ -285,7 +286,7 @@ async def listen_for_update_agg(min_params, roundNumber, index):
                 if count >= min_params:
                     params_response = requests.get(url, headers={
                         'User-Agent': 'AnyLog/1.23',
-                        "command": f"blockchain get {index}-a{roundNumber}"
+                        "command": f"blockchain get {index}-a{round_number}"
                     })
 
                     if params_response.status_code == 200:
@@ -294,22 +295,22 @@ async def listen_for_update_agg(min_params, roundNumber, index):
                             # Extract all trained_params into a list
 
                             node_params_links = [
-                                item[f'{index}-a{roundNumber}']['trained_params_local_path']
+                                item[f'{index}-a{round_number}']['trained_params_local_path']
                                 for item in result
-                                if f'{index}-a{roundNumber}' in item
+                                if f'{index}-a{round_number}' in item
                             ]
 
                             ip_ports = [
-                                item[f'{index}-a{roundNumber}']['ip_port']
+                                item[f'{index}-a{round_number}']['ip_port']
                                 for item in result
-                                if f'{index}-a{roundNumber}' in item
+                                if f'{index}-a{round_number}' in item
                             ]
 
                             # Aggregate the parameters
                             aggregated_params_link = aggregator.aggregate_model_params(
                                 node_param_download_links=node_params_links,
                                 ip_ports=ip_ports,
-                                round_number=roundNumber,
+                                round_number=round_number,
                                 index=index
                             )
                             return aggregated_params_link
