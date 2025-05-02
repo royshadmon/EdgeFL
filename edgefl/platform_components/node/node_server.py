@@ -93,11 +93,6 @@ def init_node(request: InitNodeRequest):
         node_instance = Node(replica_name, ip, port, index, logger)
         # configure_logging(f"node_server_{port}")
 
-        # aggregated_params_link = get_most_recent_agg_params(index) # for dynamically added nodes
-        # if aggregated_params_link:
-        #     filename = aggregated_params_link.split('/')[-1] # separate filename from full path
-        #     most_recent_round = int(filename.split('-')[-2]) # extract only the round number
-
         node_instance.currentRound = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized")
