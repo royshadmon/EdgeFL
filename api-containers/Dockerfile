@@ -5,9 +5,9 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copy the /edgefl contents into the container at current directories
-COPY /edgefl /app/edgefl
-COPY /api-containers /app/api-containers
-COPY /requirements.txt /app/requirements.txt
+COPY edgefl /app/edgefl
+COPY api-containers /app/api-containers
+COPY requirements.txt /app/requirements.txt
 
 
 # Install any needed packages specified in requirements.txt
@@ -22,5 +22,3 @@ ENV PYTHONPATH=/app
 EXPOSE 8080
 
 # Run aggregator_server.py when the container launches
-ENTRYPOINT ["python", "/app/api-containers/app2.py", "--env-file"]
-CMD ["/app/edgefl/env_files/mnist/mnist-agg.env"]

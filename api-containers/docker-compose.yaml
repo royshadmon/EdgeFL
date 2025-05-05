@@ -2,7 +2,7 @@ version: "3"
 
 services:
   server:
-    build: .
+    image: edgefl:latest
     restart: always
     env_file:
       - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist-agg.env
@@ -10,5 +10,6 @@ services:
     ports:
       - 8080:8080
     volumes:
-        - .:/app
-#    command: ["python", "app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
+      - ./edgefl:/app/edgefl  # Only mount specific directories
+      - ./api-containers:/app/api-containers
+    command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
