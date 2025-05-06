@@ -61,7 +61,7 @@ def check_policy_inserted(el_url, policy):
             'Content-Type': 'text/plain',
             'command': 'get !my_policy'
         }
-        print(f"check_policy_inserted: {response.status_code}")
+        # print(f"check_policy_inserted: {response.status_code}")
         # print(response.status_code)
 
         response = requests.get(el_url, headers=headers)
