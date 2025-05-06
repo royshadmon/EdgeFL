@@ -1,16 +1,14 @@
 services:
   ${NODE_NAME}:
-#    image: image_${NODE_TYPE}
+    image: ${IMAGE}
     restart: always
     env_file:
-      - /platform_${NODE_NAME}.env
-      - ${NODE_NAME}.env
-    container_name: ${NODE_NAME}
-    stdin_open: true
-    tty: true
-#    ports:
-#      - ${PORT}:${PORT}
-#    volumes:
-#        - ${NODE_NAME}--platform:/app/${NODE_NAME}
-#        - ./aggregator_server_${PORT}.env:/app/aggregator_server_${PORT}.env
-#    command: sh -c "uvicorn main:app --reload --port=${PORT} --host=0.0.0.0"
+      - ${ENV_FILE}
+    container_name: ${CONTAINER_NAME}
+    ports:
+      - ${PORT}:${PORT}
+    command: ["python", "/app/api-containers/app2.py"]
+
+
+
+
