@@ -1,17 +1,20 @@
 # Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the /edgefl contents into the container at current directories
-COPY edgefl /app/edgefl
-COPY api-containers /app/api-containers
+# Copy the requirements file first to leverage Docker cache
 COPY requirements.txt /app/requirements.txt
 
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Copy the current directory contents into the container at /app
+COPY api-containers/ /app/api-containers
+
+# Copy the sibling edgefl directory (using a relative path)
+COPY edgefl/ /app/edgefl
 
 # Define environment variable
 ENV PYTHONUNBUFFERED=1
@@ -21,4 +24,3 @@ ENV PYTHONPATH=/app
 # Make port 8080 available to the world outside this container
 EXPOSE 8080
 
-# Run aggregator_server.py when the container launches
