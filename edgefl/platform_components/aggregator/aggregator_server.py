@@ -7,8 +7,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import argparse
 from dotenv import load_dotenv
-import asyncio
+from starlette.responses import PlainTextResponse
+
 from platform_components.aggregator.aggregator import Aggregator
+import asyncio
 import logging
 import requests
 import os
@@ -39,6 +41,9 @@ ip = get_local_ip()
 port = os.getenv("SERVER_PORT", "8080")
 aggregator = Aggregator(ip, port, logger)
 
+# Track the training process of each index so that they can join once they're done
+training_processes = {}
+
 
 #######  FASTAPI IMPLEMENTATION  #######
 
@@ -64,7 +69,7 @@ class ContinueTrainingRequest(BaseModel):
 
 # @app.route('/init', methods=['POST'])
 
-@app.post("/init")
+@app.post("/init", response_class=PlainTextResponse)
 def init(request: InitRequest):
     """Deploy the smart contract with predefined nodes."""
     try:
@@ -73,18 +78,21 @@ def init(request: InitRequest):
         module_name, module_path = request.module, request.module_path
         aggregator.indexes.add(index)
 
+        if not index in aggregator.round_number:
+            aggregator.round_number[index] = 1
+
         initialize_nodes(node_urls, index, module_name, module_path)
+        # TODO: double check that if a node url is already init'ed for a specified index, don't init again for that node url
 
         aggregator.set_module_at_index(index, module_name, module_path)
         aggregator.initialize_index_on_blockchain(index, module_name, module_path)
-        aggregator.initialize_training_app(index)
-        aggregator.initialize_file_write_paths(index)
+        aggregator.initialize_training_app_on_index(index)
+        aggregator.initialize_file_write_paths_on_index(index)
 
-        # TODO: here, create a thread which will be for its own training process. For init'ing dynamic nodes, that would also create its own thread...so find a way to attach to its main agg. thread (index)
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
-        return {
-            "status": "success"
-        }
+        return (f"{{'status': 'success',"
+                f" 'message': 'Nodes initialized'"
+                f"}}\n")
     except Exception as e:
         logger.error(f"Failed to initialize nodes with index ({index}): {str(e)}")
         raise HTTPException(
@@ -115,6 +123,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path):
                 'replica_port': ip_port[1],
                 'replica_name': replica_name,
                 'replica_index': index,
+                'round_number': aggregator.round_number[index],
                 'module_name': module_name,
                 'module_path': module_path
             })
@@ -143,7 +152,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path):
 
     threads = []
     for url in node_urls:
-        thread = threading.Thread(target=init_node, args=(url,), daemon=True)
+        thread = threading.Thread(name=f"agg/init--{url}", target=init_node, args=(url,), daemon=True)
         thread.start()
         threads.append(thread)
         time.sleep(0.1)
@@ -158,14 +167,20 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path):
 async def init_training(request: TrainingRequest):
     """Start the training process by setting the number of rounds."""
     try:
-        index = aggregator.index
+        index = request.index
+        if index not in aggregator.indexes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index {index} not found (not yet initialized)."
+            )
+
         node_count = aggregator.node_count[index]
         num_rounds = request.totalRounds
         aggregator.minParams[index] = request.minParams
 
         if aggregator.minParams[index] > node_count: # prevents stalling when minParams > # of active nodes; warns user
             logger.info(
-                f"minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+                f"[{index}] minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
             )
             aggregator.minParams[index] = node_count
 
@@ -175,29 +190,25 @@ async def init_training(request: TrainingRequest):
                 detail="Number of rounds must be positive"
             )
 
-        logger.info(f"{num_rounds} {'round' if num_rounds == 1 else 'rounds'} of training started.")
+        # TODO: if a training process is in-progress, do not allow another call to /start-training
+        # TODO: add a manual way to stop training (if needed)
 
+        starting_round = 1
+        end_round = num_rounds
         initial_params = ''
-
-        for r in range(1, num_rounds + 1):
-            logger.info(f"Starting training round {r}")
-            aggregator.start_round(initial_params, r, index)
-            logger.debug("Sent initial parameters to nodes")
-
-            # Listen for updates from nodes
-            new_aggregator_params = await listen_for_update_agg(aggregator.minParams[index], r, index)
-            logger.debug("Received aggregated parameters")
-
-            # Set initial params to newly aggregated params for the next round
-            initial_params = new_aggregator_params
-            logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
-
-            # Track the last agg model file because it's not stored in a policy after the last round
-            aggregator.store_most_recent_agg_params(initial_params, index)
+        logger.info(f"[{index}] {num_rounds} {'round' if num_rounds == 1 else 'rounds'} of training started.")
+        # Allow for independent training processes
+        training_thread = threading.Thread(
+            name=f"agg/start-training--{index}",
+            target=start_training,
+            args=(aggregator, initial_params, starting_round, end_round, index),
+            daemon=True
+        )
+        training_thread.start()
 
         return {
             "status": "success",
-            "message": "Training completed successfully"
+            "message": f"Started training at index: {index}"
         }
     except Exception as e:
         raise HTTPException(
@@ -205,6 +216,31 @@ async def init_training(request: TrainingRequest):
             detail=str(e)
         )
 
+def start_training(aggregator, initial_params, starting_round, end_round, index):
+    for r in range(starting_round, end_round + 1):
+        aggregator.round_number[index] = r
+        logger.info(f"[{index}] Starting training round {r}")
+        aggregator.start_round(initial_params, r, index)
+        logger.debug(f"[{index}] Sent initial parameters to nodes")
+
+        # Listen for updates from nodes
+        new_aggregator_params = asyncio.run(
+            listen_for_update_agg(aggregator.minParams[index], r, index)
+        )
+        logger.debug(f"[{index}] Received aggregated parameters")
+
+        # Set initial params to newly aggregated params for the next round
+        initial_params = new_aggregator_params
+        print(initial_params)
+        logger.info(f"[{index}][Round {r}] Step 4 Complete: model parameters aggregated")
+
+        # Track the last agg model file because it's not stored in a policy after the last round
+        aggregator.store_most_recent_agg_params(initial_params, index)
+
+    return {
+        "status": "success",
+        "message": "Training completed successfully"
+    }
 
 @app.post('/update-minParams')
 async def update_minParams(request: UpdatedMinParamsRequest):
@@ -213,6 +249,12 @@ async def update_minParams(request: UpdatedMinParamsRequest):
 
     try:
         index = request.index
+        if index not in aggregator.indexes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index {index} not found (not yet initialized)."
+            )
+
         check_index_response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get index where name = {index}"
@@ -236,7 +278,7 @@ async def update_minParams(request: UpdatedMinParamsRequest):
 
         if aggregator.minParams[index] > node_count: # prevents stalling when minParams > # of active nodes; warns user
             logger.info(
-                f"minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+                f"[{index}] minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
             )
             aggregator.minParams[index] = node_count
     except Exception as e:
@@ -248,7 +290,7 @@ async def update_minParams(request: UpdatedMinParamsRequest):
 
 async def listen_for_update_agg(min_params, round_number, index):
     """Asynchronously poll for aggregated parameters from the blockchain."""
-    logger.info("listening for updates...")
+    logger.info(f"[{index}] listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     while True:
@@ -297,7 +339,7 @@ async def listen_for_update_agg(min_params, round_number, index):
                             return aggregated_params_link
 
         except Exception as e:
-            logger.error(f"Aggregator_server.py --> Waiting for file: {e}")
+            logger.error(f"[{index}] Aggregator_server.py --> Waiting for file: {e}")
 
         await asyncio.sleep(2)
 
@@ -306,60 +348,63 @@ async def listen_for_update_agg(min_params, round_number, index):
 async def continue_training(request: ContinueTrainingRequest):
     """Continue training from the last completed round."""
     try:
-        index = aggregator.index
+        index = request.index
+        if index not in aggregator.indexes:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Index {index} not found (not yet initialized)."
+            )
+
         node_count = aggregator.node_count[index]
         additional_rounds = request.additionalRounds
         aggregator.minParams[index] = request.minParams
 
         if aggregator.minParams[index] > node_count: # prevents stalling when minParams > # of active nodes; warns user
             logger.info(
-                f"minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
+                f"[{index}] minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
             )
             aggregator.minParams[index] = node_count
 
         if additional_rounds <= 0:
             raise HTTPException(
                 status_code=400,
-                detail="Invalid number of additional rounds"
+                detail=f"[{index}] Invalid number of additional rounds"
             )
 
         # Get the last round number from the blockchain layer
-        last_round = get_last_round_number()
+        last_round = get_last_round_number(index)
         if last_round is None:
             raise HTTPException(
                 status_code=400,
-                detail="No previous training found"
+                detail=f"[{index}] No previous training found"
             )
-        logger.info(f"Continuing training from round {last_round}, adding {additional_rounds} more {'round' if additional_rounds == 1 else 'rounds'}.")
 
         # Fetch the most recent aggregated model parameters
-        initial_params = get_last_aggregated_params()
+        initial_params = get_last_aggregated_params(index)
         if not initial_params:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to fetch aggregated parameters from round {last_round}"
+                detail=f"[{index}] Failed to fetch aggregated parameters from round {last_round}"
             )
 
-        # Continue training for the specified number of additional rounds
-        for r in range(last_round + 1, last_round + additional_rounds + 1):
-            logger.info(f"Starting training round {r}")
-            aggregator.start_round(initial_params, r, index)
-            logger.debug("Sent initial parameters to nodes")
+        # TODO: if a training process is in-progress, do not allow another call to /continue-training
+        # TODO: add a manual way to stop training (if needed)
 
-            # Listen for updates from nodes
-            new_aggregator_params = await listen_for_update_agg(aggregator.minParams[index], r, index)
-            logger.debug("Received aggregated parameters")
-
-            # Set initial params to newly aggregated params for the next round
-            initial_params = new_aggregator_params
-            logger.info(f"[Round {r}] Step 4 Complete: model parameters aggregated")
-
-            # Track the last agg model file because it's not stored in a policy after the last round
-            aggregator.store_most_recent_agg_params(initial_params, index)
+        starting_round = last_round + 1
+        end_round = last_round + additional_rounds
+        logger.info(f"[{index}] Continuing training from round {last_round}, adding {additional_rounds} more {'round' if additional_rounds == 1 else 'rounds'}.")
+        # Allow for independent training processes
+        training_thread = threading.Thread(
+            name=f"agg/continue-training--{index}",
+            target=start_training,
+            args=(aggregator, initial_params, starting_round, end_round, index),
+            daemon=True
+        )
+        training_thread.start()
 
         return {
-            'status': 'success',
-            'message': f'Training continued successfully from round {last_round + 1} to {last_round + additional_rounds}'
+            "status": "success",
+            "message": f"Continuing training at index from round {starting_round} to {end_round}: {index}"
         }
     except Exception as e:
         raise HTTPException(
@@ -368,13 +413,12 @@ async def continue_training(request: ContinueTrainingRequest):
         )
 
 
-def get_last_round_number():
+def get_last_round_number(index):
     """Get the last completed round number from the blockchain."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
     try:
         # Query the blockchain for all 'r' prefixed keys to find the highest round number
-        index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get * where [index] = {index} and [node_type] = aggregator"
@@ -402,20 +446,19 @@ def get_last_round_number():
 
             return highest_round_number
         else:
-            logger.error(f"Error fetching keys: {response.status_code}")
+            logger.error(f"[{index}] Error fetching keys: {response.status_code}")
             return None
 
     except Exception as e:
-        logger.error(f"Error fetching last round number: {str(e)}")
+        logger.error(f"[{index}] Error fetching last round number: {str(e)}")
         return None
 
 
-def get_last_aggregated_params():
+def get_last_aggregated_params(index):
     """Get the aggregated parameters from the specified round."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
     try:
         # Get the aggregated parameters from index-r
-        index = aggregator.index
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
             "command": f"blockchain get {index}-r"
@@ -428,15 +471,15 @@ def get_last_aggregated_params():
                     if f'{index}-r' in item and 'initParams' in item[f'{index}-r']:
                         return item[f'{index}-r']['initParams']
 
-            logger.info(f"No aggregated parameters found in policy {index}-r")
+            logger.info(f"[{index}] No aggregated parameters found in policy {index}-r")
             return None
 
         else:
-            logger.error(f"Error fetching aggregated parameters: {response.status_code}")
+            logger.error(f"[{index}] Error fetching aggregated parameters: {response.status_code}")
             return None
 
     except Exception as e:
-        logger.error(f"Error fetching aggregated parameters: {str(e)}")
+        logger.error(f"[{index}] Error fetching aggregated parameters: {str(e)}")
         return None
 
 if __name__ == '__main__':

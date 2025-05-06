@@ -25,7 +25,7 @@ load_dotenv()
 
 
 class Node:
-    def __init__(self, replica_name, ip, port, index, module_name, module_path, logger):
+    def __init__(self, replica_name, ip, port, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
         # self.module_name = os.getenv('MODULE_NAME') # todo: modularize
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
@@ -34,16 +34,13 @@ class Node:
         self.replica_name = replica_name
         self.node_ip = ip
         self.node_port = port
-        # self.index = index # index specified *only* on init; tracked for entire training process
-        self.indexes = set()
-        self.indexes.add(index)
 
         self.logger = logger
         self.logger.debug("Node initializing")
 
-
         # ===== Index-specific data
         self.indexes = set()
+        # self.indexes.add(index)
         # self.replica_names = {}
         self.data_batches = {} # {'index1': [], 'index2': [], ...}
         self.round_number = {}
@@ -51,53 +48,48 @@ class Node:
         self.module_names = {}
         self.module_paths = {}
         self.data_handlers = {}
-        self.fetch_indexes_and_modules() # TODO: maybe not do this, if user inputs existing index but different module, just warn them and use existing module
+        # self.fetch_indexes_and_modules()
 
-        self.file_write_destination = {}
-        self.tmp_dir = {}
-        self.docker_file_write_destination = {}
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replica_name)
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replica_name)
+        self.docker_file_write_destination = None
         # =====
 
+        # Initialize Firebase database connection
         self.database_url = os.getenv("DATABASE_URL")
         self.mongo_db_name = os.getenv('MONGO_DB_NAME')
-        # self.replica_name = replica_name # todo: modularize
-
-        # init training application class reference # todo: modularize
-        # training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        # TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
-        # self.data_handler = TrainingApp_class(self.replica_name) # Create an instance
-
-        # init file write paths # todo: modularize
-
-        # Node local data batches  # todo: modularize
-        # self.data_batches = []
-        # self.currentRound = 1
-
-        # Initializing index specific data in this node
-        self.initialize_index(index)
-        self.set_module_at_index(index, module_name, module_path)
-        self.initialize_training_app(index)
-        self.initialize_file_write_paths(index)
-
-    def initialize_index(self, index):
-        self.indexes.add(index)
-
-    def initialize_file_write_paths(self, index):
-        self.file_write_destination[index] = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replica_name)
-        self.tmp_dir[index] = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replica_name)
-        if not os.path.exists(os.path.join(self.tmp_dir[index], index)):
-            os.makedirs(os.path.join(self.tmp_dir[index], index))
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination[index] = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replica_name)
+
+    def initialize_specific_node_on_index(self, index, module_name, module_path):
+        # Initializing index specific data in this node
+        self.initialize_index(index)
+        self.set_module_at_index(index, module_name, module_path)
+        self.initialize_training_app_on_index(index)
+        self.initialize_file_write_paths_on_index(index)
+
+    def initialize_index(self, index):
+        self.indexes.add(index)
+
+    def initialize_file_write_paths_on_index(self, index):
+        if not os.path.exists(os.path.join(self.file_write_destination, index)):
+            os.makedirs(os.path.dirname(
+                f"{self.file_write_destination}/{index}/"),
+                exist_ok=True)
+
+        if not os.path.exists(os.path.join(self.tmp_dir, index)):
+            os.makedirs(os.path.join(self.tmp_dir, index), exist_ok=True)
+
+        if self.docker_running:
+            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replica_name)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination[index], index))
+            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
             # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replica_name}/{self.index}/")
             
-    def initialize_training_app(self, index):
+    def initialize_training_app_on_index(self, index):
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
@@ -120,13 +112,23 @@ class Node:
     # Each index has one training app model
     def set_module_at_index(self, index, module_name, module_path):
         try:
-            if index in self.module_names or self.get_index_in_blockchain(index):
+            index_data = self.get_index_data_in_blockchain(index)
+            if index in self.module_names: # already cached module at index, don't do anything
                 self.logger.info(f'Index "{index}" already has a module: "{self.module_names[index]}"')
                 return {
                     'status': 'error',
                     'message': f'Index "{index}" already has a module: "{self.module_names[index]}"'
                 }
+            elif index_data: # module already stored in blockchain but not cache, so fetch
+                self.logger.info(f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.')
+                self.module_names[index] = index_data['module_name']
+                self.module_paths[index] = index_data['module_path']
+                return {
+                    'status': 'success',
+                    'message': f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.'
+                }
 
+            # New index, so set new module
             self.module_names[index] = module_name
             self.module_paths[index] = module_path
             self.logger.info(f'Added module "{module_name}" to index "{index}"')
@@ -140,17 +142,16 @@ class Node:
                 'message': str(e)
             }
 
-    # Gets specified index in blockchain if it exists, otherwise returns None
-    def get_index_in_blockchain(self, index):
+    # Gets data of specified index in blockchain if it exists, otherwise returns None
+    def get_index_data_in_blockchain(self, index):
         where_condition = f"where name = {index}"
         policies = get_policies(self.edgelake_node_url, "index", where_condition)
         if not policies:
             return None
-
         if len(policies) > 1: # dev check
             raise Exception(f"Multiple instances of index {index} found in the blockchain")
 
-        return index
+        return policies[0] # attributes: name, module_name, module_path, id, date, ledger
 
     '''
     add_data_batch(data)
@@ -166,7 +167,7 @@ class Node:
         - Returns current node model parameters to edgefl via event listener
     '''
     def add_node_params(self, round_number, model_metadata, index):
-        self.logger.debug("in add_node_params")
+        self.logger.debug(f"[{index}] in add_node_params")
         try:
             data = f'''<my_policy = {{"{index}-a{round_number}" : {{
                                 "node" : "{self.replica_name}",
@@ -178,7 +179,7 @@ class Node:
 
             success = False
             while not success:
-                self.logger.debug("Attempting insert")
+                self.logger.debug(f"[{index}] Attempting insert")
                 response = insert_policy(self.edgelake_node_url, data)
                 if response.status_code == 200:
                     success = True
@@ -187,7 +188,7 @@ class Node:
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
 
-            self.logger.debug(f"Submitting results for round {round_number}")
+            self.logger.debug(f"[{index}] Submitting results for round {round_number}")
             # response = requests.post(self.edgelake_node_url, headers=headers, data=data)
             # TODO: add error check here
 
@@ -207,7 +208,7 @@ class Node:
         - Gets local data and runs training on updated model
     '''
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
-        self.logger.debug(f"in train_model_params for round {round_number}")
+        self.logger.debug(f"[{index}] in train_model_params for round {round_number}")
 
         # First round initialization
         if round_number == 1 and not aggregator_model_params_db_link:
@@ -220,17 +221,17 @@ class Node:
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination[index]}/{index}/{filename}', ip_ports)
-                    copy_file_from_container(os.path.join(self.tmp_dir[index], index), self.docker_container_name, f'{self.docker_file_write_destination[index]}/{index}/{filename}', f'{self.file_write_destination[index]}/{index}/{filename}')
+                                         f'{self.docker_file_write_destination}/{index}/{filename}', ip_ports)
+                    copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name, f'{self.docker_file_write_destination}/{index}/{filename}', f'{self.file_write_destination}/{index}/{filename}')
                 else:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link, f'{self.file_write_destination[index]}/{index}/{filename}', ip_ports)
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link, f'{self.file_write_destination}/{index}/{filename}', ip_ports)
 
 
                 # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
                     with open(
-                            f'{self.file_write_destination[index]}/{index}/{filename}',
+                            f'{self.file_write_destination}/{index}/{filename}',
                             'rb') as f:
                         data = pickle.load(f)
 
@@ -238,10 +239,10 @@ class Node:
                 if data and 'newUpdates' in data:
                     weights = self.decode_params(data['newUpdates'])
                 else:
-                    self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
-                    raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                    self.logger.error(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                    raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
             except Exception as e:
-                self.logger.error(f"Error getting weights: {str(e)}")
+                self.logger.error(f"[{index}] Error getting weights: {str(e)}")
                 raise
 
         # Update model with weights
@@ -255,16 +256,16 @@ class Node:
         encoded_params = self.encode_model(model_params)
         file = f"{round_number}-replica-{self.replica_name}.pkl"
         # make sure directory exists
-        os.makedirs(os.path.dirname(f"{self.file_write_destination[index]}/{index}/"), exist_ok=True)
-        file_name = f"{self.file_write_destination[index]}/{index}/{file}"
+        os.makedirs(os.path.dirname(f"{self.file_write_destination}/{index}/"), exist_ok=True)
+        file_name = f"{self.file_write_destination}/{index}/{file}"
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
-        self.logger.info(f"[Round {round_number}] Step 2 Complete: model training done")
+        self.logger.info(f"[{index}][Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
-            self.logger.debug(f'written to container at {f"{self.docker_file_write_destination[index]}/{index}/{file}"}')
-            copy_file_to_container(os.path.join(self.tmp_dir[index], index), self.docker_container_name, file_name, f"{self.docker_file_write_destination[index]}/{index}/{file}")
-            return f'{self.docker_file_write_destination[index]}/{index}/{file}'
+            self.logger.debug(f'[{index}] written to container at {f"{self.docker_file_write_destination}/{index}/{file}"}')
+            copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
+            return f'{self.docker_file_write_destination}/{index}/{file}'
         return file_name
 
     def encode_model(self, model_update):

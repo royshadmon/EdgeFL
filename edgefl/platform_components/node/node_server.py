@@ -3,6 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
+from starlette.responses import PlainTextResponse
 
 # from dotenv import load_dotenv
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, fetch_data_from_db
@@ -40,8 +41,6 @@ logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 node_instance = None
 listener_thread = None
 stop_listening_thread = False
-
-node_list = []
 
 ## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB for each one.
 @asynccontextmanager
@@ -89,23 +88,29 @@ def init_node(request: InitNodeRequest):
 
         # TODO: remove this so that when another training process starts, it doesn't kill existing training nodes
         # Maybe use a thread pool or a dict?
-        if listener_thread and listener_thread.is_alive():
-            stop_listening_thread = True
-            listener_thread.join(timeout=1)
-
-        # Reset the stop flag
-        stop_listening_thread = False
+        # if listener_thread and listener_thread.is_alive():
+        #     stop_listening_thread = True
+        #     listener_thread.join(timeout=1)
+        #
+        # # Reset the stop flag
+        # stop_listening_thread = False
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
-        node_instance = Node(replica_name, ip, port, index, module_name, module_path, logger) # TODO: make one Node object for every thread to access (for their stuff)
-        # configure_logging(f"node_server_{port}")
+        if not node_instance:
+            node_instance = Node(replica_name, ip, port, logger)
+        node_instance.initialize_specific_node_on_index(index, module_name, module_path)
         node_instance.round_number[index] = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized")
-
+        # print(f"indexes: {node_instance.indexes}")
+        # print(f"module names: {node_instance.module_names}")
+        # print(f"module paths: {node_instance.module_paths}")
+        # print(f"starting round numbers: {node_instance.round_number}")
+        # print(f"training apps: {node_instance.data_handlers}")
         # Start event listener for start round
         listener_thread = threading.Thread(
+            name=f"{replica_name}--{index}",
             target=listen_for_start_round,
             args=(node_instance, index, lambda: stop_listening_thread)
         )
@@ -152,7 +157,7 @@ def receive_data(request: ReceiveDataRequest):
 def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.round_number[index]
 
-    logger.debug(f"listening for start round {current_round}")
+    logger.debug(f"[{index}] listening for start round {current_round}")
     while True:
         try:
 
@@ -174,17 +179,17 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                         break  # Stop searching once the current round's data is found
 
                 if round_data:
-                    logger.debug(f"Round Data: {round_data}")  # Debugging line
+                    logger.debug(f"[{index}] Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
                     modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, index)
                     nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
-                    logger.info(f"[Round {current_round}] Step 3 Complete: Model parameters published")
+                    logger.info(f"[{index}][Round {current_round}] Step 3 Complete: Model parameters published")
                     current_round += 1
 
             time.sleep(5)  # Poll every 2 seconds
         except Exception as e:
-            logger.error(f"Error in listener thread: {str(e)}")
+            logger.error(f"[{index}] Error in listener thread: {str(e)}")
             time.sleep(2)
 
 # TODO: move to a (helper) file (i.e. 'node_helpers.py'?)
@@ -210,26 +215,27 @@ def get_most_recent_agg_params(index):
 
         return agg_params
     except Exception as e:
-        logger.error(f"Error in extracting round number: {str(e)}")
+        logger.error(f"[{index}] Error in extracting round number: {str(e)}")
 
 # @app.route('/inference', methods=['POST'])
-@app.post('/inference/{index}')
+@app.post('/inference/{index}', response_class=PlainTextResponse)
 def inference(index):
     """Inference on current model w/ data passed in."""
     try:
 
-        logger.info("received inference request")
+        logger.info(f"[{index}] received inference request")
         if not index:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Index must be specified."
             )
         results = node_instance.inference(index)
-        response = {
-            'status': 'success',
-            'message': 'Inference completed successfully',
-            'model_accuracy': str(results),
-        }
+        response = (f"{{"
+                    f"'index': '{index}',"
+                    f" 'status': 'success',"
+                    f" 'message': 'Inference completed successfully',"
+                    f" 'model_accuracy': '{str(results)}'"
+                    f"}}\n")
         return response
     except Exception as e:
         raise HTTPException(
@@ -240,6 +246,7 @@ def inference(index):
 class InferenceRequest(BaseModel):
     input: list[float] = [244.46153846153845, 453, 0, 52.29666666666667, 0.0375170724933045, 20.515]
 
+# TODO: add index and reformat response to FastAPI PlainTextResponse
 # @app.route('/infer', methods=['POST'])
 @app.post('/infer')
 def direct_inference(request: InferenceRequest):

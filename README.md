@@ -211,19 +211,19 @@ At any point, you can execute edge inference directly on the node.
 This can be done on each training node. The output will be the accuracy based on the local test data
 held out from training.
 ```bash
-curl -X POST http://localhost:8081/inference
-curl -X POST http://localhost:8082/inference
-curl -X POST http://localhost:8083/inference
-curl -X POST http://localhost:8084/inference
+curl -X POST http://localhost:8081/inference/test-index
+curl -X POST http://localhost:8082/inference/test-index
+curl -X POST http://localhost:8083/inference/test-index
+curl -X POST http://localhost:8084/inference/test-index
 ```
 
 An example output looks like this:
 ```bash
-curl -X POST http://localhost:8081/inference ; curl -X POST http://localhost:8082/inference ; curl -X POST http://localhost:8083/inference ; curl -X POST http://localhost:8084/inference
-{"message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
+curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index ; curl -X POST http://localhost:8084/inference/test-index
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
 ```
 
 ## Resolving common issues

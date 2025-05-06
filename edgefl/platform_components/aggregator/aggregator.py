@@ -34,10 +34,11 @@ class Aggregator:
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 
+        self.agg_name = os.getenv("AGG_NAME")
+
         self.server_ip = ip
         self.server_port = port
-        # self.index = '' # right now, specified *only* on init; tracked for entire training process
-
+        
         self.logger = logger
         self.logger.debug("Aggregator initializing")
 
@@ -47,26 +48,21 @@ class Aggregator:
         self.node_count = {}
         self.lock = Lock()
         self.minParams = {}
+        self.round_number = {}
 
         # These will be cached on aggregator startup
         self.module_names = {}
         self.module_paths = {}
         self.training_apps = {}
-        self.fetch_indexes_and_modules() # TODO: maybe not do this, if user inputs existing index but different module, just warn them and use existing module
+        # self.fetch_indexes_and_modules()
 
-        # Multi-training means processes write to their own file write paths
-        self.file_write_destination = {} # TODO: they are all the same, so no need for dict (including the two below)
-        self.tmp_dir = {}
-        self.docker_file_write_destination = {}
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.agg_name)
+        self.docker_file_write_destination = None
         # =====
 
         # Initialize Firebase database connection
         self.database_url = os.getenv('DATABASE_URL')
-
-        # init training application class reference
-        # training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        # TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
-        # self.training_app = TrainingApp_class('aggregator') # Create an instance
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
@@ -74,41 +70,29 @@ class Aggregator:
             self.docker_running = True
 
 
-    def initialize_file_write_paths(self, index):
+    def initialize_file_write_paths_on_index(self, index):
         # Each index has only one module, so they'll also have only one file_write_path for them
-        try:
-            # if self.index != index:
-            #     self.index = index
+        if not os.path.exists(os.path.join(self.file_write_destination, index)):
+            os.makedirs(os.path.dirname(
+                f"{self.file_write_destination}/{index}/"),
+                exist_ok=True)
 
-            self.file_write_destination[index] = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
-                                                       self.module_names[index], index)
+        if not os.path.exists(os.path.join(self.tmp_dir, index)):
+            os.makedirs(os.path.join(self.tmp_dir, index), exist_ok=True)
 
-            self.tmp_dir[index] = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_names[index], index)
-            if not os.path.exists(self.tmp_dir[index]):
-                os.makedirs(self.tmp_dir[index])
+        if self.docker_running:
+            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.agg_name)
+            self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
+            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
+            # create_directory_in_container(self.docker_container_name,
+            #                               f"{self.docker_file_write_destination}/aggregator/")
 
-            if self.docker_running:
-                self.docker_file_write_destination[index] = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"),
-                                                                  self.module_names[index], index)
-                self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-                create_directory_in_container(self.docker_container_name, self.docker_file_write_destination[index])
-                create_directory_in_container(self.docker_container_name,
-                                              f"{self.docker_file_write_destination[index]}/aggregator/")
-            return {
-                    'status': 'success',
-                    'message': 'file write paths initialized'
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
 
     def initialize_index_on_blockchain(self, index, module_name, module_path):
-        if self.get_index_in_blockchain(index):
+        if self.get_index_data_in_blockchain(index):
             return {
                 'status': 'error',
-                'message': 'index already initialized'
+                'message': 'index already initialized on the blockchain'
             }
 
         try:
@@ -144,7 +128,7 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def initialize_training_app(self, index):
+    def initialize_training_app_on_index(self, index):
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
@@ -167,13 +151,24 @@ class Aggregator:
     # Each index has one training app model
     def set_module_at_index(self, index, module_name, module_path):
         try:
-            if index in self.module_names or self.get_index_in_blockchain(index):
+            index_data = self.get_index_data_in_blockchain(index)
+            if index in self.module_names:  # already cached module at index, don't do anything
                 self.logger.info(f'Index "{index}" already has a module: "{self.module_names[index]}"')
                 return {
                     'status': 'error',
                     'message': f'Index "{index}" already has a module: "{self.module_names[index]}"'
                 }
+            elif index_data:  # module already stored in blockchain but not cache, so fetch
+                self.logger.info(
+                    f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.')
+                self.module_names[index] = index_data['module_name']
+                self.module_paths[index] = index_data['module_path']
+                return {
+                    'status': 'error',
+                    'message': f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.'
+                }
 
+            # New index, so set new module
             self.module_names[index] = module_name
             self.module_paths[index] = module_path
             self.logger.info(f'Added module "{module_name}" to index "{index}"')
@@ -187,17 +182,16 @@ class Aggregator:
                 'message': str(e)
             }
 
-    # Gets specified index in blockchain if it exists, otherwise returns None
-    def get_index_in_blockchain(self, index):
+    # Gets data of specified index in blockchain if it exists, otherwise returns None
+    def get_index_data_in_blockchain(self, index):
         where_condition = f"where name = {index}"
         policies = get_policies(self.edgelake_node_url, "index", where_condition)
         if not policies:
             return None
-
-        if len(policies) > 1: # dev check
+        if len(policies) > 1:  # dev check
             raise Exception(f"Multiple instances of index {index} found in the blockchain")
 
-        return index
+        return policies[0]  # attributes: name, module_name, module_path, id, date, ledger
 
     # Deletes and inserts index-rx with updated initParams ('blockchain update to' not working)
     def store_most_recent_agg_params(self, initParams_link, index):
@@ -297,23 +291,22 @@ class Aggregator:
             try:
                 # make sure directory exists
                 filename = path.split('/')[-1]
-                os.makedirs(os.path.dirname(
-                    f"{self.file_write_destination[index]}/aggregator/"),
-                            exist_ok=True)
 
+                local_path = f'{self.file_write_destination}/{index}/{filename}'
                 if self.docker_running:
+                    docker_file_path = f'{self.docker_file_write_destination}/{index}/{filename}'
                     response = read_file(self.edgelake_node_url, path,
-                                         f'{self.docker_file_write_destination[index]}/aggregator/{filename}', ip_ports[i])
-                    copy_file_from_container(self.tmp_dir[index], self.docker_container_name,
-                                        f'{self.docker_file_write_destination[index]}/aggregator/{filename}',
-                                        f'{self.file_write_destination[index]}/aggregator/{filename}')
+                                         docker_file_path, ip_ports[i])
+                    copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name,
+                                        docker_file_path,
+                                        local_path)
                 else:
                     response = read_file(self.edgelake_node_url, path,
-                                     f'{self.file_write_destination[index]}/aggregator/{filename}', ip_ports[i])
+                                     local_path, ip_ports[i])
 
                 if response.status_code == 200:
                     sleep(1)
-                    with open(f'{self.file_write_destination[index]}/aggregator/{filename}', 'rb') as f:
+                    with open(local_path, 'rb') as f:
                         data = pickle.load(f)
 
                     if not data:
@@ -343,16 +336,20 @@ class Aggregator:
         }
 
         # push agg data
-        with open(f'{self.file_write_destination[index]}/aggregator/{index}-{round_number}-agg_update.json', 'wb') as f:
+        # TODO: will this work on windows?
+        file_write_path = f'{self.file_write_destination}/{index}/{round_number}-{self.agg_name}_update.json'
+
+        with open(file_write_path, 'wb') as f:
             f.write(self.encode_params(data_entry))
 
         # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
-            # print(f'Writing to container at {f"{self.docker_file_write_destination[index]}/aggregator/{round_number}-agg_update.json"}')
-            copy_file_to_container(self.tmp_dir[index], self.docker_container_name, f'{self.file_write_destination[index]}/aggregator/{index}-{round_number}-agg_update.json', f'{self.docker_file_write_destination[index]}/aggregator/{index}-{round_number}-agg_update.json')
-            return f'{self.docker_file_write_destination[index]}/aggregator/{index}-{round_number}-agg_update.json'
+            docker_file_write_path = f'{self.docker_file_write_destination}/{index}/{round_number}-{self.agg_name}_update.json'
+            # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
+            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name, file_write_path, docker_file_write_path)
+            return docker_file_write_path
 
-        return f'{self.file_write_destination[index]}/aggregator/{index}-{round_number}-agg_update.json'
+        return file_write_path
 
     def encode_params(self, new_model_weights):
         serialized_data = pickle.dumps(new_model_weights)

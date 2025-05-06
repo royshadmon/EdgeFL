@@ -23,8 +23,8 @@ from tensorflow.python.client import device_lib
 device = "/GPU:0" if tf.config.list_physical_devices('GPU') else "/CPU:0"
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
-    print(device_lib.list_local_devices())
-    print(tf.sysconfig.get_build_info())
+    print(device_lib.list_local_devices()) # debugging
+    print(tf.sysconfig.get_build_info()) # debugging
     try:
         # Restrict Tensorflow to only use the first GPU
         tf.config.set_visible_devices(gpus[0], 'GPU')
