@@ -52,6 +52,7 @@ class InitRequest(BaseModel):
     index: str
     module: str
     module_path: str
+    db_name: str
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -76,13 +77,16 @@ def init(request: InitRequest):
         # Initialize the nodes on specified index and send the contract address
         node_urls, index = request.nodeUrls, request.index
         module_name, module_path = request.module, request.module_path
+        db_name = request.db_name
+
         aggregator.indexes.add(index)
 
+        if index not in aggregator.databases:
+            aggregator.databases[index] = db_name
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
-        initialize_nodes(node_urls, index, module_name, module_path)
-        # TODO: double check that if a node url is already init'ed for a specified index, don't init again for that node url
+        initialize_nodes(node_urls, index, module_name, module_path, db_name)
 
         aggregator.set_module_at_index(index, module_name, module_path)
         aggregator.initialize_index_on_blockchain(index, module_name, module_path)
@@ -101,7 +105,7 @@ def init(request: InitRequest):
         )
 
 
-def initialize_nodes(node_urls: list[str], index, module_name, module_path):
+def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -125,7 +129,8 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path):
                 'replica_index': index,
                 'round_number': aggregator.round_number[index],
                 'module_name': module_name,
-                'module_path': module_path
+                'module_path': module_path,
+                'db_name': db_name
             })
 
             with aggregator.lock:
@@ -191,6 +196,7 @@ async def init_training(request: TrainingRequest):
             )
 
         # TODO: if a training process is in-progress, do not allow another call to /start-training
+
         # TODO: add a manual way to stop training (if needed)
 
         starting_round = 1
@@ -246,7 +252,7 @@ def start_training(aggregator, initial_params, starting_round, end_round, index)
 async def update_minParams(request: UpdatedMinParamsRequest):
     """Update minParams at an existing index. Note that indices are specified on node initialization."""
     url = f'http://{os.getenv("EXTERNAL_IP")}'
-
+    # TODO: Rare bug, when training two different models and both are in-progress, one of them may stop when this endpoint is called...or if a node is added mid-way...not sure
     try:
         index = request.index
         if index not in aggregator.indexes:
@@ -388,6 +394,7 @@ async def continue_training(request: ContinueTrainingRequest):
             )
 
         # TODO: if a training process is in-progress, do not allow another call to /continue-training
+
         # TODO: add a manual way to stop training (if needed)
 
         starting_round = last_round + 1

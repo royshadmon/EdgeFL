@@ -27,7 +27,7 @@ from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
 class WinniioDataHandler():
-    def __init__(self, node_name):
+    def __init__(self, node_name, db_name):
         """
         Initialize.
 
@@ -40,6 +40,7 @@ class WinniioDataHandler():
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+        self.db_name = db_name
 
         # Data Handler Initialization
         self.x_train = None
@@ -92,16 +93,16 @@ class WinniioDataHandler():
         # self.logger.debug(query_train)
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
-        db_name = os.getenv("PSQL_DB_NAME")
-        query_train = f"sql {db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"sql {db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+        # db_name = os.getenv("PSQL_DB_NAME")
+        query_train = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-            query_train_result = np.array(train_data["Query"])
+            query_train_result = np.array(train_data["Query"]) # TODO: watch out when exceeding max rounds stored in the db
             x_train_images = []
             y_train_labels = []
             for i in range(len(query_train_result)):
@@ -196,9 +197,9 @@ class WinniioDataHandler():
         # 1. run sql to get all test data for x and y
         # 2. check if number returned equals number in db
         # 3. return test data
-        db_name = os.getenv("PSQL_DB_NAME")
+        # db_name = os.getenv("PSQL_DB_NAME")
         # query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
-        query_test = f"sql {db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE data_type = 'test'"
+        query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE data_type = 'test'"
 
         test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 

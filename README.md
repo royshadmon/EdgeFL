@@ -157,7 +157,8 @@ curl -X POST http://localhost:8080/init \
   ],
   "index": "test-index"
   "module": "MnistDataHandler",
-  "module_path": "edgefl/platform_components/data_handlers/mnist_data_handler.py"
+  "module_path": "edgefl/platform_components/data_handlers/mnist_data_handler.py",
+  "db_name": "mnist_fl"
 }'
 ```
 After, start the training process:
@@ -185,7 +186,8 @@ curl -X POST http://localhost:8080/init \
   ],
   "index": "test-index"
   "module": "MnistDataHandler",
-  "module_path": "edgefl/platform_components/data_handlers/mnist_data_handler.py"
+  "module_path": "edgefl/platform_components/data_handlers/mnist_data_handler.py",
+  "db_name": "mnist_fl"
 }'
 ```
 
