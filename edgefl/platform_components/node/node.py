@@ -251,7 +251,9 @@ class Node:
 
         # Train model
         # model_update = self.local_training_handler.train({})
+        # print(f"[INFO] [{index}][Round {round_number}] ========== Model training progress ==========")
         model_params = self.data_handlers[index].train(round_number)
+        self.logger.info(f"[{index}][Round {round_number}] Step 2 Complete: Model training done")
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
@@ -262,7 +264,6 @@ class Node:
         with open(f"{file_name}", "wb") as f:
             f.write(encoded_params)
 
-        self.logger.info(f"[{index}][Round {round_number}] Step 2 Complete: model training done")
         if self.docker_running:
             self.logger.debug(f'[{index}] written to container at {f"{self.docker_file_write_destination}/{index}/{file}"}')
             copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
