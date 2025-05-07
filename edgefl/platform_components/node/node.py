@@ -48,6 +48,7 @@ class Node:
         self.module_names = {}
         self.module_paths = {}
         self.data_handlers = {}
+        self.databases = {}
         # self.fetch_indexes_and_modules()
 
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replica_name)
@@ -93,7 +94,7 @@ class Node:
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
-            self.data_handlers[index] = TrainingApp_class(self.replica_name) # Create an instance at index
+            self.data_handlers[index] = TrainingApp_class(self.replica_name, self.databases[index]) # Create an instance at index
         except Exception as e:
             return {
                 'status': 'error',

@@ -6,7 +6,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 from starlette.responses import PlainTextResponse
 
 # from dotenv import load_dotenv
-from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, fetch_data_from_db
+from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, fetch_data_from_db, \
+    connect_to_db, get_all_databases
 from platform_components.node.node import Node
 import numpy as np
 import logging
@@ -30,6 +31,13 @@ warnings.filterwarnings("ignore")
 
 load_dotenv()
 
+db_user = os.getenv("PSQL_DB_USER")
+db_password = os.getenv("PSQL_DB_PASSWORD")
+db_host = os.getenv("PSQL_HOST")
+db_port = os.getenv("PSQL_PORT")
+
+db_list = set()
+
 edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 edgelake_node_port = edgelake_node_url.split(":")[2]
 
@@ -45,15 +53,11 @@ stop_listening_thread = False
 ## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB for each one.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global db_list
     logger.info(f"Node server on port {edgelake_node_port} starting up.")
 
-    node_name = "node1" ##### TODO: make table names dynamic
-    db_name = os.getenv("PSQL_DB_NAME")
-    query = f"sql {db_name} SELECT * FROM node_{node_name} LIMIT 1"
-    try:
-        _ = fetch_data_from_db(edgelake_node_url, query)
-    except Exception as e:
-        raise ConnectionError(f"Unable to access the database tables: {str(e)}")
+    # Get all connected databases from the EdgeLake node
+    db_list = get_all_databases(edgelake_node_url)
 
     yield
     logger.info("Node server shutting down.")
@@ -69,6 +73,7 @@ class InitNodeRequest(BaseModel):
     round_number: int
     module_name: str
     module_path: str
+    db_name: str
 
 
 @app.post('/init-node')
@@ -84,21 +89,27 @@ def init_node(request: InitNodeRequest):
         module_name = request.module_name
         module_path = request.module_path
 
-        # logger.debug(f"Replica name " + replica_name)
+        db_name = request.db_name # testing winniio_fl + mnist_fl DBs
 
-        # TODO: remove this so that when another training process starts, it doesn't kill existing training nodes
-        # Maybe use a thread pool or a dict?
-        # if listener_thread and listener_thread.is_alive():
-        #     stop_listening_thread = True
-        #     listener_thread.join(timeout=1)
-        #
-        # # Reset the stop flag
-        # stop_listening_thread = False
+        # Connect to DB if it's not in the EdgeLake node
+        if db_name not in db_list:
+            connect_to_db(edgelake_node_url, db_name, db_user, db_password, db_host, db_port)
+            db_list.add(db_name)
+
+        # Fetch and check for existing data
+        query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
+        check_data = fetch_data_from_db(edgelake_node_url, query)
+        if not check_data:
+            raise ValueError(f"No data found in the database: {db_name}.")
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
         if not node_instance:
             node_instance = Node(replica_name, ip, port, logger)
+
+        if index not in node_instance.databases:
+            node_instance.databases[index] = db_name
+
         node_instance.initialize_specific_node_on_index(index, module_name, module_path)
         node_instance.round_number[index] = most_recent_round # 1 or current round
 
@@ -108,6 +119,7 @@ def init_node(request: InitNodeRequest):
         # print(f"module paths: {node_instance.module_paths}")
         # print(f"starting round numbers: {node_instance.round_number}")
         # print(f"training apps: {node_instance.data_handlers}")
+
         # Start event listener for start round
         listener_thread = threading.Thread(
             name=f"{replica_name}--{index}",
@@ -121,10 +133,18 @@ def init_node(request: InitNodeRequest):
             'status': 'success',
             'message': 'Node initialized successfully'
         }
-    except Exception as e:
+    except ValueError as e:
+        raise ValueError(
+            f"No data found in the database: {db_name}"
+        )
+    except HTTPException as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"/init-node - {str(e)}"
+        )
+    except ConnectionError as e:
+        raise ConnectionError(
+            f"Unable to access the database tables: {str(e)}"
         )
 
 '''

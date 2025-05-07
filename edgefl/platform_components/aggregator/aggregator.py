@@ -50,10 +50,10 @@ class Aggregator:
         self.minParams = {}
         self.round_number = {}
 
-        # These will be cached on aggregator startup
         self.module_names = {}
         self.module_paths = {}
         self.training_apps = {}
+        self.databases = {}
         # self.fetch_indexes_and_modules()
 
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
@@ -132,7 +132,7 @@ class Aggregator:
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
-            self.training_apps[index] = TrainingApp_class('aggregator') # Create an instance at index
+            self.training_apps[index] = TrainingApp_class('aggregator', self.databases[index]) # Create an instance at index
         except Exception as e:
             return {
                 'status': 'error',
