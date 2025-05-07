@@ -54,13 +54,13 @@ stop_listening_thread = False
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_list
-    logger.info(f"Node server on port {edgelake_node_port} starting up.")
+    # logger.info(f"Node server on port {edgelake_node_port} starting up.")
 
     # Get all connected databases from the EdgeLake node
     db_list = get_all_databases(edgelake_node_url)
 
     yield
-    logger.info("Node server shutting down.")
+    # logger.info("Node server shutting down.")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -113,7 +113,7 @@ def init_node(request: InitNodeRequest):
         node_instance.initialize_specific_node_on_index(index, module_name, module_path)
         node_instance.round_number[index] = most_recent_round # 1 or current round
 
-        logger.info(f"{replica_name} successfully initialized")
+        logger.info(f"{replica_name} successfully initialized for ({index})")
         # print(f"indexes: {node_instance.indexes}")
         # print(f"module names: {node_instance.module_names}")
         # print(f"module paths: {node_instance.module_paths}")
