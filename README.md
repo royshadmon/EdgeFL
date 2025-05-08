@@ -155,7 +155,7 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8082",
     "http://localhost:8083"
   ],
-  "index": "test-index"
+  "index": "test-index",
   "module": "MnistDataHandler",
   "module_file": "mnist_data_handler.py",
   "db_name": "mnist_fl"
@@ -184,7 +184,7 @@ curl -X POST http://localhost:8080/init \
   "nodeUrls": [
     "http://localhost:8084"
   ],
-  "index": "test-index"
+  "index": "test-index",
   "module": "MnistDataHandler",
   "module_file": "mnist_data_handler.py",
   "db_name": "mnist_fl"
