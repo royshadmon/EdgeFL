@@ -33,6 +33,7 @@ class Aggregator:
         # self.module_name = os.getenv('MODULE_NAME')
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
+        self.training_app_dir = os.getenv('TRAINING_APPLICATION_DIR')
 
         self.agg_name = os.getenv("AGG_NAME")
 
@@ -88,7 +89,7 @@ class Aggregator:
             #                               f"{self.docker_file_write_destination}/aggregator/")
 
 
-    def initialize_index_on_blockchain(self, index, module_name, module_path):
+    def initialize_index_on_blockchain(self, index, module_name, module_path, db_name):
         if self.get_index_data_in_blockchain(index):
             return {
                 'status': 'error',
@@ -99,7 +100,8 @@ class Aggregator:
             data = f'''<my_policy = {{"index" : {{
                                         "name": "{index}",
                                         "module_name": "{module_name}",
-                                        "module_path": "{module_path}"
+                                        "module_path": "{module_path}",
+                                        "db_name": "{db_name}"
             }} }}>'''
             success = False
             while not success:
