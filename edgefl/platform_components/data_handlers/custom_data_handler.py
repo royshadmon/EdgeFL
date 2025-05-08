@@ -23,8 +23,8 @@ from tensorflow.python.client import device_lib
 device = "/GPU:0" if tf.config.list_physical_devices('GPU') else "/CPU:0"
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
-    print(device_lib.list_local_devices())
-    print(tf.sysconfig.get_build_info())
+    print(device_lib.list_local_devices()) # debugging
+    print(tf.sysconfig.get_build_info()) # debugging
     try:
         # Restrict Tensorflow to only use the first GPU
         tf.config.set_visible_devices(gpus[0], 'GPU')
@@ -33,11 +33,12 @@ if gpus:
         print(e)
 
 class MnistDataHandler():
-    def __init__(self, node_name):
+    def __init__(self, node_name, db_name):
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+        self.db_name = db_name
 
         # Data Handler Initialization
         self.x_train = None
@@ -167,21 +168,21 @@ class MnistDataHandler():
         # 2. check if number returned equals number in db
         # 3. return test data
         batch_amount = 50 # TODO: make this parameterized
-        db_name = os.getenv("PSQL_DB_NAME")
+        # db_name = os.getenv("PSQL_DB_NAME")
 
         # Get number of rows
-        row_count_query = f"sql {db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
+        row_count_query = f"sql {self.db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
         row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
         num_rows = row_count["Query"][0].get('count(*)')
         # fetch in offsets of 50
         # TODO: Get row offset queries to work
         for offset in range(1):
         # for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50"
+            query_test = f"sql {self.db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50"
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-            query_test_result = np.array(test_data["Query"])
+            query_test_result = np.array(test_data["Query"]) # TODO: watch out when exceeding max rounds stored in the db
             x_test_images = []
             y_test_labels = []
             for i in range(len(query_test_result)):
@@ -222,9 +223,9 @@ class MnistDataHandler():
         # self.logger.debug(query_train)
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
-        db_name = os.getenv("PSQL_DB_NAME")
-        query_train = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+        # db_name = os.getenv("PSQL_DB_NAME")
+        query_train = f"sql {self.db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"sql {self.db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
