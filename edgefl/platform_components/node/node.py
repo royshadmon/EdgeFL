@@ -26,11 +26,17 @@ load_dotenv()
 class Node:
     def __init__(self, replica_name, ip, port, index, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
-        self.module_name = os.getenv('MODULE_NAME')
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
         self.node_ip = ip
         self.node_port = port
         self.index = index # index specified *only* on init; tracked for entire training process
 
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
+
+        # configure_logging(f"node_server_{port}")
+        # self.logger = logging.getLogger(__name__)
         self.logger = logger
         self.logger.debug("Node initializing")
 
@@ -42,21 +48,15 @@ class Node:
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
+        module_name = os.getenv('MODULE_NAME')
+        TrainingApp_class = load_class_from_file(training_app_path, module_name)
         self.data_handler = TrainingApp_class(self.replicaName)  # Create an instance
-
-        # init file write paths
-        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
-                                                   self.module_name, self.index)
-        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
-        if not os.path.exists(self.tmp_dir):
-            os.makedirs(self.tmp_dir)
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-            self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.module_name, self.index)
+            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
             create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replicaName}/")
@@ -83,7 +83,6 @@ class Node:
         try:
             data = f'''<my_policy = {{"{index}-a{round_number}" : {{
                                 "node" : "{self.replicaName}",
-                                "index": "{index}",
                                 "node_type": "training",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
                                 "trained_params_local_path": "{model_metadata}"
@@ -123,7 +122,7 @@ class Node:
         self.logger.debug(f"in train_model_params for round {round_number}")
 
         # First round initialization
-        if round_number == 1 and not aggregator_model_params_db_link:
+        if round_number == 1:
             # weights = self.local_training_handler.fl_model.get_model_update()
             weights = self.data_handler.get_weights()
             # model_update = self.data_handler.get_model_update()

@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, \
-    check_policy_inserted, delete_policy, get_policy_id_by_name
+    check_policy_inserted
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
@@ -29,8 +29,10 @@ load_dotenv()
 class Aggregator:
     def __init__(self, ip, port):
         self.github_dir = os.getenv('GITHUB_DIR')
-        self.module_name = os.getenv('MODULE_NAME')
-
+        self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"))
+        self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"))
+        if not os.path.exists(self.tmp_dir):
+            os.makedirs(self.tmp_dir)
         self.server_ip = ip
         self.server_port = port
         self.index = '' # right now, specified *only* on init; tracked for entire training process
@@ -40,48 +42,21 @@ class Aggregator:
 
         # init training application class reference
         training_app_path = os.path.join(self.github_dir, os.getenv('TRAINING_APPLICATION_PATH'))
-        TrainingApp_class = load_class_from_file(training_app_path, self.module_name)
+        module_name = os.getenv('MODULE_NAME')
+        TrainingApp_class = load_class_from_file(training_app_path, module_name)
         self.training_app = TrainingApp_class('aggregator')  # Create an instance
 
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 
-        self.file_write_destination = None
-        self.tmp_dir = None
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:
             self.docker_running = True
-
-    # Originally initialized in __init__, but moved due to the index currently being requested in '/init' (after agg. instance)
-    def initialize_file_write_paths(self, index):
-        try:
-            if self.index != index:
-                self.index = index
-
-            self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"),
-                                                       self.module_name, self.index)
-
-            self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.module_name, self.index)
-            if not os.path.exists(self.tmp_dir):
-                os.makedirs(self.tmp_dir)
-
-            if self.docker_running:
-                self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"),
-                                                                  self.module_name, self.index)
-                self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-                create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
-                create_directory_in_container(self.docker_container_name,
-                                              f"{self.docker_file_write_destination}/aggregator/")
-            return {
-                    'status': 'success',
-                    'message': 'file write paths initialized' # TODO: reword
-            }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
+            self.docker_file_write_destination = os.getenv("DOCKER_FILE_WRITE_DESTINATION")
+            self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
+            create_directory_in_container(self.docker_container_name, self.docker_file_write_destination)
+            create_directory_in_container(self.docker_container_name,f"{self.docker_file_write_destination}/aggregator/")
 
     def initialize_index_on_blockchain(self, index):
         try:
@@ -102,56 +77,7 @@ class Aggregator:
             if success:
                 return {
                     'status': 'success',
-                    'message': 'index initialized onto the blockchain' # TODO: reword
-                }
-            else:
-                return {
-                    'status': 'error',
-                    'message': f'Request failed with status code: {response.status_code}'
-                }
-        except Exception as e:
-            return {
-                'status': 'error',
-                'message': str(e)
-            }
-
-    # Deletes and inserts index-rx with updated initParams ('blockchain update to' not working)
-    def store_most_recent_agg_params(self, initParams_link, index):
-        try:
-            policy_name = f"{index}-r"
-            old_policy_id = get_policy_id_by_name(self.edgelake_node_url, policy_name)
-
-            # Deleting old policy
-            delete_success = False
-            while old_policy_id and not delete_success:
-                response = delete_policy(self.edgelake_node_url, old_policy_id)
-                if response.status_code == 200:
-                    delete_success = True
-                else:
-                    sleep(np.random.randint(1,3))
-
-            # Inserting policy back in with updated initParams link
-            data = f'''<my_policy = {{"{policy_name}" : {{
-                                                    "index" : "{index}",
-                                                    "node_type": "aggregator",
-                                                    "initParams": "{initParams_link}",
-                                                    "ip_port": "{self.edgelake_tcp_node_ip_port}"
-                                          }} }}>'''
-            insert_success = False
-            while not insert_success:
-                response = insert_policy(self.edgelake_node_url, data)
-                if response.status_code == 200:
-                    insert_success = True
-                else:
-                    sleep(np.random.randint(2, 5))
-
-                    if check_policy_inserted(self.edgelake_node_url, data):
-                        insert_success = True
-
-            if insert_success:
-                return {
-                    'status': 'success',
-                    'message': f'Successfully updated most recent aggregated model file at policy {index}-r'
+                    'message': 'index initialized onto the blockchain' # reword
                 }
             else:
                 return {
@@ -165,14 +91,13 @@ class Aggregator:
             }
 
     # function to call the start round function
-    def start_round(self, initParams_link, round_number, index):
+    def start_round(self, initParamsLink, roundNumber, index):
         try:
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
-            data = f'''<my_policy = {{"{index}-r{round_number}" : {{
-                                        "index" : "{index}",
+            data = f'''<my_policy = {{"{index}-r{roundNumber}" : {{
                                         "node_type": "aggregator",
-                                        "initParams": "{initParams_link}",
+                                        "initParams": "{initParamsLink}",
                                         "ip_port": "{self.edgelake_tcp_node_ip_port}"
                               }} }}>'''
             success = False
@@ -244,6 +169,13 @@ class Aggregator:
                         f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
             except Exception as e:
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
+
+        # do aggregation function here (doesn't return anything)
+        # self.fusion_model.update_weights(decoded_params)
+        # aggregate_params_weights2 = self.fusion_model.current_model_weights
+        #
+        # # aggregate_params_weights = FedMax_aggregate(decoded_params)
+        # aggregate_params_weights = PBA_aggregate(decoded_params)
 
         aggregate_params_weights = self.training_app.aggregate_model_weights(decoded_params)
 

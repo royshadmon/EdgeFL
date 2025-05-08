@@ -41,7 +41,7 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
-## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB  for each one.
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Node server on port {edgelake_node_port} starting up.")
@@ -69,6 +69,7 @@ class InitNodeRequest(BaseModel):
 
 @app.post('/init-node')
 def init_node(request: InitNodeRequest):
+    """Receive the contract address from the aggregator server."""
     global node_instance, listener_thread, stop_listening_thread
     try:
         ip = get_local_ip()
@@ -104,7 +105,7 @@ def init_node(request: InitNodeRequest):
 
         return {
             'status': 'success',
-            'message': 'Node initialized successfully'
+            'message': 'Contract address set and Node initialized successfully'
         }
     except Exception as e:
         raise HTTPException(
@@ -145,6 +146,9 @@ def listen_for_start_round(nodeInstance, stop_event):
     logger.debug(f"listening for start round {current_round}")
     while True:
         try:
+            # next_round = current_round + 1
+
+            # logger.debug(f"listening for start round {current_round}")
 
             headers = {
                 'User-Agent': 'AnyLog/1.23',
@@ -171,6 +175,8 @@ def listen_for_start_round(nodeInstance, stop_event):
                     nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
                     logger.info(f"[Round {current_round}] Step 3 Complete: Model parameters published")
                     current_round += 1
+                # else: # Debugging line
+                #     logger.error(f"No data found for round r{current_round}")
 
             time.sleep(5)  # Poll every 2 seconds
         except Exception as e:
