@@ -20,14 +20,7 @@ COPY edgefl/ /app/edgefl
 RUN ls -la /app
 RUN ls -la /app/api-containers
 
-# Define environment variable
+# Define environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8080
 ENV PYTHONPATH=/app
 
-# Make port 8080 available to the world outside this container
-EXPOSE 8080
-
-# Run app.py when the container launches
-ENTRYPOINT ["python", "/app/api-containers/app2.py"]
-CMD ["--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
