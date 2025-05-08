@@ -245,7 +245,7 @@ def main():
         'Content-Type': 'text/plain'
     }
 
-    __post_data(conn=args.conn, payload=content, headers=headers)
+    # __post_data(conn=args.conn, payload=content, headers=headers)
 
 
 
