@@ -1,0 +1,31 @@
+#services:
+#  server:
+#    image: edgefl:5-7
+#    restart: always
+#    env_file:
+#      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist-agg.env
+#    container_name: aggregator_server_8080
+#    ports:
+#      - 8080:8080
+#
+#    # Fix for Docker socket access
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock
+#
+#    # GPU configuration
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+#
+#    # Docker and GPU environment settings
+#    environment:
+#      - NVIDIA_VISIBLE_DEVICES=all
+#      - NVIDIA_DRIVER_CAPABILITIES=all
+#      - TF_FORCE_GPU_ALLOW_GROWTH=true
+#      - DOCKER_HOST=unix:///var/run/docker.sock
+#
+#    command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
