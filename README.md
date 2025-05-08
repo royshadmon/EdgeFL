@@ -137,7 +137,7 @@ dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.nod
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
-predefined training application file here: `edgefl/platform_components/data_handlers/custom_data_handler.py`.
+predefined training application file here: `custom_data_handler.py`.
 
 ## Initialize model parameters and training application, start training, executing inference
 Execute the following `curl` command to initialize training. As a result of this command,
@@ -157,7 +157,7 @@ curl -X POST http://localhost:8080/init \
   ],
   "index": "test-index"
   "module": "MnistDataHandler",
-  "module_path": "edgefl/platform_components/data_handlers/mnist_data_handler.py",
+  "module_file": "mnist_data_handler.py",
   "db_name": "mnist_fl"
 }'
 ```
@@ -186,7 +186,7 @@ curl -X POST http://localhost:8080/init \
   ],
   "index": "test-index"
   "module": "MnistDataHandler",
-  "module_path": "edgefl/platform_components/data_handlers/mnist_data_handler.py",
+  "module_file": "mnist_data_handler.py",
   "db_name": "mnist_fl"
 }'
 ```

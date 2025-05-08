@@ -51,7 +51,7 @@ class InitRequest(BaseModel):
     nodeUrls: list[str]
     index: str
     module: str
-    module_path: str
+    module_file: str
     db_name: str
 
 class TrainingRequest(BaseModel):
@@ -76,7 +76,7 @@ def init(request: InitRequest):
     try:
         # Initialize the nodes on specified index and send the contract address
         node_urls, index = request.nodeUrls, request.index
-        module_name, module_path = request.module, request.module_path
+        module_name, module_file = request.module, request.module_file
         db_name = request.db_name
 
         aggregator.indexes.add(index)
@@ -86,10 +86,10 @@ def init(request: InitRequest):
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
-        initialize_nodes(node_urls, index, module_name, module_path, db_name)
+        aggregator.set_module_at_index(index, module_name, module_file)
+        initialize_nodes(node_urls, index, module_name, module_file, db_name)
 
-        aggregator.set_module_at_index(index, module_name, module_path)
-        aggregator.initialize_index_on_blockchain(index, module_name, module_path)
+        aggregator.initialize_index_on_blockchain(index, module_name)
         aggregator.initialize_training_app_on_index(index)
         aggregator.initialize_file_write_paths_on_index(index)
 
@@ -105,7 +105,7 @@ def init(request: InitRequest):
         )
 
 
-def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
+def initialize_nodes(node_urls: list[str], index, module_name, module_file, db_name):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -129,7 +129,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
                 'replica_index': index,
                 'round_number': aggregator.round_number[index],
                 'module_name': module_name,
-                'module_path': module_path,
+                'module_file': module_file,
                 'db_name': db_name
             })
 
