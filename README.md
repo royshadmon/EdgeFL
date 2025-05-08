@@ -130,10 +130,12 @@ Now that data is loaded into the database continue to the next step.
 Note to execute the below commands in a new terminal. 
 ```bash
 cd edgefl
+
 dotenv -f env_files/mnist/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
 dotenv -f env_files/mnist/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
 dotenv -f env_files/mnist/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
 dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
+
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
@@ -210,6 +212,16 @@ curl -X POST http://localhost:8080/continue-training \
    "additionalRounds": 3, 
    "minParams": 4,
    "index": "test-index"
+ }'
+ ```
+
+Once the training process is complete, you may choose to do additional rounds of training on the same model.
+```bash
+curl -X POST http://localhost:8080/continue-training \
+ -H "Content-Type: application/json" \
+ -d '{
+   "additionalRounds": 3, 
+   "minParams": 3
  }'
  ```
 

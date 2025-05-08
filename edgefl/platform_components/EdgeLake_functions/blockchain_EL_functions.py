@@ -75,7 +75,6 @@ def check_policy_inserted(el_url, policy):
 
         return False
 
-
 def get_policies(el_url, policy_type='*', condition=None):
     command = f'blockchain get {policy_type} {condition if condition else ""}'
     headers = {
@@ -93,7 +92,6 @@ def get_policies(el_url, policy_type='*', condition=None):
         policies.append(policy[policy_type])
     return policies # [{'attr1': ..., 'attr2': ..., ...}, {'attr1': ..., 'attr2': ..., ...}, ...]
 
-
 def get_policy_id_by_name(el_url, policy_name):
     headers = {
         'User-Agent': 'AnyLog/1.23',
@@ -106,7 +104,6 @@ def get_policy_id_by_name(el_url, policy_name):
         return None
     policy_id = data[0][policy_name]['id'] # [{policy_name: {..., 'id': ..., ...}}]
     return policy_id
-
 
 def get_all_databases(edgelake_node_url):
     """
@@ -172,7 +169,6 @@ def connect_to_db(edgelake_node_url, db_name, user, password, ip, port):
 
     except requests.exceptions.ConnectionError as e:
         raise ConnectionError(f"Unable to connect to database: {e}")
-
 
 def fetch_data_from_db(edgelake_node_url, query):
     """

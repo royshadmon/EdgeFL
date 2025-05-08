@@ -1,0 +1,10 @@
+services:
+  server:
+    image: edgefl:5-7
+    restart: always
+    env_file:
+      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist-agg.env
+    container_name: aggregator_server_8080
+    ports:
+      - 8080:8080
+    command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
