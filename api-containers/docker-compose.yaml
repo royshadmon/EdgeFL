@@ -1,6 +1,6 @@
 services:
   server:
-    image: edgefl:latest
+    image: edgefl:5-6
     restart: always
     env_file:
       - /home/miguelcse121/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist-agg.env
