@@ -27,7 +27,7 @@ load_dotenv()
 class Node:
     def __init__(self, replica_name, ip, port, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
-        # self.module_name = os.getenv('MODULE_NAME') # todo: modularize
+        self.training_app_dir = os.getenv('TRAINING_APPLICATION_DIR')
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 
@@ -65,10 +65,10 @@ class Node:
         else:
             self.docker_running = True
 
-    def initialize_specific_node_on_index(self, index, module_name, module_path):
+    def initialize_specific_node_on_index(self, index, module_name, module_file):
         # Initializing index specific data in this node
         self.initialize_index(index)
-        self.set_module_at_index(index, module_name, module_path)
+        self.set_module_at_index(index, module_name, module_file)
         self.initialize_training_app_on_index(index)
         self.initialize_file_write_paths_on_index(index)
 
@@ -111,7 +111,7 @@ class Node:
             self.module_paths[index] = policy['module_path']
 
     # Each index has one training app model
-    def set_module_at_index(self, index, module_name, module_path):
+    def set_module_at_index(self, index, module_name, module_file):
         try:
             index_data = self.get_index_data_in_blockchain(index)
             if index in self.module_names: # already cached module at index, don't do anything
@@ -131,7 +131,7 @@ class Node:
 
             # New index, so set new module
             self.module_names[index] = module_name
-            self.module_paths[index] = module_path
+            self.module_paths[index] = os.path.join(self.training_app_dir, module_file)
             self.logger.info(f'Added module "{module_name}" to index "{index}"')
             return {
                 'status': 'success',
