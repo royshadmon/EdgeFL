@@ -30,7 +30,6 @@ load_dotenv()
 class Aggregator:
     def __init__(self, ip, port, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
-        self.training_app_dir = os.getenv('TRAINING_APPLICATION_DIR')
         # self.module_name = os.getenv('MODULE_NAME')
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
@@ -89,7 +88,7 @@ class Aggregator:
             #                               f"{self.docker_file_write_destination}/aggregator/")
 
 
-    def initialize_index_on_blockchain(self, index, module_name):
+    def initialize_index_on_blockchain(self, index, module_name, module_path):
         if self.get_index_data_in_blockchain(index):
             return {
                 'status': 'error',
@@ -100,8 +99,7 @@ class Aggregator:
             data = f'''<my_policy = {{"index" : {{
                                         "name": "{index}",
                                         "module_name": "{module_name}",
-                                        "module_path": "{self.module_paths[index]}",
-                                        "db_name": "{self.databases[index]}"
+                                        "module_path": "{module_path}"
             }} }}>'''
             success = False
             while not success:
@@ -151,7 +149,7 @@ class Aggregator:
             self.module_paths[index] = policy['module_path']
 
     # Each index has one training app model
-    def set_module_at_index(self, index, module_name, module_file):
+    def set_module_at_index(self, index, module_name, module_path):
         try:
             index_data = self.get_index_data_in_blockchain(index)
             if index in self.module_names:  # already cached module at index, don't do anything
@@ -172,7 +170,7 @@ class Aggregator:
 
             # New index, so set new module
             self.module_names[index] = module_name
-            self.module_paths[index] = os.path.join(self.training_app_dir, module_file)
+            self.module_paths[index] = module_path
             self.logger.info(f'Added module "{module_name}" to index "{index}"')
             return {
                 'status': 'success',
