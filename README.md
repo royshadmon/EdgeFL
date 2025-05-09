@@ -293,6 +293,96 @@ cd EdgeLake/postgres
 docker compose down
 ```
 
+## Docker Containerization of APIs
+
+The APIs are containerized using Docker. Before starting the APIs, ensure that 
+```bash
+edgefl/env_files/mnist-docker/mnist1.env
+edgefl/env_files/mnist-docker/mnist2.env
+edgefl/env_files/mnist-docker/mnist3.env
+```
+are configured like this:
+```bash
+GITHUB_DIR=/app/edgefl
+
+TRAINING_APPLICATION_DIR=platform_components/data_handlers
+MODULE_NAME=MnistDataHandler
+
+PORT=<operator port num> #(aggregator port num + operator num = operator port num)
+SERVER_TYPE=node
+TMP_DIR=tmp_dir/node1/
+# External IP Address for CURL commands to Edgelake
+EXTERNAL_IP="<host ip>:32149"
+EXTERNAL_TCP_IP_PORT="<host ip>:32148"
+
+# LOCAL PSQL DB NAME
+PSQL_DB_NAME="mnist_fl"
+PSQL_DB_USER="demo"
+PSQL_DB_PASSWORD="passwd"
+PSQL_HOST=<psql ip>
+PSQL_PORT="5432"
+
+FILE_WRITE_DESTINATION="file_write"
+
+EDGELAKE_DOCKER_RUNNING="True"
+EDGELAKE_DOCKER_CONTAINER_NAME="operator1"
+DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
+```
+The aggregator env file,
+```bash
+edgefl/env_files/mnist-docker/mnist-agg.env
+```
+
+Should be configured like this:
+```bash
+GITHUB_DIR=/app/edgefl/
+
+TRAINING_APPLICATION_DIR=platform_components/data_handlers
+MODULE_NAME=MnistDataHandler
+
+PORT=8080
+SERVER_TYPE=aggregator
+
+TMP_DIR=tmp_dir/agg/
+# External IP Address for CURL commands to Edgelake
+EXTERNAL_IP="<host ip>:32049"
+EXTERNAL_TCP_IP_PORT="<host ip>:32048"
+
+# LOCAL PSQL DB NAME
+PSQL_DB_NAME="mnist_fl"
+PSQL_DB_USER="demo"
+PSQL_DB_PASSWORD="passwd"
+PSQL_HOST=<psql ip>
+PSQL_PORT="5432"
+
+FILE_WRITE_DESTINATION="file_write"
+AGG_NAME=agg
+
+EDGELAKE_DOCKER_RUNNING="True"
+EDGELAKE_DOCKER_CONTAINER_NAME=master
+DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
+```
+To build the image, run the following command from the root directory of the project:
+
+```bash
+docker build -t edgefl:latest -f api-containers/Dockerfile .
+```
+
+To run the APIs, you can use the following command:
+
+```bash
+cd api-containers
+docker compose up -d
+```
+
+To see the endpoints and interact with the APIs, you can use the following URLs:
+```bash
+127.0.0.1:8080/docs # aggregator
+
+127.0.0.1:8081/docs # nodes
+127.0.0.1:8082/docs
+127.0.0.1:8083/docs
+```
 
 
 
