@@ -137,7 +137,7 @@ dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.nod
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
-predefined training application file here: `edgefl/platform_components/data_handlers/custom_data_handler.py`.
+predefined training application file here: `custom_data_handler.py`.
 
 ## Initialize model parameters and training application, start training, executing inference
 Execute the following `curl` command to initialize training. As a result of this command,
@@ -201,17 +201,6 @@ curl -X POST http://localhost:8080/update-minParams \
   "index": "test-index"
 }'
 ```
-
-Once the training process is complete, you may choose to do additional rounds of training on the same model.
-```bash
-curl -X POST http://localhost:8080/continue-training \
- -H "Content-Type: application/json" \
- -d '{
-   "additionalRounds": 3, 
-   "minParams": 4,
-   "index": "test-index"
- }'
- ```
 
 Once the training process is complete, you may choose to do additional rounds of training on the same model.
 ```bash
