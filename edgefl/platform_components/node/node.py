@@ -122,39 +122,74 @@ class Node:
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
         self.logger.debug(f"in train_model_params for round {round_number}")
 
-        # First round initialization
-        if round_number == 1 and not aggregator_model_params_db_link:
-            # weights = self.local_training_handler.fl_model.get_model_update()
-            weights = self.data_handler.get_weights()
-            # model_update = self.data_handler.get_model_update()
-        else:
-            try:
-                # Extract the key from the URL
-                filename = aggregator_model_params_db_link.split('/')[-1]
-                if self.docker_running:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-                    copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
-                else:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+        training_method = "DFL" # TODO: read from CURL init request
 
-                # response = requests.get(link)
-                if response.status_code == 200:
-                    sleep(1)
-                    with open(
-                            f'{self.file_write_destination}/{self.replicaName}/{filename}',
-                            'rb') as f:
+        if training_method == "DFL":
+            # DFL logic: aggregate from peer weights
+            weights_list = []
+            for i, path in enumerate(ip_ports):  # path = trained_params_local_path
+                try:
+                    filename = path.split('/')[-1]
+                    local_path = f'{self.file_write_destination}/{self.replicaName}/{filename}'
+
+                    if self.docker_running:
+                        read_file(self.edgelake_node_url, path,
+                                  f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports[i])
+                        copy_file_from_container(self.tmp_dir, self.docker_container_name,
+                                                 f'{self.docker_file_write_destination}/{self.replicaName}/{filename}',
+                                                 local_path)
+                    else:
+                        read_file(self.edgelake_node_url, path, local_path, ip_ports[i])
+
+                    with open(local_path, 'rb') as f:
                         data = pickle.load(f)
 
-                # Ensure the data is valid and decode the parameters
-                if data and 'newUpdates' in data:
-                    weights = self.decode_params(data['newUpdates'])
-                else:
-                    self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
-                    raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
-            except Exception as e:
-                self.logger.error(f"Error getting weights: {str(e)}")
-                raise
+                    if data and 'newUpdates' in data:
+                        decoded = self.decode_params(data['newUpdates'])
+                        weights_list.append(decoded)
+                except Exception as e:
+                    self.logger.error(f"[DFL] Failed to read or decode peer weight: {e}")
+                    continue
+
+            if weights_list:
+                weights = self.data_handler.aggregate_model_weights(weights_list)
+            else:
+                raise Exception(f"[DFL] Aggregation failed: No peer weights collected")
+
+        else: # use CFL training method
+            # First round initialization
+            if round_number == 1 and not aggregator_model_params_db_link:
+                # weights = self.local_training_handler.fl_model.get_model_update()
+                weights = self.data_handler.get_weights()
+                # model_update = self.data_handler.get_model_update()
+            else:
+                try:
+                    # Extract the key from the URL
+                    filename = aggregator_model_params_db_link.split('/')[-1]
+                    if self.docker_running:
+                        response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
+                                             f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+                        copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                    else:
+                        response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+
+                    # response = requests.get(link)
+                    if response.status_code == 200:
+                        sleep(1)
+                        with open(
+                                f'{self.file_write_destination}/{self.replicaName}/{filename}',
+                                'rb') as f:
+                            data = pickle.load(f)
+
+                    # Ensure the data is valid and decode the parameters
+                    if data and 'newUpdates' in data:
+                        weights = self.decode_params(data['newUpdates'])
+                    else:
+                        self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                        raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                except Exception as e:
+                    self.logger.error(f"Error getting weights: {str(e)}")
+                    raise
 
         # Update model with weights
         self.data_handler.update_model(weights)

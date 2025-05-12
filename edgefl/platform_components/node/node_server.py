@@ -148,6 +148,7 @@ def receive_data(request: ReceiveDataRequest):
         detail="No Data Provided"
     )
 
+# CFL - wait for broadcast from aggregator (via a policy), then start pulling for new model params updates from aggregator
 def listen_for_start_round(nodeInstance, stop_event):
     current_round = nodeInstance.currentRound
     index = nodeInstance.index
@@ -186,6 +187,64 @@ def listen_for_start_round(nodeInstance, stop_event):
         except Exception as e:
             logger.error(f"Error in listener thread: {str(e)}")
             time.sleep(2)
+
+# DFL - constantly listen for atleast min_params # of nodes, and get updates from other training nodes
+def dfl_listen(nodeInstance, stop_event):
+    while True:
+        if stop_event():
+            break
+
+        current_round = nodeInstance.currentRound
+        index = nodeInstance.index
+        min_params = 2 #TODO: catch from request instead of hardcode
+
+        # First round special case: just publish own weights immediately (to prevent deadlock)
+        if current_round == 1:
+            logger.info(f"[DFL] First round: publishing initial weights")
+            model_weights = nodeInstance.data_handler.get_weights()
+            encoded = nodeInstance.encode_model(model_weights)
+            file_name = f"{index}-{current_round}-replica-{nodeInstance.replicaName}.pkl"
+            full_path = f"{nodeInstance.file_write_destination}/{nodeInstance.replicaName}/{file_name}"
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "wb") as f:
+                f.write(encoded)
+            nodeInstance.add_node_params(current_round, full_path, index)
+            nodeInstance.currentRound += 1
+            continue  # Go to next round
+
+        logger.info(f"[DFL] Node waiting for peer models for round {current_round}")
+        headers = {
+            'User-Agent': 'AnyLog/1.23',
+            'command': f'blockchain get * where [index] = {index} and [node_type] = training'
+        }
+
+        try:
+            response = requests.get(edgelake_node_url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                peer_models = []
+                ip_ports = []
+
+                for item in data:
+                    for key in item:
+                        if key.endswith(f"-a{current_round}"):
+                            peer_models.append(item[key]["trained_params_local_path"])
+                            ip_ports.append(item[key]["ip_port"])
+
+                if len(peer_models) >= min_params:
+                    logger.info(f"[DFL] Found {len(peer_models)} peer models. Starting aggregation and training.")
+                    agg_link = nodeInstance.train_model_params(None, current_round, peer_models, index)
+                    nodeInstance.add_node_params(current_round, agg_link, index)
+                    nodeInstance.currentRound += 1
+
+                    if nodeInstance.currentRound > 10:
+                        logger.info(f"[DFL] Node finished 10 rounds. Exiting.")
+                        break
+            time.sleep(5)
+        except Exception as e:
+            logger.error(f"[DFL] Error while waiting for peer models: {str(e)}")
+            time.sleep(5)
+
 
 # TODO: move to a (helper) file (i.e. 'node_helpers.py'?)
 # Extracts initParams from the policy 'index-r' at the specified index
