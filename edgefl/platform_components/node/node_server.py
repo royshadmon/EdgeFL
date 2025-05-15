@@ -50,7 +50,6 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
-## TODO: Make this check part of the node init, since if we support multiple training applications simultaneously, we want to check access to the DB for each one.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_list
@@ -180,7 +179,6 @@ def listen_for_start_round(nodeInstance, index, stop_event):
     logger.debug(f"[{index}] listening for start round {current_round}")
     while True:
         try:
-
             headers = {
                 'User-Agent': 'AnyLog/1.23',
                 'command': f'blockchain get {index}-r{current_round}'
@@ -242,7 +240,6 @@ def get_most_recent_agg_params(index):
 def inference(index):
     """Inference on current model w/ data passed in."""
     try:
-
         logger.info(f"[{index}] received inference request")
         if not index:
             raise HTTPException(

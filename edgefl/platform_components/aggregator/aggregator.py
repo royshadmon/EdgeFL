@@ -164,7 +164,7 @@ class Aggregator:
                 self.logger.info(
                     f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.')
                 self.module_names[index] = index_data['module_name']
-                self.module_paths[index] = index_data['module_path']
+                self.module_paths[index] = index_data['module_path']                # self.databases[index] = index_data['db_name'] # done in the server for now
                 return {
                     'status': 'error',
                     'message': f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.'
@@ -173,6 +173,7 @@ class Aggregator:
             # New index, so set new module
             self.module_names[index] = module_name
             self.module_paths[index] = module_path
+            # self.databases[index] = index_data['db_name'] # done in the server for now
             self.logger.info(f'Added module "{module_name}" to index "{index}"')
             return {
                 'status': 'success',
@@ -360,3 +361,9 @@ class Aggregator:
     def decode_params(self, encoded_model_update):
         model_weights = pickle.loads(encoded_model_update)
         return model_weights
+
+    def inference(self, index):
+        return self.training_apps[index].run_inference()
+
+    def direct_inference(self, index, data, labels):
+        return self.training_apps[index].direct_inference(data, labels)

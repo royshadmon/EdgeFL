@@ -26,6 +26,7 @@ from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
+
 class WinniioDataHandler():
     def __init__(self, node_name, db_name):
         """
@@ -54,8 +55,7 @@ class WinniioDataHandler():
         # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
         # self.logger.debug("AFTER LOAD DATASET")
         self.node_name = node_name
-        if self.node_name != 'aggregator':
-            self.fl_model = self.model_def()
+        self.fl_model = self.model_def()
 
     def model_def(self):
         time_steps = 1
@@ -225,11 +225,56 @@ class WinniioDataHandler():
         aggregated_params = FedAvg_aggregate(weights)
         return aggregated_params
 
-    def direct_inference(self, data):
-        data = data.reshape(-1, 1, 6)
-        predictions = self.fl_model.predict_on_batch(data)
+    def direct_inference(self, data, labels: list[float]):
+        """
+        Run inference on raw input data against given labels (already in WINNIIO format).
+        Handles data conversion and validation internally.
+        """
+
+        # Validate existence and check there is same number of data inputs as number of labels
+        if not data and not labels and len(data) != len(labels):
+            raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")
+
+        # Validate labels/predictions
+        if all([not isinstance(labels[0], t) for t in [int, float, str]]):
+            raise TypeError(
+                f"Labels must be a list of floats, ints, or str."
+            )
+
+        # Set up the test data properly
+        test_data = []
+        test_labels = []
+        for values, label in zip(data, labels):
+            self.validate_sensor_data(values) # values: {'exact_key1': str, 'exact_key2': str, ...}
+            values = np.array(list(values.values()), dtype=np.float32) # just get the floats
+            test_data.append(values)
+            test_labels.append(label)
+
+        # Convert test data into final numpy arrays
+        test_data_final = np.array(test_data, dtype=np.float32).reshape(-1, 1, 6)
+        test_labels_final = np.array(test_labels, dtype=np.float32)
+
+        # Get prediction (on-batch) and reshape
+        predictions = self.fl_model.predict_on_batch(test_data_final)
+        predictions = predictions.reshape(-1)
+
+        # Set up prediction results
+        i = 1
+        res = {}
+        for prediction, label in zip(predictions, test_labels_final):
+            res[i] = f"{prediction} --> {label}"
+            i += 1
+            if len(res) == 10:
+                break
+
+        # Do data calculations to send along with results
+        mae = mean_absolute_error(test_labels_final, predictions)
+        mse = mean_squared_error(test_labels_final, predictions)
+        rmse = np.sqrt(mse)
+        r2 = r2_score(test_labels_final, predictions)
+        reg_accuracy = self.regression_accuracy(test_labels_final, predictions, threshold=0.1)
         self.logger.info(f"[Inference] Step 5: Edge inference complete")
-        return predictions.reshape(-1)
+        return {"results": str(res), "mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
 
     def run_inference(self):
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
@@ -274,3 +319,54 @@ class WinniioDataHandler():
     def regression_accuracy(self, y_true, y_pred, threshold=0.1):
         correct = np.abs(y_true - y_pred) / y_true < threshold
         return np.mean(correct)
+
+    @staticmethod
+    def validate_sensor_data(values):
+        """
+        Validates that the input is a dictionary with exactly six specific keys
+        required for sensor data. Checks for missing or extra keys and raises
+        a ValueError with details if the validation fails.
+
+        Parameters:
+            values (dict): The dictionary to validate. Expected keys are:
+                - 'actuatorState'
+                - 'co2Value'
+                - 'eventCount'
+                - 'humidity'
+                - 'switchStatus'
+                - 'temperature'
+
+        Raises:
+            TypeError: If the input is not a dictionary.
+            ValueError: If there are missing or extra keys, or if the dictionary
+                        does not have exactly six keys.
+
+        Returns:
+            bool: True if validation passes.
+        """
+        required_keys = {
+            "actuatorState", "co2Value", "eventCount",
+            "humidity", "switchStatus", "temperature"
+        }
+
+        if not isinstance(values, dict):
+            raise TypeError(f"Expected dict, got {type(values).__name__} for test data: {values}")
+
+        keys = set(values.keys())
+        missing = required_keys - keys
+        extra = keys - required_keys
+
+        if missing or extra:
+            error = []
+            if missing:
+                error.append(f"Missing keys: {sorted(missing)}")
+            if extra:
+                error.append(f"Extra keys: {sorted(extra)}")
+            raise ValueError(". ".join(error))
+
+        if len(values) != 6:
+            raise ValueError(
+                f"Expected 6 keys, got {len(values)} keys: {values}"
+            )
+
+        return True
