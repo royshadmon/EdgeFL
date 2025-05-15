@@ -50,11 +50,12 @@ class MnistDataHandler():
         self.training_generator = None
         
         self.node_name = node_name
-        
+
+        self.fl_model = self.model_def()
+
         # load the datasets from SQL
-        if self.node_name != 'aggregator':
+        if self.node_name != 'aggregator': # for now, aggregator only allows for direct inference
             (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
-            self.fl_model = self.model_def()
 
             # pre-process the datasets
             self.preprocess()
@@ -128,6 +129,57 @@ class MnistDataHandler():
 
         # Calculate accuracy
         acc = accuracy_score(y_test_labels, y_pred) * 100
+
+        return acc
+
+    def direct_inference(self, data, labels: list[int]):
+        """
+        Run inference on raw input data (already in MNIST format).
+        Handles data conversion and validation internally.
+        """
+        # TODO: add another input type that allows for raw images to work (would be converted properly)
+
+        # Validate existence and check that there is the same number of data inputs as number of labels
+        if not data and not labels and len(data) != len(labels):
+            raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")
+
+        # Validate labels/predictions and convert labels into a numpy array
+        if not isinstance(labels[0], int):
+            raise TypeError(
+                f"Labels must be a list of integers."
+            )
+
+        # Set up the test data properly
+        test_images = []
+        test_labels = []
+        for image, label in zip(data, labels):
+            # Convert data type to required numpy array
+            image = np.array(image, dtype=np.float32)
+            # Validate input dimensions and reshape
+            if image.ndim not in [1, 3]:
+                raise ValueError(
+                    f"Invalid input dimensions ({image.ndim}D). "
+                    "Expected 1D (784 elements) or 3D (28x28x1) array."
+                )
+            if image.size != 784:
+                raise ValueError(
+                    f"1D input must contain exactly 784 elements. Got {image.size}."
+                )
+            test_images.append(image)
+            test_labels.append(label)
+
+        # Convert test data into final numpy arrays
+        img_rows, img_cols = 28, 28
+        test_images_final = np.array(test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+        test_labels_final = np.array(test_labels, dtype=np.int64)
+
+        # Get predictions
+        with tf.device(device):
+            predictions = self.fl_model.predict(test_images_final)
+        y_pred = np.argmax(predictions, axis=1)
+
+        # Calculate accuracy
+        acc = accuracy_score(test_labels_final, y_pred) * 100
 
         return acc
 

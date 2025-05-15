@@ -54,8 +54,7 @@ class WinniioDataHandler():
         # (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
         # self.logger.debug("AFTER LOAD DATASET")
         self.node_name = node_name
-        if self.node_name != 'aggregator':
-            self.fl_model = self.model_def()
+        self.fl_model = self.model_def()
 
     def model_def(self):
         time_steps = 1

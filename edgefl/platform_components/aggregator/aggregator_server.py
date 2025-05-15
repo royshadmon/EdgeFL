@@ -12,6 +12,8 @@ from starlette.responses import PlainTextResponse
 from platform_components.aggregator.aggregator import Aggregator
 import asyncio
 import logging
+import numpy as np
+import pickle
 import requests
 import os
 import threading
@@ -67,6 +69,11 @@ class ContinueTrainingRequest(BaseModel):
     additionalRounds: int
     minParams: int
     index: str
+
+class InferenceRequest(BaseModel):
+    input: list[list[float]] # each element in here is one data value to test
+    labels: list # check element type within direct_inference
+
 
 # @app.route('/init', methods=['POST'])
 
@@ -195,6 +202,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
     if index not in aggregator.node_urls:
         aggregator.node_urls[index] = set()
 
+    # TODO: if a node gets re-init'ed because the node server re-opened, shut down the corresponding thread and start again
     threads = []
     for url in node_urls:
         thread = threading.Thread(name=f"agg/init--{url}", target=init_node, args=(url,), daemon=True)
@@ -263,31 +271,51 @@ async def init_training(request: TrainingRequest):
         )
 
 def start_training(aggregator, initial_params, starting_round, end_round, index):
-    for r in range(starting_round, end_round + 1):
-        aggregator.round_number[index] = r
-        logger.info(f"[{index}] Starting training round {r}")
-        aggregator.start_round(initial_params, r, index)
-        logger.debug(f"[{index}] Sent initial parameters to nodes")
+    try:
+        for r in range(starting_round, end_round + 1):
+            aggregator.round_number[index] = r
+            logger.info(f"[{index}] Starting training round {r}")
+            aggregator.start_round(initial_params, r, index)
+            logger.debug(f"[{index}] Sent initial parameters to nodes")
 
-        # Listen for updates from nodes
-        new_aggregator_params = asyncio.run(
-            listen_for_update_agg(aggregator.minParams[index], r, index)
-        )
-        logger.debug(f"[{index}] Received aggregated parameters")
+            # Listen for updates from nodes
+            new_aggregator_params = asyncio.run(
+                listen_for_update_agg(aggregator.minParams[index], r, index)
+            )
+            logger.debug(f"[{index}] Received aggregated parameters")
 
-        # Set initial params to newly aggregated params for the next round
-        initial_params = new_aggregator_params
-        print(initial_params)
-        logger.info(f"[{index}][Round {r}] Step 4 Complete: model parameters aggregated")
+            # Set initial params to newly aggregated params for the next round
+            initial_params = new_aggregator_params # docker: /app/file_write/agg/{index}/1-agg_update.json
+            # print(initial_params) # debugging
+            logger.info(f"[{index}][Round {r}] Step 4 Complete: model parameters aggregated")
 
-        # Track the last agg model file because it's not stored in a policy after the last round
-        aggregator.store_most_recent_agg_params(initial_params, index)
+            # Track the last agg model file because it's not stored in a policy after the last round
+            aggregator.store_most_recent_agg_params(initial_params, index)
 
-    logger.info(f"[{index}] Training completed successfully")
-    return {
-        "status": "success",
-        "message": "Training completed successfully"
-    }
+            # Then, update aggregator's model at 'index'
+            local_path_of_initial_params = f"{aggregator.file_write_destination}/{index}/{r}-{aggregator.agg_name}_update.json"
+            with open(local_path_of_initial_params, "rb") as f:
+                data = pickle.load(f)
+
+            if data and 'newUpdates' in data:
+                weights = aggregator.decode_params(data['newUpdates'])
+            else:
+                aggregator.logger.error(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+
+            aggregator.training_apps[index].update_model(weights)
+
+        logger.info(f"[{index}] Training completed successfully")
+        return {
+            "status": "success",
+            "message": "Training completed successfully"
+        }
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+        else:
+            raise RuntimeError(f"An error occurred during training: {str(e)}")
+
 
 @app.post('/update-minParams')
 async def update_minParams(request: UpdatedMinParamsRequest):
@@ -535,15 +563,26 @@ def get_last_aggregated_params(index):
         return None
 
 
-# TODO: finish this aggregator inference (task)
-@app.post("/inference/{index}", response_class=PlainTextResponse)
-async def direct_inference(index):
+@app.post("/direct-inference/{index}", response_class=PlainTextResponse)
+async def direct_inference(index, request: InferenceRequest):
     try:
-        pass
+        results = aggregator.direct_inference(index, request.input, request.labels)
+        response = (f"{{"
+                    f"'index': '{index}',"
+                    f" 'status': 'success',"
+                    f" 'message': 'Inference completed successfully',"
+                    f" 'accuracy': '{str(results)}'"
+                    f"}}\n")
+        return response
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail=f"Inference failed: {str(e)}"
         )
 
 
