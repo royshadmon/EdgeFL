@@ -86,16 +86,21 @@ def init(request: InitRequest):
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
-        aggregator.set_module_at_index(index, module_name, module_file)
-        initialize_nodes(node_urls, index, module_name, module_file, db_name)
+        # TODO: check that module_path exists (if not, don't initialize)
 
-        aggregator.initialize_index_on_blockchain(index, module_name)
+        module_path = os.path.join(aggregator.training_app_dir, module_file)
+        initialize_nodes(node_urls, index, module_name, module_path, db_name)
+
+        aggregator.set_module_at_index(index, module_name, module_path)
+        aggregator.initialize_index_on_blockchain(index, module_name, module_path, db_name)
         aggregator.initialize_training_app_on_index(index)
         aggregator.initialize_file_write_paths_on_index(index)
 
+        # TODO: node checked to see if actually initialized (shows success even if off)
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
         return (f"{{'status': 'success',"
                 f" 'message': 'Nodes initialized'"
+                f" 'nodes': '{aggregator.node_urls[index]}'"
                 f"}}\n")
     except Exception as e:
         logger.error(f"Failed to initialize nodes with index ({index}): {str(e)}")
@@ -105,7 +110,7 @@ def init(request: InitRequest):
         )
 
 
-def initialize_nodes(node_urls: list[str], index, module_name, module_file, db_name):
+def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -129,7 +134,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_file, db_n
                 'replica_index': index,
                 'round_number': aggregator.round_number[index],
                 'module_name': module_name,
-                'module_file': module_file,
+                'module_path': module_path,
                 'db_name': db_name
             })
 
@@ -287,6 +292,10 @@ async def update_minParams(request: UpdatedMinParamsRequest):
                 f"[{index}] minParams ({aggregator.minParams[index]}) is greater than number of active nodes ({node_count}). Using active nodes as minParams."
             )
             aggregator.minParams[index] = node_count
+        return {
+            "status": "success",
+            "message": f"minParams successfully updated to {aggregator.minParams[index]}"
+        }
     except Exception as e:
         raise HTTPException(
             status_code=500,
