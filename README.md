@@ -249,6 +249,36 @@ curl -X POST http://localhost:8080/direct-inference/test-index \
 }'
 ```
 
+Here is one for the WINNIIO dataset:
+```bash
+curl -X POST http://localhost:8080/direct-inference/test-index \
+-H "Content-Type: application/json" \
+-d '{
+  "input": [
+    {
+        "actuatorState": "9770",
+        "co2Value": "418",
+        "eventCount": "0",
+        "humidity": "33.8",
+        "switchStatus": "0.021216271052304",
+        "temperature": "22.02"
+    },
+    {
+        "actuatorState": "0",
+        "co2Value": "425.8333333333333",
+        "eventCount": "0",
+        "humidity": "48.22",
+        "switchStatus": "0.0137001034912",
+        "temperature": "21.67"
+    }
+  ],
+  "labels": [
+    "22.02",
+    "21.59"
+  ]
+}'
+```
+
 ## Resolving common issues
 After executing the init `curl` request, if your training nodes do not print out model weights,
 then they do not have access to the data. 
