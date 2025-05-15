@@ -232,6 +232,23 @@ curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://lo
 {"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
 ```
 
+You can also do a direct inference on the aggregator which requires inputting test data and its test
+labels (i.e. expected predictions). The label must correspond to the given input and will be used to
+compare against the actual predictions of the model's testing output. The data type of the test data
+can be anything as long as fits the data type of the dataset. Below is an example for MNIST:
+```bash
+curl -X POST http://localhost:8080/direct-inference/test-index \
+-H "Content-Type: application/json" \
+-d '{
+  "input": [
+    [0,244,281,...(780 more numbers),0]
+  ],
+  "labels": [
+    3
+  ]
+}'
+```
+
 ## Resolving common issues
 After executing the init `curl` request, if your training nodes do not print out model weights,
 then they do not have access to the data. 

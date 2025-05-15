@@ -71,7 +71,7 @@ class ContinueTrainingRequest(BaseModel):
     index: str
 
 class InferenceRequest(BaseModel):
-    input: list[list[float]] # each element in here is one data value to test
+    input: list # each element in here is one data value to test
     labels: list # check element type within direct_inference
 
 
@@ -563,6 +563,7 @@ def get_last_aggregated_params(index):
         return None
 
 
+# TODO: make labels optional (...maybe user doesn't feel like getting the accuracy?)
 @app.post("/direct-inference/{index}", response_class=PlainTextResponse)
 async def direct_inference(index, request: InferenceRequest):
     try:

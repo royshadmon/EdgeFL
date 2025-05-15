@@ -134,7 +134,7 @@ class MnistDataHandler():
 
     def direct_inference(self, data, labels: list[int]):
         """
-        Run inference on raw input data (already in MNIST format).
+        Run inference on raw input data against given labels (already in MNIST format).
         Handles data conversion and validation internally.
         """
         # TODO: add another input type that allows for raw images to work (would be converted properly)
