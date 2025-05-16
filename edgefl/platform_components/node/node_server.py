@@ -188,7 +188,6 @@ def listen_for_start_round(nodeInstance, stop_event):
             logger.error(f"Error in listener thread: {str(e)}")
             time.sleep(2)
 
-# DFL - constantly listen for atleast min_params # of nodes, and get updates from other training nodes
 def dfl_listen(nodeInstance, stop_event):
     while True:
         if stop_event():
@@ -196,51 +195,56 @@ def dfl_listen(nodeInstance, stop_event):
 
         current_round = nodeInstance.currentRound
         index = nodeInstance.index
-        min_params = 2 #TODO: catch from request instead of hardcode
+        min_params = 2  # TODO: make configurable if needed
 
-        # First round special case: just publish own weights immediately (to prevent deadlock)
-        if current_round == 1:
-            logger.info(f"[DFL] First round: publishing initial weights")
-            model_weights = nodeInstance.data_handler.get_weights()
-            encoded = nodeInstance.encode_model(model_weights)
-            file_name = f"{index}-{current_round}-replica-{nodeInstance.replicaName}.pkl"
-            full_path = f"{nodeInstance.file_write_destination}/{nodeInstance.replicaName}/{file_name}"
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(encoded)
-            nodeInstance.add_node_params(current_round, full_path, index)
-            nodeInstance.currentRound += 1
-            continue  # Go to next round
+        # ➡ Step 1: Local training
+        logger.info(f"[DFL] Node local training for round {current_round}")
+        model_params = nodeInstance.data_handler.train(current_round)
+        encoded_params = nodeInstance.encode_model(model_params)
 
-        logger.info(f"[DFL] Node waiting for peer models for round {current_round}")
+        file_name = f"{index}-{current_round}-replica-{nodeInstance.replicaName}.pkl"
+        local_path = f"{nodeInstance.file_write_destination}/{nodeInstance.replicaName}/{file_name}"
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(encoded_params)
+
+        # ➡ Step 2: Publish own model (aka send the model params to the blockchain, so that other nodes can see updates
+        nodeInstance.add_node_params(current_round, local_path, index)
+
+        # ➡ Step 3: Wait for peer models (including own)
+        logger.info(f"[DFL] Node waiting for at least {min_params} peer models for round {current_round}")
         headers = {
             'User-Agent': 'AnyLog/1.23',
             'command': f'blockchain get * where [index] = {index} and [node_type] = training'
         }
 
         try:
-            response = requests.get(edgelake_node_url, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                peer_models = []
-                ip_ports = []
+            while True:
+                response = requests.get(nodeInstance.edgelake_node_url, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    peer_models_and_ips = []
 
-                for item in data:
-                    for key in item:
-                        if key.endswith(f"-a{current_round}"):
-                            peer_models.append(item[key]["trained_params_local_path"])
-                            ip_ports.append(item[key]["ip_port"])
+                    for item in data:
+                        for key in item:
+                            if key.endswith(f"-a{current_round}"):
+                                model_path = item[key]["trained_params_local_path"]
+                                ip_port = item[key]["ip_port"]
+                                peer_models_and_ips.append((model_path, ip_port))
 
-                if len(peer_models) >= min_params:
-                    logger.info(f"[DFL] Found {len(peer_models)} peer models. Starting aggregation and training.")
-                    agg_link = nodeInstance.train_model_params(None, current_round, peer_models, index)
-                    nodeInstance.add_node_params(current_round, agg_link, index)
-                    nodeInstance.currentRound += 1
+                    if len(peer_models_and_ips) >= min_params:
+                        logger.info(f"[DFL] Found {len(peer_models_and_ips)} peer models for round {current_round}. Aggregating.")
+                        agg_link = nodeInstance.dfl_train_model_params(None, current_round, peer_models_and_ips, index)
+                        nodeInstance.add_node_params(current_round, agg_link, index)
+                        nodeInstance.currentRound += 1
 
-                    if nodeInstance.currentRound > 10:
-                        logger.info(f"[DFL] Node finished 10 rounds. Exiting.")
+                        if nodeInstance.currentRound > 10:
+                            logger.info(f"[DFL] Node finished 10 rounds. Exiting.")
+                            return
                         break
-            time.sleep(5)
+
+                logger.info(f"[DFL] Still waiting for {min_params} peer models...")
+                time.sleep(5)
         except Exception as e:
             logger.error(f"[DFL] Error while waiting for peer models: {str(e)}")
             time.sleep(5)

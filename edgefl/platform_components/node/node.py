@@ -122,74 +122,39 @@ class Node:
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
         self.logger.debug(f"in train_model_params for round {round_number}")
 
-        training_method = "DFL" # TODO: read from CURL init request
+        # First round initialization
+        if round_number == 1 and not aggregator_model_params_db_link:
+            # weights = self.local_training_handler.fl_model.get_model_update()
+            weights = self.data_handler.get_weights()
+            # model_update = self.data_handler.get_model_update()
+        else:
+            try:
+                # Extract the key from the URL
+                filename = aggregator_model_params_db_link.split('/')[-1]
+                if self.docker_running:
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
+                                         f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
+                    copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
+                else:
+                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
 
-        if training_method == "DFL":
-            # DFL logic: aggregate from peer weights
-            weights_list = []
-            for i, path in enumerate(ip_ports):  # path = trained_params_local_path
-                try:
-                    filename = path.split('/')[-1]
-                    local_path = f'{self.file_write_destination}/{self.replicaName}/{filename}'
-
-                    if self.docker_running:
-                        read_file(self.edgelake_node_url, path,
-                                  f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports[i])
-                        copy_file_from_container(self.tmp_dir, self.docker_container_name,
-                                                 f'{self.docker_file_write_destination}/{self.replicaName}/{filename}',
-                                                 local_path)
-                    else:
-                        read_file(self.edgelake_node_url, path, local_path, ip_ports[i])
-
-                    with open(local_path, 'rb') as f:
+                # response = requests.get(link)
+                if response.status_code == 200:
+                    sleep(1)
+                    with open(
+                            f'{self.file_write_destination}/{self.replicaName}/{filename}',
+                            'rb') as f:
                         data = pickle.load(f)
 
-                    if data and 'newUpdates' in data:
-                        decoded = self.decode_params(data['newUpdates'])
-                        weights_list.append(decoded)
-                except Exception as e:
-                    self.logger.error(f"[DFL] Failed to read or decode peer weight: {e}")
-                    continue
-
-            if weights_list:
-                weights = self.data_handler.aggregate_model_weights(weights_list)
-            else:
-                raise Exception(f"[DFL] Aggregation failed: No peer weights collected")
-
-        else: # use CFL training method
-            # First round initialization
-            if round_number == 1 and not aggregator_model_params_db_link:
-                # weights = self.local_training_handler.fl_model.get_model_update()
-                weights = self.data_handler.get_weights()
-                # model_update = self.data_handler.get_model_update()
-            else:
-                try:
-                    # Extract the key from the URL
-                    filename = aggregator_model_params_db_link.split('/')[-1]
-                    if self.docker_running:
-                        response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                             f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-                        copy_file_from_container(self.tmp_dir, self.docker_container_name, f'{self.docker_file_write_destination}/{self.replicaName}/{filename}', f'{self.file_write_destination}/{self.replicaName}/{filename}')
-                    else:
-                        response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,f'{self.file_write_destination}/{self.replicaName}/{filename}', ip_ports)
-
-                    # response = requests.get(link)
-                    if response.status_code == 200:
-                        sleep(1)
-                        with open(
-                                f'{self.file_write_destination}/{self.replicaName}/{filename}',
-                                'rb') as f:
-                            data = pickle.load(f)
-
-                    # Ensure the data is valid and decode the parameters
-                    if data and 'newUpdates' in data:
-                        weights = self.decode_params(data['newUpdates'])
-                    else:
-                        self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
-                        raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
-                except Exception as e:
-                    self.logger.error(f"Error getting weights: {str(e)}")
-                    raise
+                # Ensure the data is valid and decode the parameters
+                if data and 'newUpdates' in data:
+                    weights = self.decode_params(data['newUpdates'])
+                else:
+                    self.logger.error(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                    raise ValueError(f"Invalid data or 'newUpdates' missing in Firestore response: {data}")
+            except Exception as e:
+                self.logger.error(f"Error getting weights: {str(e)}")
+                raise
 
         # Update model with weights
         self.data_handler.update_model(weights)
@@ -213,6 +178,104 @@ class Node:
             copy_file_to_container(self.tmp_dir, self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{self.replicaName}/{file}")
             return f'{self.docker_file_write_destination}/{self.replicaName}/{file}'
         return file_name
+
+
+    def dfl_train_model_params(self, aggregator_model_params_db_link, round_number, peer_models_and_ips, index):
+        self.logger.info(f"[DFL] in train_model_params for round {round_number}")
+
+        if not peer_models_and_ips:
+            self.logger.info(f"[DFL] No peer models provided. Using local model.")
+            weights = self.data_handler.get_weights()
+        else:
+            weights_list = []
+            for model_path, peer_ip_port in peer_models_and_ips:
+                try:
+                    filename = model_path.split('/')[-1]
+                    local_path = f'{self.file_write_destination}/{self.replicaName}/peer_{filename}'
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+                    self.logger.info(f"[DFL] Downloading peer model from {peer_ip_port} path {model_path}")
+                    response = read_file(self.edgelake_node_url, model_path, local_path, peer_ip_port)
+
+                    if response.status_code == 200:
+                        if response.content and len(response.content) > 0:
+                            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                            with open(local_path, 'wb') as f:
+                                f.write(response.content)
+
+                            try:
+                                with open(local_path, 'rb') as f:
+                                    data = pickle.load(f)
+
+                                if isinstance(data, dict) and 'newUpdates' in data:
+                                    decoded = self.decode_params(data['newUpdates'])
+                                    weights_list.append(decoded)
+                                else:
+                                    self.logger.error(f"[DFL] Invalid peer data structure at {local_path}")
+                            except Exception as e:
+                                self.logger.error(f"[DFL] Exception during pickle load for {local_path}: {e}")
+                        else:
+                            self.logger.error(f"[DFL] Empty response content from {peer_ip_port} for {model_path}")
+                    else:
+                        self.logger.error(
+                            f"[DFL] Failed to download peer model from {peer_ip_port}. Status {response.status_code}")
+
+                except Exception as e:
+                    self.logger.error(f"[DFL] Exception while handling peer model from {peer_ip_port}: {e}")
+                    continue
+
+            if weights_list:
+                weights = self.data_handler.aggregate_model_weights(weights_list)
+            else:
+                raise Exception(f"[DFL] Aggregation failed: No peer weights collected")
+
+        # ➡ Update and train
+        self.data_handler.update_model(weights)
+        model_params = self.data_handler.train(round_number)
+        encoded_params = self.encode_model(model_params)
+
+        file = f"{index}-{round_number}-replica-{self.replicaName}.pkl"
+        final_local_path = f"{self.file_write_destination}/{self.replicaName}/{file}"
+        with open(final_local_path, "wb") as f:
+            f.write(encoded_params)
+
+        self.logger.info(f"[DFL] Round {round_number} training complete, model saved at {final_local_path}")
+        return final_local_path
+
+
+    def aggregate_peer_models(self, node_param_download_links, ip_ports, round_number, index):
+        decoded_params = []
+        for i, path in enumerate(node_param_download_links):
+            try:
+                filename = path.split('/')[-1]
+                local_peer_file = f"{self.file_write_destination}/{self.replicaName}/peer_{filename}"
+                os.makedirs(os.path.dirname(local_peer_file), exist_ok=True)
+
+                if self.docker_running:
+                    read_file(self.edgelake_node_url, path,
+                              f'{self.docker_file_write_destination}/{self.replicaName}/peer_{filename}', ip_ports[i])
+                    copy_file_from_container(self.tmp_dir, self.docker_container_name,
+                                             f'{self.docker_file_write_destination}/{self.replicaName}/peer_{filename}',
+                                             local_peer_file)
+                else:
+                    read_file(self.edgelake_node_url, path, local_peer_file, ip_ports[i])
+
+                with open(local_peer_file, 'rb') as f:
+                    data = pickle.load(f)
+
+                if not data:
+                    raise ValueError(f"[DFL] Missing model weights in peer file {filename}")
+                decoded_params.append(data)
+            except Exception as e:
+                self.logger.error(f"[DFL] Failed to handle peer model from {ip_ports[i]}: {str(e)}")
+                continue
+
+        if not decoded_params:
+            raise Exception("[DFL] Aggregation failed: No peer weights collected")
+
+        aggregated_weights = self.data_handler.aggregate_model_weights(decoded_params)
+        return aggregated_weights
+
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
