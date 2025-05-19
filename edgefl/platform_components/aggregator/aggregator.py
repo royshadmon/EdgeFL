@@ -283,12 +283,16 @@ class Aggregator:
                 'message': str(e)
             }
 
+    def fetch_decoded_params(self, node_param_download_links, ip_ports, round_number, index):
+        pass
+
     def aggregate_model_params(self, node_param_download_links, ip_ports, round_number, index):
         # use the node_param_download_links to get all the file
         # in the form of tuples, like ["('blobs_admin', 'node_model_updates', '1-replica-node1.pkl')"]
         # node_ref = db.reference('node_model_updates')
 
         decoded_params = []
+
         # Loop through each provided download link to retrieve node parameter objects
         for i, path in enumerate(node_param_download_links):
             try:
@@ -307,27 +311,23 @@ class Aggregator:
                     response = read_file(self.edgelake_node_url, path,
                                      local_path, ip_ports[i])
 
-                if response.status_code == 200:
-                    sleep(1)
-                    with open(local_path, 'rb') as f:
-                        data = pickle.load(f)
-
-                    if not data:
-                        raise ValueError(f"Missing model_weights in data from file: {filename}")
-                    # decoded_params.append(data)
-
-                    # decoded_params.append({'weights': pickle.dumps(data)})
-                    decoded_params.append(LocalModelUpdate(weights=data))
-                    # decoded_params.append(LocalModelUpdate(weights=data[0].detach().numpy()))
-                else:
+                if response.status_code != 200:
                     raise ValueError(
-                        f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}")
+                        f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}"
+                    )
+
+                sleep(1)
+                with open(local_path, 'rb') as f:
+                    data = pickle.load(f)
+                if not data:
+                    raise ValueError(f"Missing model_weights in data from file: {filename}")
+
+                decoded_params.append(LocalModelUpdate(weights=data))
+
             except Exception as e:
                 raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
 
         aggregate_params_weights = self.training_apps[index].aggregate_model_weights(decoded_params)
-
-        # aggregate_params_weights = [np.array(aggregate_params_weights[0], dtype=np.float32)]
 
         aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights)
 

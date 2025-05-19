@@ -379,43 +379,63 @@ async def listen_for_update_agg(min_params, round_number, index):
                 'User-Agent': 'AnyLog/1.23',
                 "command": f"blockchain get {index}-a{round_number} count"
             })
+            count_response.raise_for_status() # != 200
 
-            if count_response.status_code == 200:
-                count_data = count_response.json()
-                count = len(count_data) if isinstance(count_data, list) else int(count_data)
+            count_data = count_response.json()
+            count = len(count_data) if isinstance(count_data, list) else int(count_data)
 
-                # If enough parameters, get the URL
-                if count >= min_params: # TODO: move this check down to when it aggregates and pre-emptively pull model weights as they come in
-                    params_response = requests.get(url, headers={
-                        'User-Agent': 'AnyLog/1.23',
-                        "command": f"blockchain get {index}-a{round_number}"
-                    })
+            # === Outside listen_for_update_agg()
+            # - Create fetch_decoded_params() from aggregate function (move its reading part into this new function).
+            #
+            # === Outside the while-loop
+            # - Initialize a list "decoded_params" that tracks all node links already processed.
+            # - Initialize a counter "checks_left" that tracks how many chances the min_params check can go through.
+            #
+            # === Inside the while-loop, before the try-except block
+            #
+            # === Inside the try-except block
+            # - Do a GET request w/"blockchain get {index}-a{round_number}" to get policies with the node model links.
+            # - Check its status code.
+            # - Extract node_params_links and ip_ports from the response if there's any result.
+            # - Use the new fetch_decoded_params() and pass in decoded_params...along with node_params_links, ip_ports,
+            #       round_number, and index
+            # - Check if the length of decoded_params >= min_params or checks_left has reached <= 0.
+            #       If so, call the aggregate function and return the new aggregated_params_link.
+            # - Decrement checks_left.
 
-                    if params_response.status_code == 200:
-                        result = params_response.json()
-                        if result and len(result) > 0:
-                            # Extract all trained_params into a list
+            # If enough parameters, get the URL
+            if count >= min_params: # TODO: move this check down to when it aggregates and pre-emptively pull model weights as they come in
+                params_response = requests.get(url, headers={
+                    'User-Agent': 'AnyLog/1.23',
+                    "command": f"blockchain get {index}-a{round_number}"
+                })
 
-                            node_params_links = [
-                                item[f'{index}-a{round_number}']['trained_params_local_path']
-                                for item in result
-                                if f'{index}-a{round_number}' in item
-                            ]
+                params_response.raise_for_status() # != 200
 
-                            ip_ports = [
-                                item[f'{index}-a{round_number}']['ip_port']
-                                for item in result
-                                if f'{index}-a{round_number}' in item
-                            ]
+                result = params_response.json()
+                if result and len(result) > 0:
+                    # Extract all trained_params into a list
 
-                            # Aggregate the parameters
-                            aggregated_params_link = aggregator.aggregate_model_params(
-                                node_param_download_links=node_params_links,
-                                ip_ports=ip_ports,
-                                round_number=round_number,
-                                index=index
-                            )
-                            return aggregated_params_link
+                    node_params_links = [
+                        item[f'{index}-a{round_number}']['trained_params_local_path']
+                        for item in result
+                        if f'{index}-a{round_number}' in item
+                    ]
+
+                    ip_ports = [
+                        item[f'{index}-a{round_number}']['ip_port']
+                        for item in result
+                        if f'{index}-a{round_number}' in item
+                    ]
+
+                    # Aggregate the parameters
+                    aggregated_params_link = aggregator.aggregate_model_params(
+                        node_param_download_links=node_params_links,
+                        ip_ports=ip_ports,
+                        round_number=round_number,
+                        index=index
+                    )
+                    return aggregated_params_link
 
         except Exception as e:
             logger.error(f"[{index}] Aggregator_server.py --> Waiting for file: {e}")
