@@ -22,6 +22,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - TF_FORCE_GPU_ALLOW_GROWTH=true
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - PATH=/usr/local/cuda-12.2/bin:$PATH
+      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
 
   # Node Server 1
@@ -48,6 +50,8 @@ services:
       - TF_FORCE_GPU_ALLOW_GROWTH=true
       - DOCKER_HOST=unix:///var/run/docker.sock
       - FILE_WRITE_DESTINATION=edgefl/file_write
+      - PATH=/usr/local/cuda-12.2/bin:$PATH
+      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist1.env"]
 
   # Node Server 2
@@ -73,6 +77,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - TF_FORCE_GPU_ALLOW_GROWTH=true
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - PATH=/usr/local/cuda-12.2/bin:$PATH
+      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist2.env"]
 
   # Node Server 3
@@ -98,4 +104,6 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - TF_FORCE_GPU_ALLOW_GROWTH=true
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - PATH=/usr/local/cuda-12.2/bin:$PATH
+      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist3.env"]
