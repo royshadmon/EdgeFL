@@ -372,74 +372,66 @@ async def listen_for_update_agg(min_params, round_number, index):
     logger.info(f"[{index}] listening for updates...")
     url = f'http://{os.getenv("EXTERNAL_IP")}'
 
+    # TODO: update min_params here with aggregator.min_params since the update_minParams request doesn't affect here
+    #  as of now
+    decoded_params = {} # { 'node_params_link': 'decoded_param' }
+    check_chances = 5 # Once this reaches <= 0, we will ignore min_params and handle accordingly
     while True:
         try:
-            # Check parameter count
-            count_response = requests.get(url, headers={
+            # Fetch policies containing the node models at index and round number
+            params_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"blockchain get {index}-a{round_number} count"
+                "command": f"blockchain get {index}-a{round_number}"
             })
-            count_response.raise_for_status() # != 200
+            params_response.raise_for_status()  # != 200
 
-            count_data = count_response.json()
-            count = len(count_data) if isinstance(count_data, list) else int(count_data)
+            result = params_response.json()
+            if result:
+                # Extract all trained_params into a list
+                node_params_links = [
+                    item[f'{index}-a{round_number}']['trained_params_local_path']
+                    for item in result
+                    if f'{index}-a{round_number}' in item
+                ]
+                ip_ports = [
+                    item[f'{index}-a{round_number}']['ip_port']
+                    for item in result
+                    if f'{index}-a{round_number}' in item
+                ]
 
-            # === Outside listen_for_update_agg()
-            # - Create fetch_decoded_params() from aggregate function (move its reading part into this new function).
-            #
-            # === Outside the while-loop
-            # - Initialize a list "decoded_params" that tracks all node links already processed.
-            # - Initialize a counter "checks_left" that tracks how many chances the min_params check can go through.
-            #
-            # === Inside the while-loop, before the try-except block
-            #
-            # === Inside the try-except block
-            # - Do a GET request w/"blockchain get {index}-a{round_number}" to get policies with the node model links.
-            # - Check its status code.
-            # - Extract node_params_links and ip_ports from the response if there's any result.
-            # - Use the new fetch_decoded_params() and pass in decoded_params...along with node_params_links, ip_ports,
-            #       round_number, and index
-            # - Check if the length of decoded_params >= min_params or checks_left has reached <= 0.
-            #       If so, call the aggregate function and return the new aggregated_params_link.
-            # - Decrement checks_left.
+                # Updates decoded_params with newly fetched decoded params (with node link as key)
+                aggregator.fetch_decoded_params(
+                    decoded_params_dict=decoded_params,
+                    node_param_download_links=node_params_links,
+                    ip_ports=ip_ports,
+                    index=index
+                )
 
-            # If enough parameters, get the URL
-            if count >= min_params: # TODO: move this check down to when it aggregates and pre-emptively pull model weights as they come in
-                params_response = requests.get(url, headers={
-                    'User-Agent': 'AnyLog/1.23',
-                    "command": f"blockchain get {index}-a{round_number}"
-                })
+            # If enough parameters or not getting ALL parameters in time, get the URL
+            if len(decoded_params) >= min_params or (decoded_params and not check_chances):
+                aggregated_params_link = aggregator.aggregate_model_params(
+                    decoded_params=list(decoded_params.values()),
+                    round_number=round_number,
+                    index=index
+                )
+                return aggregated_params_link
 
-                params_response.raise_for_status() # != 200
+            # TODO: Adjust this to decrement with >=0 decoded params, but based on nodes' training process
+            # Only decrement the counter when there is at least 1 decoded params
+            if decoded_params and check_chances:
+                check_chances -= 1
 
-                result = params_response.json()
-                if result and len(result) > 0:
-                    # Extract all trained_params into a list
-
-                    node_params_links = [
-                        item[f'{index}-a{round_number}']['trained_params_local_path']
-                        for item in result
-                        if f'{index}-a{round_number}' in item
-                    ]
-
-                    ip_ports = [
-                        item[f'{index}-a{round_number}']['ip_port']
-                        for item in result
-                        if f'{index}-a{round_number}' in item
-                    ]
-
-                    # Aggregate the parameters
-                    aggregated_params_link = aggregator.aggregate_model_params(
-                        node_param_download_links=node_params_links,
-                        ip_ports=ip_ports,
-                        round_number=round_number,
-                        index=index
-                    )
+            # Use most recent aggregated model link if failed to pull any node models
+            if not decoded_params and not check_chances:
+                aggregated_params_link = get_last_aggregated_params(index)
+                if aggregated_params_link: # but only fetch if there exists one
                     return aggregated_params_link
+                check_chances = 5 # If none, then reset and try to fetch node model links again
 
         except Exception as e:
             logger.error(f"[{index}] Aggregator_server.py --> Waiting for file: {e}")
 
+        # TODO: see there's an alternative to this sleep e.g. sleeping for less time or using another function
         await asyncio.sleep(2)
 
 

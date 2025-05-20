@@ -283,52 +283,53 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def fetch_decoded_params(self, node_param_download_links, ip_ports, round_number, index):
-        pass
-
-    def aggregate_model_params(self, node_param_download_links, ip_ports, round_number, index):
+    def fetch_decoded_params(self, decoded_params_dict, node_param_download_links, ip_ports, index):
         # use the node_param_download_links to get all the file
         # in the form of tuples, like ["('blobs_admin', 'node_model_updates', '1-replica-node1.pkl')"]
         # node_ref = db.reference('node_model_updates')
 
-        decoded_params = []
-
         # Loop through each provided download link to retrieve node parameter objects
         for i, path in enumerate(node_param_download_links):
-            try:
-                # make sure directory exists
-                filename = path.split('/')[-1]
+            # Don't fetch for existing paths
+            if path in decoded_params_dict:
+                continue
 
+            try:
+                # Make sure the directory exists
+                filename = path.split('/')[-1]
                 local_path = f'{self.file_write_destination}/{index}/{filename}'
                 if self.docker_running:
                     docker_file_path = f'{self.docker_file_write_destination}/{index}/{filename}'
                     response = read_file(self.edgelake_node_url, path,
                                          docker_file_path, ip_ports[i])
                     copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name,
-                                        docker_file_path,
-                                        local_path)
+                                             docker_file_path,
+                                             local_path)
                 else:
                     response = read_file(self.edgelake_node_url, path,
-                                     local_path, ip_ports[i])
+                                         local_path, ip_ports[i])
 
                 if response.status_code != 200:
                     raise ValueError(
                         f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}"
                     )
 
+                # Decode the model weights from the file
                 sleep(1)
                 with open(local_path, 'rb') as f:
                     data = pickle.load(f)
                 if not data:
                     raise ValueError(f"Missing model_weights in data from file: {filename}")
 
-                decoded_params.append(LocalModelUpdate(weights=data))
+                decoded_params_dict[path] = LocalModelUpdate(weights=data)
 
             except Exception as e:
-                raise ValueError(f"Error retrieving data from link {filename}: {str(e)}")
+                self.logger.error(f"Error retrieving data from link {filename}: {str(e)}")
+                continue
+
+    def aggregate_model_params(self, decoded_params, round_number, index):
 
         aggregate_params_weights = self.training_apps[index].aggregate_model_weights(decoded_params)
-
         aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights)
 
         # encode params back to string
@@ -345,11 +346,11 @@ class Aggregator:
         with open(file_write_path, 'wb') as f:
             f.write(self.encode_params(data_entry))
 
-        # print(f"Model aggregation for round {round_number} complete")
         if self.docker_running:
             docker_file_write_path = f'{self.docker_file_write_destination}/{index}/{round_number}-{self.agg_name}_update.json'
-            # print(f'Writing to container at {f"{self.docker_file_write_destination}/aggregator/{round_number}-agg_update.json"}')
-            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name, file_write_path, docker_file_write_path)
+            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name,
+                                   file_write_path,
+                                   docker_file_write_path)
             return docker_file_write_path
 
         return file_write_path
