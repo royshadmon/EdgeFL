@@ -4,26 +4,26 @@ services:
     image: edgefl:latest
     restart: always
     env_file:
-      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist-agg.env
+      - ../edgefl/env_files/mnist-docker/mnist-agg.env
     container_name: aggregator_server_8080
     ports:
       - 8080:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - PATH=/usr/local/cuda-12.2/bin:$PATH
-      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+#    environment:
+#      - NVIDIA_VISIBLE_DEVICES=all
+#      - NVIDIA_DRIVER_CAPABILITIES=all
+#      - TF_FORCE_GPU_ALLOW_GROWTH=false
+#      - DOCKER_HOST=unix:///var/run/docker.sock
+#      - PATH=/usr/local/cuda-12.2/bin:$PATH
+#      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
 
   # Node Server 1
@@ -31,27 +31,27 @@ services:
     image: edgefl:latest
     restart: always
     env_file:
-      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist1.env
+      - ../edgefl/env_files/mnist-docker/mnist1.env
     container_name: node_server_8081
     ports:
       - 8081:8081
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - FILE_WRITE_DESTINATION=edgefl/file_write
-      - PATH=/usr/local/cuda-12.2/bin:$PATH
-      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+##    environment:
+##      - NVIDIA_VISIBLE_DEVICES=all
+##      - NVIDIA_DRIVER_CAPABILITIES=all
+##      - TF_FORCE_GPU_ALLOW_GROWTH=false
+##      - DOCKER_HOST=unix:///var/run/docker.sock
+##      - FILE_WRITE_DESTINATION=edgefl/file_write
+##      - PATH=/usr/local/cuda-12.2/bin:$PATH
+##      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist1.env"]
 
   # Node Server 2
@@ -59,26 +59,26 @@ services:
     image: edgefl:latest
     restart: always
     env_file:
-      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist2.env
+      - ../edgefl/env_files/mnist-docker/mnist2.env
     container_name: node_server_8082
     ports:
       - 8082:8082
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - PATH=/usr/local/cuda-12.2/bin:$PATH
-      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+#    environment:
+#      - NVIDIA_VISIBLE_DEVICES=all
+#      - NVIDIA_DRIVER_CAPABILITIES=all
+#      - TF_FORCE_GPU_ALLOW_GROWTH=false
+#      - DOCKER_HOST=unix:///var/run/docker.sock
+#      - PATH=/usr/local/cuda-12.2/bin:$PATH
+#      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist2.env"]
 
   # Node Server 3
@@ -86,24 +86,24 @@ services:
     image: edgefl:latest
     restart: always
     env_file:
-      - /home/miguel06/PycharmProjects/Anylog-Edgelake-Federated-Learning-Platform/edgefl/env_files/mnist-docker/mnist3.env
+      - ../edgefl/env_files/mnist-docker/mnist3.env
     container_name: node_server_8083
     ports:
       - 8083:8083
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - TF_FORCE_GPU_ALLOW_GROWTH=true
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - PATH=/usr/local/cuda-12.2/bin:$PATH
-      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]
+#    environment:
+#      - NVIDIA_VISIBLE_DEVICES=all
+#      - NVIDIA_DRIVER_CAPABILITIES=all
+#      - TF_FORCE_GPU_ALLOW_GROWTH=false
+#      - DOCKER_HOST=unix:///var/run/docker.sock
+#      - PATH=/usr/local/cuda-12.2/bin:$PATH
+#      - LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64:$LD_LIBRARY_PATH
     command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist3.env"]
