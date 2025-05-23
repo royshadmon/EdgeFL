@@ -27,7 +27,6 @@ load_dotenv()
 class Node:
     def __init__(self, replica_name, ip, port, logger):
         self.github_dir = os.getenv('GITHUB_DIR')
-        # self.module_name = os.getenv('MODULE_NAME') # todo: modularize
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.edgelake_tcp_node_ip_port = f'{os.getenv("EXTERNAL_TCP_IP_PORT")}'
 

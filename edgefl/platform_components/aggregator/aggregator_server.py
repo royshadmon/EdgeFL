@@ -12,6 +12,8 @@ from starlette.responses import PlainTextResponse
 from platform_components.aggregator.aggregator import Aggregator
 import asyncio
 import logging
+import numpy as np
+import pickle
 import requests
 import os
 import threading
@@ -25,7 +27,7 @@ from platform_components.EdgeLake_functions.blockchain_EL_functions import get_l
 import warnings
 
 from platform_components.lib.logger.logger_config import configure_logging
-
+from platform_components.lib.modules.exceptions import NodeInitializationError
 
 warnings.filterwarnings("ignore")
 
@@ -68,6 +70,11 @@ class ContinueTrainingRequest(BaseModel):
     minParams: int
     index: str
 
+class InferenceRequest(BaseModel):
+    input: list # each element in here is one data value to test
+    labels: list # check element type within direct_inference
+
+
 # @app.route('/init', methods=['POST'])
 
 @app.post("/init", response_class=PlainTextResponse)
@@ -79,16 +86,18 @@ def init(request: InitRequest):
         module_name, module_file = request.module, request.module_file
         db_name = request.db_name
 
-        aggregator.indexes.add(index)
+        # Verify filepath exists
+        module_path = os.path.join(aggregator.training_app_dir, module_file)
+        if not os.path.exists(os.path.join(os.getenv("GITHUB_DIR"), module_path)):
+            raise FileNotFoundError(f"Module '{module_file}' does not exist within the given path: '{module_path}'.")
 
+        # Set up index and specific data
+        aggregator.indexes.add(index)
         if index not in aggregator.databases:
             aggregator.databases[index] = db_name
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
-        # TODO: check that module_path exists (if not, don't initialize)
-
-        module_path = os.path.join(aggregator.training_app_dir, module_file)
         initialize_nodes(node_urls, index, module_name, module_path, db_name)
 
         aggregator.set_module_at_index(index, module_name, module_path)
@@ -96,12 +105,21 @@ def init(request: InitRequest):
         aggregator.initialize_training_app_on_index(index)
         aggregator.initialize_file_write_paths_on_index(index)
 
-        # TODO: node checked to see if actually initialized (shows success even if off)
+        initialized_nodes = [url for url in node_urls if url in aggregator.node_urls[index]]
+        failed_nodes = [url for url in node_urls if url not in aggregator.node_urls[index]]
+
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
-        return (f"{{'status': 'success',"
-                f" 'message': 'Nodes initialized'"
-                f" 'nodes': '{aggregator.node_urls[index]}'"
+        return (f"{{\n'status': 'success',\n"
+                f" 'message': 'Initialization request finished.',\n"
+                f" 'initialized nodes': '{initialized_nodes}',\n"
+                f" 'failed nodes': '{failed_nodes}'\n"
                 f"}}\n")
+    except FileNotFoundError as e:
+        logger.error(f"{str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={str(e)}
+        )
     except Exception as e:
         logger.error(f"Failed to initialize nodes with index ({index}): {str(e)}")
         raise HTTPException(
@@ -109,6 +127,12 @@ def init(request: InitRequest):
             detail=str(e)
         )
 
+def is_node_online(node_url: str):
+    try:
+        response = requests.get(node_url, timeout=2)
+        return True
+    except requests.exceptions.RequestException:
+        return False
 
 def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
     """Send the deployed contract address to multiple node servers."""
@@ -117,12 +141,23 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
             ip_port = node_url.split('/')[-1].split(':')
             logger.info(f"Initializing model at {node_url}")
 
+            # Check that node is online; if it's not, then remove it from node_urls and decrement
+            # node_count
+
+            if not is_node_online(node_url):
+                with aggregator.lock:
+                    if node_url in aggregator.node_urls[index]:
+                        aggregator.node_urls[index].remove(node_url)
+                        aggregator.node_count[index] -= 1
+                logger.warning(f"Node {node_url} is offline; skipping initialization.")
+                return
+
             with aggregator.lock:
-                if node_url in aggregator.node_urls[index]:  # don't initialize for an existing node url
+                if node_url in aggregator.node_urls[index]:  # skip already initialized nodes
                     logger.info(f"Model at {url} already exists for index {index}.")
                     return
 
-                # Generate name and reserve count before sending POST request
+                # Reserve a replica number
                 replica_number = aggregator.node_count[index] + 1
                 replica_name = f"node{replica_number}"
                 aggregator.node_count[index] = replica_number
@@ -145,7 +180,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
                 else:
                     # Rollback node count if request fails
                     aggregator.node_count[index] -= 1
-                    raise HTTPException(
+                    raise NodeInitializationError(
                         status_code=response.status_code,
                         detail=f"Failed to initialize node at {node_url}."
                     )
@@ -153,6 +188,13 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
             with aggregator.lock:
                 aggregator.node_count[index] -= 1 # Rollback on exception
             logger.critical(f"{str(e)}")
+            if isinstance(e, NodeInitializationError):
+                raise e
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=str(e)
+                )
 
     if index not in aggregator.node_count:
         aggregator.node_count[index] = 0
@@ -160,6 +202,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
     if index not in aggregator.node_urls:
         aggregator.node_urls[index] = set()
 
+    # TODO: if a node gets re-init'ed because the node server re-opened, shut down the corresponding thread and start again
     threads = []
     for url in node_urls:
         thread = threading.Thread(name=f"agg/init--{url}", target=init_node, args=(url,), daemon=True)
@@ -228,30 +271,51 @@ async def init_training(request: TrainingRequest):
         )
 
 def start_training(aggregator, initial_params, starting_round, end_round, index):
-    for r in range(starting_round, end_round + 1):
-        aggregator.round_number[index] = r
-        logger.info(f"[{index}] Starting training round {r}")
-        aggregator.start_round(initial_params, r, index)
-        logger.debug(f"[{index}] Sent initial parameters to nodes")
+    try:
+        for r in range(starting_round, end_round + 1):
+            aggregator.round_number[index] = r
+            logger.info(f"[{index}] Starting training round {r}")
+            aggregator.start_round(initial_params, r, index)
+            logger.debug(f"[{index}] Sent initial parameters to nodes")
 
-        # Listen for updates from nodes
-        new_aggregator_params = asyncio.run(
-            listen_for_update_agg(aggregator.minParams[index], r, index)
-        )
-        logger.debug(f"[{index}] Received aggregated parameters")
+            # Listen for updates from nodes
+            new_aggregator_params = asyncio.run(
+                listen_for_update_agg(aggregator.minParams[index], r, index)
+            )
+            logger.debug(f"[{index}] Received aggregated parameters")
 
-        # Set initial params to newly aggregated params for the next round
-        initial_params = new_aggregator_params
-        print(initial_params)
-        logger.info(f"[{index}][Round {r}] Step 4 Complete: model parameters aggregated")
+            # Set initial params to newly aggregated params for the next round
+            initial_params = new_aggregator_params # docker: /app/file_write/agg/{index}/1-agg_update.json
+            # print(initial_params) # debugging
+            logger.info(f"[{index}][Round {r}] Step 4 Complete: model parameters aggregated")
 
-        # Track the last agg model file because it's not stored in a policy after the last round
-        aggregator.store_most_recent_agg_params(initial_params, index)
+            # Track the last agg model file because it's not stored in a policy after the last round
+            aggregator.store_most_recent_agg_params(initial_params, index)
 
-    return {
-        "status": "success",
-        "message": "Training completed successfully"
-    }
+            # Then, update aggregator's model at 'index'
+            local_path_of_initial_params = f"{aggregator.file_write_destination}/{index}/{r}-{aggregator.agg_name}_update.json"
+            with open(local_path_of_initial_params, "rb") as f:
+                data = pickle.load(f)
+
+            if data and 'newUpdates' in data:
+                weights = aggregator.decode_params(data['newUpdates'])
+            else:
+                aggregator.logger.error(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+                raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+
+            aggregator.training_apps[index].update_model(weights)
+
+        logger.info(f"[{index}] Training completed successfully")
+        return {
+            "status": "success",
+            "message": "Training completed successfully"
+        }
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
+        else:
+            raise RuntimeError(f"An error occurred during training: {str(e)}")
+
 
 @app.post('/update-minParams')
 async def update_minParams(request: UpdatedMinParamsRequest):
@@ -321,7 +385,7 @@ async def listen_for_update_agg(min_params, round_number, index):
                 count = len(count_data) if isinstance(count_data, list) else int(count_data)
 
                 # If enough parameters, get the URL
-                if count >= min_params:
+                if count >= min_params: # TODO: move this check down to when it aggregates and pre-emptively pull model weights as they come in
                     params_response = requests.get(url, headers={
                         'User-Agent': 'AnyLog/1.23',
                         "command": f"blockchain get {index}-a{round_number}"
@@ -497,6 +561,31 @@ def get_last_aggregated_params(index):
     except Exception as e:
         logger.error(f"[{index}] Error fetching aggregated parameters: {str(e)}")
         return None
+
+
+# TODO: make labels optional (...maybe user doesn't feel like getting the accuracy?)
+@app.post("/direct-inference/{index}", response_class=PlainTextResponse)
+async def direct_inference(index, request: InferenceRequest):
+    try:
+        results = aggregator.direct_inference(index, request.input, request.labels)
+        response = (f"{{"
+                    f"'index': '{index}',"
+                    f" 'status': 'success',"
+                    f" 'message': 'Inference completed successfully',"
+                    f" 'accuracy': '{str(results)}'"
+                    f"}}\n")
+        return response
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Inference failed: {str(e)}"
+        )
+
 
 if __name__ == '__main__':
     # Add argument parsing to make the port configurable
