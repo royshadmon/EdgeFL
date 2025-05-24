@@ -43,7 +43,7 @@ edgelake_node_port = edgelake_node_url.split(":")[2]
 
 configure_logging(f"node_server_{edgelake_node_port}")
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # Excludes WARNING, ERROR, CRITICAL
+logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 
 # Initialize the Node instance
 node_instance = None
@@ -183,13 +183,8 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                 'User-Agent': 'AnyLog/1.23',
                 'command': f'blockchain get {index}-r{current_round}'
             }
-            # log headers
-            logger.debug(f"{headers}")
-
             response = requests.get(edgelake_node_url, headers=headers)
-            # log response
-            logger.debug(f"{response}")
-            logger.debug(f"{response.status_code}")
+
             if response.status_code == 200:
                 data = response.json()
                 # logger.debug(f"Response Data: {data}")  # Debugging line
@@ -205,9 +200,7 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                     logger.debug(f"[{index}] Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
-                    # log
                     modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, index)
-                    # log
                     nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
                     logger.info(f"[{index}][Round {current_round}] Step 3 Complete: Model parameters published")
                     current_round += 1
