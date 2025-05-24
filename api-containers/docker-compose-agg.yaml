@@ -28,4 +28,4 @@
 #      - TF_FORCE_GPU_ALLOW_GROWTH=true
 #      - DOCKER_HOST=unix:///var/run/docker.sock
 #
-#    command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
+#    command: ["python", "/app/api-containers/app.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]

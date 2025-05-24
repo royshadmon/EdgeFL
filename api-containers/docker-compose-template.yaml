@@ -7,7 +7,7 @@ services:
     container_name: ${CONTAINER_NAME}
     ports:
       - ${PORT}:${PORT}
-    command: ["python", "/app/api-containers/app2.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
+    command: ["python", "/app/api-containers/app.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
 
 
 

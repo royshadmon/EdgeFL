@@ -1,34 +1,51 @@
 import os
 import sys
-import uvicorn
 import argparse
+import uvicorn
 from dotenv import load_dotenv
 
+# Add edgefl directory to Python path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EDGEFL_PATH = os.path.join(PROJECT_ROOT, "edgefl")
+sys.path.append(EDGEFL_PATH)
 
 def main():
-    parser = argparse.ArgumentParser(description="Run uvicorn server with environment variable configuration")
+    parser = argparse.ArgumentParser(description="Run server based on environment variables")
     parser.add_argument('--env-file', type=str, help='Path to .env file to load')
+    parser.add_argument('--port', type=int, help='Override port from env file')
     args = parser.parse_args()
 
     # Load environment variables from file if specified
     if args.env_file and os.path.exists(args.env_file):
         load_dotenv(args.env_file)
+    else:
+        load_dotenv()  # Load from default .env if it exists
 
-    # Get configuration from environment variables
+    # Determine which server to run based on SERVER_TYPE
+    server_type = os.getenv('SERVER_TYPE', '').lower()
+
+    if not server_type:
+        print("ERROR: SERVER_TYPE environment variable not set. Set to 'aggregator' or 'node'")
+        sys.exit(1)
+
+    # Get port from args, env var, or default
+    port = args.port if args.port else int(os.getenv('PORT', 8080))
     host = os.getenv('HOST', '0.0.0.0')
-    port = int(os.getenv('PORT', 8080))
-    app_module = os.getenv('APP_MODULE', 'aggregator_server:app')
     reload = os.getenv('RELOAD', 'False').lower() == 'true'
 
-    print(f"Starting server with {app_module} on {host}:{port} (reload={reload})")
+    print(f"Starting {server_type} server on {host}:{port}")
 
-    # Start the uvicorn server
-    uvicorn.run(
-        app_module,
-        host=host,
-        port=port,
-        reload=reload
-    )
+    if server_type == 'aggregator':
+        app_module = "platform_components.aggregator.aggregator_server:app"
+        uvicorn.run(app_module, host=host, port=port, reload=reload)
+
+    elif server_type == 'node':
+        app_module = "platform_components.node.node_server:app"
+        uvicorn.run(app_module, host=host, port=port, reload=reload)
+
+    else:
+        print(f"ERROR: Invalid SERVER_TYPE '{server_type}'. Must be 'aggregator' or 'node'")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
