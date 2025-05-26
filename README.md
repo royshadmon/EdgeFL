@@ -415,11 +415,36 @@ To build the image, run the following command from the root directory of the pro
 docker build -t edgefl:latest -f api-containers/Dockerfile .
 ```
 
-To run the APIs, you can use the following command:
+You can run any of the APIs using Docker Compose. The `docker-compose.yml` file in the `api-containers` directory defines the services for the aggregator and nodes.
 
+To run all of the APIs:
 ```bash
 cd api-containers
 docker compose up -d
+```
+
+The run only specific API services in the `docker-compose.yml` file, you can add the `--no-deps` flag to avoid starting dependent services. This is useful for testing or development purposes. 
+The template for running a set of services is as follows:
+```bash
+cd api-containers
+docker compose up -d --no-deps <service1> <service2> ...
+```
+Where `<service1>`, `<service2>`, etc. are the names of services defined in the `docker-compose.yml` file.
+
+
+Example A: to run only the Aggregator
+```bash
+cd api-containers
+docker compose up --no-deps -d aggregator
+```
+Example B: to run the aggregator and two nodes
+```bash
+cd api-containers
+docker compose up --no-deps -d aggregator node1 node2
+```
+You can then add a node by running the following command:
+```bash
+docker compose up --no-deps -d node3
 ```
 
 To see the endpoints and interact with the APIs, you can use the following URLs:
