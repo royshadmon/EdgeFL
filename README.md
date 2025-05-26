@@ -357,7 +357,7 @@ MODULE_NAME=MnistDataHandler
 
 PORT=<operator port num> #(aggregator port num + operator num = operator port num)
 SERVER_TYPE=node
-TMP_DIR=tmp_dir/node1/
+TMP_DIR=tmp_dir/node<operator number>/
 # External IP Address for CURL commands to Edgelake
 EXTERNAL_IP="<host ip>:32149"
 EXTERNAL_TCP_IP_PORT="<host ip>:32148"
@@ -366,13 +366,13 @@ EXTERNAL_TCP_IP_PORT="<host ip>:32148"
 PSQL_DB_NAME="mnist_fl"
 PSQL_DB_USER="demo"
 PSQL_DB_PASSWORD="passwd"
-PSQL_HOST=<psql ip>
+PSQL_HOST=<host ip>
 PSQL_PORT="5432"
 
 FILE_WRITE_DESTINATION="file_write"
 
 EDGELAKE_DOCKER_RUNNING="True"
-EDGELAKE_DOCKER_CONTAINER_NAME="operator1"
+EDGELAKE_DOCKER_CONTAINER_NAME="operator<operator number>"
 DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
 ```
 The aggregator env file,
@@ -399,7 +399,7 @@ EXTERNAL_TCP_IP_PORT="<host ip>:32048"
 PSQL_DB_NAME="mnist_fl"
 PSQL_DB_USER="demo"
 PSQL_DB_PASSWORD="passwd"
-PSQL_HOST=<psql ip>
+PSQL_HOST=<host ip>
 PSQL_PORT="5432"
 
 FILE_WRITE_DESTINATION="file_write"
