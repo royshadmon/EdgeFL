@@ -137,7 +137,7 @@ dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.nod
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
-predefined training application file here: `edgefl/platform_components/data_handlers/custom_data_handler.py`.
+predefined training application file here: `custom_data_handler.py`.
 
 ## Initialize model parameters and training application, start training, executing inference
 Execute the following `curl` command to initialize training. As a result of this command,
@@ -155,7 +155,10 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8082",
     "http://localhost:8083"
   ],
-  "index": "test-index"
+  "index": "test-index",
+  "module": "MnistDataHandler",
+  "module_file": "custom_data_handler.py",
+  "db_name": "mnist_fl"
 }'
 ```
 After, start the training process:
@@ -181,7 +184,10 @@ curl -X POST http://localhost:8080/init \
   "nodeUrls": [
     "http://localhost:8084"
   ],
-  "index": "test-index"
+  "index": "test-index",
+  "module": "MnistDataHandler",
+  "module_file": "custom_data_handler.py",
+  "db_name": "mnist_fl"
 }'
 ```
 
@@ -211,19 +217,66 @@ At any point, you can execute edge inference directly on the node.
 This can be done on each training node. The output will be the accuracy based on the local test data
 held out from training.
 ```bash
-curl -X POST http://localhost:8081/inference
-curl -X POST http://localhost:8082/inference
-curl -X POST http://localhost:8083/inference
-curl -X POST http://localhost:8084/inference
+curl -X POST http://localhost:8081/inference/test-index
+curl -X POST http://localhost:8082/inference/test-index
+curl -X POST http://localhost:8083/inference/test-index
+curl -X POST http://localhost:8084/inference/test-index
 ```
 
 An example output looks like this:
 ```bash
-curl -X POST http://localhost:8081/inference ; curl -X POST http://localhost:8082/inference ; curl -X POST http://localhost:8083/inference ; curl -X POST http://localhost:8084/inference
-{"message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
+curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index ; curl -X POST http://localhost:8084/inference/test-index
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
+```
+
+You can also do a direct inference on the aggregator which requires inputting test data and its test
+labels (i.e. expected predictions). The label must correspond to the given input and will be used to
+compare against the actual predictions of the model's testing output. The data type of the test data
+can be anything as long as fits the data type of the dataset. Below is an example for MNIST:
+```bash
+curl -X POST http://localhost:8080/direct-inference/test-index \
+-H "Content-Type: application/json" \
+-d '{
+  "input": [
+    [0,244,281,...(780 more numbers),0]
+  ],
+  "labels": [
+    3
+  ]
+}'
+```
+
+Here is one for the WINNIIO dataset:
+```bash
+curl -X POST http://localhost:8080/direct-inference/test-index \
+-H "Content-Type: application/json" \
+-d '{
+  "input": [
+    {
+        "actuatorState": "9770",
+        "co2Value": "418",
+        "eventCount": "0",
+        "humidity": "33.8",
+        "switchStatus": "0.021216271052304",
+        "temperature": "22.02"
+    },
+    {
+        "actuatorState": "0",
+        "co2Value": "425.8333333333333",
+        "eventCount": "0",
+        "humidity": "48.22",
+        "switchStatus": "0.0137001034912",
+        "temperature": "21.67"
+    }
+  ],
+  "labels": [
+    "22.02",
+    "21.59"
+  ]
+}'
 ```
 
 ## Resolving common issues
@@ -287,6 +340,126 @@ cd EdgeLake/postgres
 docker compose down
 ```
 
+## Docker Containerization of APIs
+
+The APIs are containerized using Docker. Before starting the APIs, ensure that 
+```bash
+edgefl/env_files/mnist-docker/mnist1.env
+edgefl/env_files/mnist-docker/mnist2.env
+edgefl/env_files/mnist-docker/mnist3.env
+```
+are configured like this:
+```bash
+GITHUB_DIR=/app/edgefl
+
+TRAINING_APPLICATION_DIR=platform_components/data_handlers
+MODULE_NAME=MnistDataHandler
+
+PORT=<operator port num> #(aggregator port num + operator num = operator port num)
+SERVER_TYPE=node
+TMP_DIR=tmp_dir/node<operator number>/
+# External IP Address for CURL commands to Edgelake
+EXTERNAL_IP="<host ip>:32149"
+EXTERNAL_TCP_IP_PORT="<host ip>:32148"
+
+# LOCAL PSQL DB NAME
+PSQL_DB_NAME="mnist_fl"
+PSQL_DB_USER="demo"
+PSQL_DB_PASSWORD="passwd"
+PSQL_HOST=<host ip>
+PSQL_PORT="5432"
+
+FILE_WRITE_DESTINATION="file_write"
+
+EDGELAKE_DOCKER_RUNNING="True"
+EDGELAKE_DOCKER_CONTAINER_NAME="operator<operator number>"
+DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
+```
+The aggregator env file,
+```bash
+edgefl/env_files/mnist-docker/mnist-agg.env
+```
+
+Should be configured like this:
+```bash
+GITHUB_DIR=/app/edgefl/
+
+TRAINING_APPLICATION_DIR=platform_components/data_handlers
+MODULE_NAME=MnistDataHandler
+
+PORT=8080
+SERVER_TYPE=aggregator
+
+TMP_DIR=tmp_dir/agg/
+# External IP Address for CURL commands to Edgelake
+EXTERNAL_IP="<host ip>:32049"
+EXTERNAL_TCP_IP_PORT="<host ip>:32048"
+
+# LOCAL PSQL DB NAME
+PSQL_DB_NAME="mnist_fl"
+PSQL_DB_USER="demo"
+PSQL_DB_PASSWORD="passwd"
+PSQL_HOST=<host ip>
+PSQL_PORT="5432"
+
+FILE_WRITE_DESTINATION="file_write"
+AGG_NAME=agg
+
+EDGELAKE_DOCKER_RUNNING="True"
+EDGELAKE_DOCKER_CONTAINER_NAME=master
+DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
+```
+To build the image, run the following command from the root directory of the project:
+
+```bash
+docker build -t edgefl:latest -f api-containers/Dockerfile .
+```
+
+You can run any of the APIs using Docker Compose. The `docker-compose.yml` file in the `api-containers` directory defines the services for the aggregator and nodes.
+
+To run all of the APIs:
+```bash
+cd api-containers
+docker compose up -d
+```
+
+The run only specific API services in the `docker-compose.yml` file, you can add the `--no-deps` flag to avoid starting dependent services. This is useful for testing or development purposes. 
+The template for running a set of services is as follows:
+```bash
+cd api-containers
+docker compose up -d --no-deps <service1> <service2> ...
+```
+Where `<service1>`, `<service2>`, etc. are the names of services defined in the `docker-compose.yml` file.
+
+
+Example A: to run only the Aggregator
+```bash
+cd api-containers
+docker compose up --no-deps -d aggregator
+```
+Example B: to run the aggregator and two nodes
+```bash
+cd api-containers
+docker compose up --no-deps -d aggregator node1 node2
+```
+You can then add a node by running the following command:
+```bash
+docker compose up --no-deps -d node3
+```
+
+To see the endpoints and interact with the APIs, you can use the following URLs:
+```bash
+127.0.0.1:8080/docs # aggregator
+
+127.0.0.1:8081/docs # nodes
+127.0.0.1:8082/docs
+127.0.0.1:8083/docs
+```
+
+To take down the containers, simply run:
+```bash
+docker compose down
+```
 
 
 
