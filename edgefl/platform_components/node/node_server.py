@@ -18,6 +18,7 @@ import os
 import argparse
 import requests
 import warnings
+import asyncio
 
 from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
@@ -119,13 +120,23 @@ def init_node(request: InitNodeRequest):
         # print(f"starting round numbers: {node_instance.round_number}")
         # print(f"training apps: {node_instance.data_handlers}")
 
+        # CFL:
         # Start event listener for start round
+        # listener_thread = threading.Thread(
+        #     name=f"{replica_name}--{index}",
+        #     target=listen_for_start_round,
+        #     args=(node_instance, index, lambda: stop_listening_thread)
+        # )
+        # listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
+        # listener_thread.start()
+
+        # DFL:
         listener_thread = threading.Thread(
             name=f"{replica_name}--{index}",
-            target=listen_for_start_round,
-            args=(node_instance, index, lambda: stop_listening_thread)
+            target=run_dfl_training_loop,
+            args=(node_instance, index),
+            daemon=True
         )
-        listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
         listener_thread.start()
 
         return {
@@ -209,6 +220,48 @@ def listen_for_start_round(nodeInstance, index, stop_event):
         except Exception as e:
             logger.error(f"[{index}] Error in listener thread: {str(e)}")
             time.sleep(2)
+
+# DFL
+def run_dfl_training_loop(node_instance, index, max_rounds=10, min_params=2):
+    current_round = node_instance.round_number.get(index, 1)
+
+    while current_round <= max_rounds:
+        try:
+            node_instance.logger.info(f"[{index}] [Round {current_round}] Starting decentralized training")
+
+            # 1. Get peer models (skip on round 1) then their weights
+            if current_round > 1:
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Waiting for {min_params} peer models...")
+                # asynchronously poll from blockchain to get other training nodes' model weights
+                peer_params = asyncio.run(node_instance.listen_for_update_dfl(min_params, current_round - 1, index))
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Retrieved {len(peer_params)} peer models")
+                # combine the fetched training nodes' params
+                agg_weights = node_instance.data_handlers[index].aggregate_model_weights(peer_params)
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Aggregated weights from peers")
+                # update the current nodes' model
+                node_instance.data_handlers[index].update_model(agg_weights)
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Done updating the model weights!")
+
+            # 2. Local training with the updated model
+            modelUpdate_metadata = node_instance.dfl_train_model_params(
+                round_number=current_round,
+                index=index
+            )
+            node_instance.logger.info(f"[{index}] [Round {current_round}] Local training complete")
+
+            # 3. Publish to blockchain so that other nodes can fetch
+            node_instance.add_node_params(current_round, modelUpdate_metadata, index)
+            node_instance.logger.info(f"[{index}] [Round {current_round}] Published model to blockchain")
+
+            current_round += 1
+            node_instance.round_number[index] = current_round
+
+            time.sleep(2)  # Optionally throttle to reduce load
+        except Exception as e:
+            node_instance.logger.error(f"[{index}] Error in DFL loop round {current_round}: {str(e)}")
+            time.sleep(5)
+
+
 
 # TODO: move to a (helper) file (i.e. 'node_helpers.py'?)
 # Extracts initParams from the policy 'index-r' at the specified index

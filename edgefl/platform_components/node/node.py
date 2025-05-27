@@ -7,6 +7,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 import logging
 import os
 import pickle
+import requests
 from asyncio import sleep
 
 # import keras
@@ -19,6 +20,7 @@ from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
+from platform_components.lib.modules.local_model_update import LocalModelUpdate
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -268,6 +270,130 @@ class Node:
             copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
             return f'{self.docker_file_write_destination}/{index}/{file}'
         return file_name
+
+
+    # DFL
+    def dfl_train_model_params(self, round_number, index):
+        self.logger.debug(f"[{index}] in train_model_params for round {round_number}")
+
+        weights = self.data_handlers[index].get_weights()
+
+        if round_number == 1:
+            # Update model with weights
+            self.data_handlers[index].update_model(weights)
+
+        # Train model
+        # model_update = self.local_training_handler.train({})
+        # print(f"[INFO] [{index}][Round {round_number}] ========== Model training progress ==========")
+        model_params = self.data_handlers[index].train(round_number)
+        self.logger.info(f"[{index}][Round {round_number}] Step 2 Complete: Model training done")
+
+        # Save and return new weights
+        encoded_params = self.encode_model(model_params)
+        file = f"{round_number}-replica-{self.replica_name}.pkl"
+        # make sure directory exists
+        os.makedirs(os.path.dirname(f"{self.file_write_destination}/{index}/"), exist_ok=True)
+        file_name = f"{self.file_write_destination}/{index}/{file}"
+        with open(f"{file_name}", "wb") as f:
+            f.write(encoded_params)
+
+        if self.docker_running:
+            self.logger.debug(f'[{index}] written to container at {f"{self.docker_file_write_destination}/{index}/{file}"}')
+            copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
+            return f'{self.docker_file_write_destination}/{index}/{file}'
+        return file_name
+
+    # DFL
+    async def listen_for_update_dfl(self, min_params, round_number, index):
+        logger = self.logger
+        decoded_params = {}
+
+        while True:
+            try:
+                headers = {
+                    'User-Agent': 'AnyLog/1.23',
+                    'command': f'blockchain get {index}-a{round_number}'
+                }
+                response = requests.get(self.edgelake_node_url, headers=headers)
+                response.raise_for_status()
+                results = response.json()
+
+                node_params_links = []
+                ip_ports = []
+
+                # for item in results:
+                #     key = f"{index}-a{round_number}"
+                #     if key in item and item[key]['node'] != self.replica_name:  # skip own model
+                #         node_params_links.append(item[key]['trained_params_local_path'])
+                #         ip_ports.append(item[key]['ip_port'])
+                for item in results:
+                    key = f"{index}-a{round_number}"
+                    if key in item:
+                        source_node = item[key]['node']
+                        if source_node != self.replica_name:
+                            link = item[key]['trained_params_local_path']
+                            node_params_links.append(link)
+                            ip_ports.append(item[key]['ip_port'])
+                            logger.info(
+                                f"[{index}] [Round {round_number}] Found peer model from {source_node} at {link}")
+                        else:
+                            logger.debug(f"[{index}] Skipping own model {source_node}")
+
+                # Fetch and decode
+                self.fetch_decoded_params(decoded_params, node_params_links, ip_ports, index)
+
+                if len(decoded_params) >= min_params:
+                    return list(decoded_params.values())
+
+            except Exception as e:
+                logger.error(f"[{index}] DFL listen error: {str(e)}")
+
+            await sleep(2)
+
+    # DFL
+    def fetch_decoded_params(self, decoded_params_dict, node_param_download_links, ip_ports, index):
+        # use the node_param_download_links to get all the file
+        # in the form of tuples, like ["('blobs_admin', 'node_model_updates', '1-replica-node1.pkl')"]
+        # node_ref = db.reference('node_model_updates')
+
+        # Loop through each provided download link to retrieve node parameter objects
+        for i, path in enumerate(node_param_download_links):
+            # Don't fetch for existing paths
+            if path in decoded_params_dict:
+                continue
+
+            try:
+                # Make sure the directory exists
+                filename = path.split('/')[-1]
+                local_path = f'{self.file_write_destination}/{index}/{filename}'
+                if self.docker_running:
+                    docker_file_path = f'{self.docker_file_write_destination}/{index}/{filename}'
+                    response = read_file(self.edgelake_node_url, path,
+                                         docker_file_path, ip_ports[i])
+                    copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name,
+                                             docker_file_path,
+                                             local_path)
+                else:
+                    response = read_file(self.edgelake_node_url, path,
+                                         local_path, ip_ports[i])
+
+                if response.status_code != 200:
+                    raise ValueError(
+                        f"Failed to retrieve node params from link: {filename}. HTTP Status: {response.status_code}"
+                    )
+
+                # Decode the model weights from the file
+                sleep(1)
+                with open(local_path, 'rb') as f:
+                    data = pickle.load(f)
+                if not data:
+                    raise ValueError(f"Missing model_weights in data from file: {filename}")
+
+                decoded_params_dict[path] = LocalModelUpdate(weights=data)
+
+            except Exception as e:
+                self.logger.error(f"Error retrieving data from link {filename}: {str(e)}")
+                continue
 
     def encode_model(self, model_update):
         serialized_data = pickle.dumps(model_update)
