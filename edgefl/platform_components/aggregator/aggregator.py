@@ -39,7 +39,7 @@ class Aggregator:
 
         self.server_ip = ip
         self.server_port = port
-        
+
         self.logger = logger
         self.logger.debug("Aggregator initializing")
 

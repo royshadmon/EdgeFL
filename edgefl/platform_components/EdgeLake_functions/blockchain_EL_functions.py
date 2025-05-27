@@ -75,6 +75,22 @@ def check_policy_inserted(el_url, policy):
 
         return False
 
+def get_policies(el_url, policy_type='*', condition=None):
+    command = f'blockchain get {policy_type} {condition if condition else ""}'
+    headers = {
+        'User-Agent': 'AnyLog/1.23',
+        'Content-Type': 'text/plain',
+        'command': command
+    }
+    response = requests.get(el_url, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f"Request failed with status code {response.status_code}: {response.reason}. Command: {command}")
+
+    data = response.json() # [{policy_name: {..., 'id': ..., ...}}]
+    policies = []
+    for policy in data:
+        policies.append(policy[policy_type])
+    return policies # [{'attr1': ..., 'attr2': ..., ...}, {'attr1': ..., 'attr2': ..., ...}, ...]
 
 def get_policies(el_url, policy_type='*', condition=None):
     command = f'blockchain get {policy_type} {condition if condition else ""}'
@@ -107,6 +123,70 @@ def get_policy_id_by_name(el_url, policy_name):
     policy_id = data[0][policy_name]['id'] # [{policy_name: {..., 'id': ..., ...}}]
     return policy_id
 
+def get_all_databases(edgelake_node_url):
+    """
+    Gets all databases that the specified EdgeLake node is connected to.
+
+    :param edgelake_node_url: The URL of the EdgeLake node to fetch the databases list.
+    :return: Set of all the connected databases.
+    :rtype: set()
+    """
+    command = "get databases"
+    headers = {
+        'User-Agent': 'AnyLog/1.23',
+        'command': command,
+    }
+
+    try:
+        # Send the POST request
+        response = requests.get(edgelake_node_url, headers=headers)
+
+        # Raise an HTTPError if the response code indicates failure
+        response.raise_for_status()
+
+        # Parsing response content
+        response_string = response.content.decode('utf-8') # Initially in bytes
+        lines = response_string.strip().split('\r\n')
+        data_lines = lines[3:]
+
+        database_names = set()
+        for line in data_lines:
+            parts = [part.strip() for part in line.split('|')]
+            if parts and parts[-1] == '':
+                parts = parts[:-1]
+            if len(parts) == 6:
+                database_names.add(parts[0])
+
+        return database_names
+    except requests.exceptions.RequestException as e:
+        raise RequestException(e)
+
+
+def connect_to_db(edgelake_node_url, db_name, user, password, ip, port):
+    """
+    Connect to the database on the given EdgeLake node.
+
+    :param edgelake_node_url: The URL of the EdgeLake node with the database to connect.
+    :param command: The Anylog command to connect databases.
+    """
+    # TODO: add db types if necessary
+    command = (f"connect dbms {db_name} where type = psql"
+                + f" and user = {user} and password = {password}"
+                + f" and ip = {ip} and port = {port} and memory = true")
+
+    headers = {
+        'User-Agent': 'AnyLog/1.23',
+        'command': command,
+    }
+    try:
+        # Send the POST request
+        response = requests.post(edgelake_node_url, headers=headers)
+
+        # Raise an HTTPError if the response code indicates failure
+        response.raise_for_status()
+
+    except requests.exceptions.ConnectionError as e:
+        raise ConnectionError(f"Unable to connect to database: {e}")
 
 def get_all_databases(edgelake_node_url):
     """

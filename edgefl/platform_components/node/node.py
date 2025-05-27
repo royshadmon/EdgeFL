@@ -88,7 +88,7 @@ class Node:
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
             # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replica_name}/{self.index}/")
-            
+
     def initialize_training_app_on_index(self, index):
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
