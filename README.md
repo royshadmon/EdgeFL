@@ -456,6 +456,11 @@ To see the endpoints and interact with the APIs, you can use the following URLs:
 127.0.0.1:8083/docs
 ```
 
+To take down the containers, simply run:
+```bash
+docker compose down
+```
+
 
 
 
