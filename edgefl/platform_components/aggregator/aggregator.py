@@ -55,6 +55,8 @@ class Aggregator:
         self.module_paths = {}
         self.training_apps = {}
         self.databases = {}
+
+        self.end_round = {}
         # self.fetch_indexes_and_modules()
 
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
