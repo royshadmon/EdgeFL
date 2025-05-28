@@ -74,6 +74,7 @@ class InitNodeRequest(BaseModel):
     module_name: str
     module_path: str
     db_name: str
+    training_method: str = "CFL"  # Default to centralized
 
 
 @app.post('/init-node')
@@ -88,6 +89,7 @@ def init_node(request: InitNodeRequest):
         index = request.replica_index
         module_name = request.module_name
         module_path = request.module_path
+        training_method = request.training_method
 
         db_name = request.db_name # testing winniio_fl + mnist_fl DBs
 
@@ -120,23 +122,22 @@ def init_node(request: InitNodeRequest):
         # print(f"starting round numbers: {node_instance.round_number}")
         # print(f"training apps: {node_instance.data_handlers}")
 
-        # CFL:
-        # Start event listener for start round
-        # listener_thread = threading.Thread(
-        #     name=f"{replica_name}--{index}",
-        #     target=listen_for_start_round,
-        #     args=(node_instance, index, lambda: stop_listening_thread)
-        # )
-        # listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
-        # listener_thread.start()
-
-        # DFL:
-        listener_thread = threading.Thread(
-            name=f"{replica_name}--{index}",
-            target=run_dfl_training_loop,
-            args=(node_instance, index),
-            daemon=True
-        )
+        if training_method == "DFL":
+            logger.info(f"[{index}] Node {replica_name} using DFL mode")
+            listener_thread = threading.Thread(
+                name=f"{replica_name}--DFL-{index}",
+                target=run_dfl_training_loop,
+                args=(node_instance, index),
+                daemon=True
+            )
+        else: # CFL
+            logger.info(f"[{index}] Node {replica_name} using CFL mode")
+            listener_thread = threading.Thread(
+                name=f"{replica_name}--CFL-{index}",
+                target=listen_for_start_round,
+                args=(node_instance, index, lambda: stop_listening_thread),
+                daemon=True
+            )
         listener_thread.start()
 
         return {
