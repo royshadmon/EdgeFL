@@ -285,16 +285,19 @@ cd EdgeLake/postgres
 docker compose down
 ```
 
-
-
-
-
-
-
-
-
-
-
+# Running Vizualization
+Change the ips of the prometheus.yml file. You can obtain it by entering ifconfig into terminal. Apply the ip address to all of the nodes and the master node.
+```bash
+  - job_name: 'master'
+    static_configs:
+      - targets: ['Your IP:8000']
+```
+Need to start the docker container for grafana and prometheus 
+```bash
+cd EdgeLake/docker_makefile/monitoring
+docker compose up -d
+```
+Load up http://localhost:3000/ in your browser and enter username: admin password: admin
 
 
 
