@@ -285,7 +285,7 @@ cd EdgeLake/postgres
 docker compose down
 ```
 
-# Running Vizualization
+# Running Visualization
 Change the ips of the prometheus.yml file. You can obtain it by entering ifconfig into terminal. Apply the ip address to all of the nodes and the master node.
 ```bash
   - job_name: 'master'
