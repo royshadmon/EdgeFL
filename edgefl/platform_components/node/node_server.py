@@ -230,8 +230,14 @@ def run_dfl_training_loop(node_instance, index, max_rounds=10, min_params=2):
         try:
             node_instance.logger.info(f"[{index}] [Round {current_round}] Starting decentralized training")
 
+            #0. for first round, just update with default weights
+            if current_round == 1:
+                weights = node_instance.data_handlers[index].get_weights()
+                # Update model with weights
+                node_instance.data_handlers[index].update_model(weights)
+
             # 1. Get peer models (skip on round 1) then their weights
-            if current_round > 1:
+            elif current_round > 1:
                 node_instance.logger.info(f"[{index}] [Round {current_round}] Waiting for {min_params} peer models...")
                 # asynchronously poll from blockchain to get other training nodes' model weights
                 peer_params = asyncio.run(node_instance.listen_for_update_dfl(min_params, current_round - 1, index))

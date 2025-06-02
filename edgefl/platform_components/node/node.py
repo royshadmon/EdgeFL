@@ -271,16 +271,12 @@ class Node:
             return f'{self.docker_file_write_destination}/{index}/{file}'
         return file_name
 
-
-    # DFL
+    '''
+    dfl_train_model_params()
+        - 
+    '''
     def dfl_train_model_params(self, round_number, index):
-        self.logger.debug(f"[{index}] in train_model_params for round {round_number}")
-
-        weights = self.data_handlers[index].get_weights()
-
-        if round_number == 1:
-            # Update model with weights
-            self.data_handlers[index].update_model(weights)
+        self.logger.debug(f"[{index}] in dfl_train_model_params for round {round_number}")
 
         # Train model
         # model_update = self.local_training_handler.train({})
@@ -303,7 +299,10 @@ class Node:
             return f'{self.docker_file_write_destination}/{index}/{file}'
         return file_name
 
-    # DFL
+    '''
+    listen_for_update_dfl(self, min_params, round_number, index):
+        - helper for a singular training node to asynchronously poll the blockchain for other training nodes' model params/weights
+    '''
     async def listen_for_update_dfl(self, min_params, round_number, index):
         logger = self.logger
         decoded_params = {}
@@ -350,7 +349,7 @@ class Node:
 
             await sleep(2)
 
-    # DFL
+    # same as in aggregator.py
     def fetch_decoded_params(self, decoded_params_dict, node_param_download_links, ip_ports, index):
         # use the node_param_download_links to get all the file
         # in the form of tuples, like ["('blobs_admin', 'node_model_updates', '1-replica-node1.pkl')"]
