@@ -176,6 +176,10 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
                 'training_method': training_method
             })
 
+            # init end_round
+
+
+
             with aggregator.lock:
                 if response.status_code == 200:
                     aggregator.node_urls[index].add(node_url)
@@ -276,7 +280,11 @@ async def init_training(request: TrainingRequest):
 def start_training(aggregator, initial_params, starting_round, end_round, index):
     try:
         logger.info("[AGGREGATOR_SERVER.py] inside start_training!!")
-        for r in range(starting_round, end_round + 1):
+
+        aggregator.end_round[index] = end_round
+        # for r in range(starting_round, end_round + 1):
+        while starting_round <= aggregator.end_round[index]:
+            r = starting_round
             aggregator.round_number[index] = r
             logger.info(f"[{index}] Starting training round {r}")
             aggregator.start_round(initial_params, r, index)
@@ -308,6 +316,8 @@ def start_training(aggregator, initial_params, starting_round, end_round, index)
                 raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
 
             aggregator.training_apps[index].update_model(weights)
+
+            starting_round += 1
 
         logger.info(f"[{index}] Training completed successfully")
         return {
@@ -473,6 +483,15 @@ async def continue_training(request: ContinueTrainingRequest):
                 status_code=400,
                 detail=f"[{index}] No previous training found"
             )
+
+        # if mid training, we don't need to do anything but update the end_round value
+        if aggregator.round_number[index] < aggregator.end_round[index]:
+            aggregator.end_round[index] = aggregator.end_round[index] + additional_rounds
+            return {
+                "status": "success",
+                "message": f"Extended training at index {index} to round {aggregator.end_round[index]}: current round is {aggregator.round_number[index]}"
+            }
+
 
         # Fetch the most recent aggregated model parameters
         initial_params = get_last_aggregated_params(index)

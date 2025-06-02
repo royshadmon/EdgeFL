@@ -2,5 +2,8 @@ venv
 __pycache__/
 .DS_Store
 edgefl/file_write/
+edgefl/tmp_dir/
+edgefl/env_files/mnist
+EdgeLake
 .idea/
 edgefl/logs/

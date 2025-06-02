@@ -24,11 +24,12 @@ def write_file(edgelake_node_url, dbms, table, filename):
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'application/octet-stream',  # Specify binary content
         'command': f'file store where dbms = {dbms} and table = {table} and dest = {filename.split("/")[-1]}'
+        # 'command': f'file store where dbms = {dbms} and table = {table} and dest = {filename}'
     }
 
     with open(filename, 'rb') as f:
         binary_data = f.read()
-        response = requests.post(edgelake_node_url, headers=headers, data=binary_data)
+        response = requests.post(edgelake_node_url, headers=headers, data=binary_data, verify=False)
     return response
 
 
@@ -171,8 +172,10 @@ def read_file_mongo(edgelake_node_url, dbms, table, filename, dest, ip_port):
 
 
 if __name__ == '__main__':
-    file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
-    # write_file(f"http://192.168.1.118:32049", "blobs_admin", "my_table",
-    #            f"{file_write_destination}/node1/1-replica-node1.pkl")
-    response = read_file(f"http://192.168.1.118:32048", "blobs_winniio_fl", "node_model_updates", "1-replica-node3.pkl", f"{file_write_destination}/aggregator/1-replica-node1.pkl", "192.53.121.36:32148")
+    # file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
+    response = write_file(f"http://192.168.1.125:32049", "blobs_mydb", "admin",
+               f"/Users/roy/test2.txt")
     print(response.status_code)
+    # the last ip_port variable is the node in which you want to get the file from. edgelake_node_url is the node that acts as your gateway to the anylog network
+    # after the below command, test2.txt should be in /Users/roy/new_dir
+    response = read_file_mongo(f"http://192.168.1.125:32049", "blobs_mydb", "admin", "test2.txt", f"/Users/roy/my_file2.txt", "192.168.1.125:32049")
