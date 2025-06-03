@@ -287,6 +287,7 @@ docker compose down
 
 # Running Visualization
 Change the ips of the prometheus.yml file. You can obtain it by entering ifconfig into terminal. Apply the ip address to all of the nodes and the master node.
+Example:
 ```bash
   - job_name: 'master'
     static_configs:
