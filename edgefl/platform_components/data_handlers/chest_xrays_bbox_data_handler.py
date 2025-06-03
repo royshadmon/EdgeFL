@@ -10,6 +10,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 from keras.src.metrics.metrics_utils import confusion_matrix
 
 # from sklearn.preprocessing import MinMaxScaler
@@ -34,6 +35,18 @@ from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
+load_dotenv("./../../env_files/chest_xrays_bbox/chest_xrays_bbox1.env") # change path if respective env is elsewhere
+
+CLASSES = [
+    "Infiltrate",
+    "Atelectasis",
+    "Pneumonia",
+    "Cardiomegaly",
+    "Effusion",
+    "Pneumothorax",
+    "Mass",
+    "Nodule"
+]
 
 class ChestXraysBBoxDataHandler():
     def __init__(self, node_name, db_name):
@@ -64,9 +77,15 @@ class ChestXraysBBoxDataHandler():
 
         self.node_name = node_name
         self.fl_model = self.model_def()
+        # self.initialize_model()
 
+    def initialize_model(self):
+        self.load_dataset(self.node_name, 1)
+        self.fl_model = self.model_def()
 
     def model_def(self):
+        # num_classes = len(self.training_generator.class_indices)
+
         model = Sequential([
             Conv2D(32, (3, 3), activation="relu", input_shape=(224, 224, 3)),
             MaxPooling2D((2, 2)),
@@ -77,7 +96,8 @@ class ChestXraysBBoxDataHandler():
             Flatten(),
             Dense(128, activation="relu"),
             Dropout(0.5),
-            Dense(9, activation="softmax") # 9 unique labels
+            Dense(8, activation="softmax") # 7 unique labels
+            # Dense(num_classes, activation="softmax")
         ])
 
         model.compile(
@@ -96,18 +116,8 @@ class ChestXraysBBoxDataHandler():
         :param nb_points: Number of data points to fetch for training and testing datasets.
         :type nb_points: int
         """
-        query_train = f"""sql {self.db_name}
-            SELECT image, width, height, class, x_min, y_min, x_max, y_max
-            FROM node_{node_name}
-            WHERE round_number = {round_number}
-            AND data_type = 'train'
-        """
-        query_test = f"""sql {self.db_name}
-            SELECT image, width, height, class, x_min, y_min, x_max, y_max
-            FROM node_{node_name}
-            WHERE round_number = {round_number}
-            AND data_type = 'test'
-        """
+        query_train = f"""sql {self.db_name} SELECT image, width, height, class, x_min, y_min, x_max, y_max FROM node_{node_name} WHERE round_number = {round_number}AND data_type = 'train'"""
+        query_test = f"""sql {self.db_name} SELECT image, width, height, class, x_min, y_min, x_max, y_max FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"""
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
@@ -150,14 +160,13 @@ class ChestXraysBBoxDataHandler():
         self.load_dataset(node_name=self.node_name, round_number=round_number)
 
         early_stopping = EarlyStopping(
-            monitor="val_loss",
+            monitor="loss",
             patience=10,
             restore_best_weights=True
         )
 
         history = self.fl_model.fit(
             self.training_generator,
-            validation_data=self.testing_generator,
             callbacks=[early_stopping],
             steps_per_epoch=30,
             epochs=1,
@@ -183,7 +192,8 @@ class ChestXraysBBoxDataHandler():
             target_size=(224, 224),
             batch_size=batch_size,
             class_mode="categorical",
-            subset="training"
+            classes=CLASSES,
+            verbose=0
         )
 
         self.testing_generator = self.data_generator.flow_from_dataframe(
@@ -194,7 +204,8 @@ class ChestXraysBBoxDataHandler():
             target_size=(224, 224),
             batch_size=batch_size,
             class_mode="categorical",
-            subset="validation"
+            classes=CLASSES,
+            verbose=0
         )
 
     # def get_all_test_data(self, node_name):

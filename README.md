@@ -320,6 +320,14 @@ If not, then your IP may be wrong.
 
 Note, to detach from EdgeLake, press ctrl+p+q simultaneously. 
 
+### Chest-Xray Bounding Box Model/Data Handler
+
+- Ensure that the kaggle package is installed via requirements.txt
+- Go to [Kaggle](kaggle.com) and create/sign-in to your Kaggle account
+- Go to your account settings
+- Scroll down to PAI and "create new token" and download the JSON
+- Add the json to /home/{user}/.config/kaggle/kaggle.json
+
 ## Redoing simulation / Clean up
 To redo the simulation, you need to delete the `edgefl/file_write` directory.
 In addition, you need to kill and restart the EdgeLake operators and master node.
