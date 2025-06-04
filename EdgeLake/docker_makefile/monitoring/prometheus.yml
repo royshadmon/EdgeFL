@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'master'
+    static_configs:
+      - targets: ['192.168.1.177:8000']
+
+  - job_name: 'operator1'
+    static_configs:
+      - targets: ['192.168.1.177:8001']
+
+  - job_name: 'operator2'
+    static_configs:
+      - targets: ['192.168.1.177:8002']
+
+  - job_name: 'operator3'
+    static_configs:
+      - targets: ['192.168.1.177:8003']

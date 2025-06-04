@@ -11,6 +11,8 @@ services:
     ports:
       - ${EDGELAKE_SERVER_PORT}:${EDGELAKE_SERVER_PORT}
       - ${EDGELAKE_REST_PORT}:${EDGELAKE_REST_PORT}
+    networks:
+      - edgebridge
     volumes:
       - ${NODE_NAME}-anylog:/app/EdgeLake/anylog
       - ${NODE_NAME}-blockchain:/app/EdgeLake/blockchain
@@ -21,3 +23,7 @@ volumes:
   ${NODE_NAME}-blockchain:
   ${NODE_NAME}-data:
   ${NODE_NAME}-local-scripts:
+
+networks:
+  edgebridge:
+    external: true
