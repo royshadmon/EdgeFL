@@ -64,6 +64,85 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# self initialization for DFL (no reliance on aggregator server)
+class SelfInitRequest(BaseModel):
+    index: str
+    replica_name: str
+    module_name: str
+    module_path: str
+    db_name: str
+    min_params: int = 2
+    max_rounds: int = 10
+
+@app.post('/self-init')
+def self_init(request: SelfInitRequest):
+    global node_instance, listener_thread, stop_listening_thread
+    try:
+        ip = get_local_ip()
+
+        port = os.getenv("PORT")
+        replica_name = request.replica_name
+        index = request.index
+        module_name = request.module_name
+        module_path = request.module_path
+        min_params = request.min_params
+        max_rounds = request.max_rounds
+
+        db_name = request.db_name # testing winniio_fl + mnist_fl DBs
+
+        # Connect to DB if it's not in the EdgeLake node
+        if db_name not in db_list:
+            connect_to_db(edgelake_node_url, db_name, db_user, db_password, db_host, db_port)
+            db_list.add(db_name)
+
+        # Fetch and check for existing data
+        query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
+        check_data = fetch_data_from_db(edgelake_node_url, query)
+        if not check_data:
+            raise ValueError(f"No data found in the database: {db_name}.")
+
+        # Instantiate the Node class
+        logger.info(f"{replica_name} before initialized")
+        if not node_instance:
+            node_instance = Node(replica_name, ip, port, logger)
+
+        if index not in node_instance.databases:
+            node_instance.databases[index] = db_name
+
+        node_instance.initialize_specific_node_on_index(index, module_name, module_path)
+        node_instance.round_number[index] = 1
+
+        logger.info(f"{replica_name} successfully initialized for ({index})")
+
+        logger.info(f"[{index}] Node {replica_name} using DFL mode")
+        listener_thread = threading.Thread(
+            name=f"{replica_name}--DFL-{index}",
+            target=run_dfl_training_loop,
+            args=(node_instance, index, max_rounds, min_params),
+            daemon=True
+        )
+        listener_thread.start()
+
+        return {
+            'status': 'success',
+            'message': 'Node initialized successfully'
+        }
+    except ValueError as e:
+        raise ValueError(
+            f"No data found in the database: {db_name}"
+        )
+    except HTTPException as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"/init-node - {str(e)}"
+        )
+    except ConnectionError as e:
+        raise ConnectionError(
+            f"Unable to access the database tables: {str(e)}"
+        )
+# -- end self init ---
+
+
 
 class InitNodeRequest(BaseModel):
     replica_name: str
@@ -74,7 +153,6 @@ class InitNodeRequest(BaseModel):
     module_name: str
     module_path: str
     db_name: str
-    training_method: str = "CFL"  # Default to centralized
 
 
 @app.post('/init-node')
@@ -89,7 +167,6 @@ def init_node(request: InitNodeRequest):
         index = request.replica_index
         module_name = request.module_name
         module_path = request.module_path
-        training_method = request.training_method
 
         db_name = request.db_name # testing winniio_fl + mnist_fl DBs
 
@@ -122,22 +199,13 @@ def init_node(request: InitNodeRequest):
         # print(f"starting round numbers: {node_instance.round_number}")
         # print(f"training apps: {node_instance.data_handlers}")
 
-        if training_method == "DFL":
-            logger.info(f"[{index}] Node {replica_name} using DFL mode")
-            listener_thread = threading.Thread(
-                name=f"{replica_name}--DFL-{index}",
-                target=run_dfl_training_loop,
-                args=(node_instance, index),
-                daemon=True
-            )
-        else: # CFL
-            logger.info(f"[{index}] Node {replica_name} using CFL mode")
-            listener_thread = threading.Thread(
-                name=f"{replica_name}--CFL-{index}",
-                target=listen_for_start_round,
-                args=(node_instance, index, lambda: stop_listening_thread),
-                daemon=True
-            )
+        # Start event listener for start round
+        listener_thread = threading.Thread(
+            name=f"{replica_name}--{index}",
+            target=listen_for_start_round,
+            args=(node_instance, index, lambda: stop_listening_thread)
+        )
+        listener_thread.daemon = True  # Make thread daemon so it exits when main thread exits
         listener_thread.start()
 
         return {
@@ -157,6 +225,7 @@ def init_node(request: InitNodeRequest):
         raise ConnectionError(
             f"Unable to access the database tables: {str(e)}"
         )
+
 
 '''
 /receive_data [POST] (data)

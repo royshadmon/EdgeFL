@@ -55,7 +55,6 @@ class InitRequest(BaseModel):
     module: str
     module_file: str
     db_name: str
-    training_method: str = "CFL"
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -86,7 +85,6 @@ def init(request: InitRequest):
         node_urls, index = request.nodeUrls, request.index
         module_name, module_file = request.module, request.module_file
         db_name = request.db_name
-        training_method = request.training_method
 
         # Verify filepath exists
         module_path = os.path.join(aggregator.training_app_dir, module_file)
@@ -100,7 +98,7 @@ def init(request: InitRequest):
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
-        initialize_nodes(node_urls, index, module_name, module_path, db_name, training_method)
+        initialize_nodes(node_urls, index, module_name, module_path, db_name)
 
         aggregator.set_module_at_index(index, module_name, module_path)
         aggregator.initialize_index_on_blockchain(index, module_name, module_path, db_name)
@@ -136,7 +134,7 @@ def is_node_online(node_url: str):
     except requests.exceptions.RequestException:
         return False
 
-def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name, training_method):
+def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -172,8 +170,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
                 'round_number': aggregator.round_number[index],
                 'module_name': module_name,
                 'module_path': module_path,
-                'db_name': db_name,
-                'training_method': training_method
+                'db_name': db_name
             })
 
             # init end_round
@@ -279,8 +276,6 @@ async def init_training(request: TrainingRequest):
 
 def start_training(aggregator, initial_params, starting_round, end_round, index):
     try:
-        logger.info("[AGGREGATOR_SERVER.py] inside start_training!!")
-
         aggregator.end_round[index] = end_round
         # for r in range(starting_round, end_round + 1):
         while starting_round <= aggregator.end_round[index]:
