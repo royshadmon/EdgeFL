@@ -475,12 +475,11 @@ curl -X POST http://localhost:8081/self-init -H "Content-Type: application/json"
   "index": "test-index",
   "replica_name": "node1",
   "module_name": "MnistDataHandler",
-  "module_path": "custom_data_handler.py",
+  "module_file": "custom_data_handler.py",
   "db_name": "mnist_fl",
   "min_params": 2,
   "max_rounds": 10
 }'
-
 ```
 If using three training nodes, you want to run these commands three times, focusing on each node (change the replica name and port). Be sure that across all three curls, `min_params` and `max_rounds` are the same.
 
