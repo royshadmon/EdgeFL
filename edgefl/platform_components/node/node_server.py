@@ -69,7 +69,7 @@ class SelfInitRequest(BaseModel):
     index: str
     replica_name: str
     module_name: str
-    module_path: str
+    module_file: str
     db_name: str
     min_params: int = 2
     max_rounds: int = 10
@@ -84,11 +84,16 @@ def self_init(request: SelfInitRequest):
         replica_name = request.replica_name
         index = request.index
         module_name = request.module_name
-        module_path = request.module_path
+        module_file = request.module_file
         min_params = request.min_params
         max_rounds = request.max_rounds
 
         db_name = request.db_name # testing winniio_fl + mnist_fl DBs
+
+        # Verify filepath exists
+        module_path = os.path.join(os.getenv('TRAINING_APPLICATION_DIR'), module_file)
+        if not os.path.exists(os.path.join(os.getenv("GITHUB_DIR"), module_path)):
+            raise FileNotFoundError(f"Module '{module_file}' does not exist within the given path: '{module_path}'.")
 
         # Connect to DB if it's not in the EdgeLake node
         if db_name not in db_list:
@@ -113,6 +118,12 @@ def self_init(request: SelfInitRequest):
         node_instance.round_number[index] = 1
 
         logger.info(f"{replica_name} successfully initialized for ({index})")
+        # logger.info(f"indexes: {node_instance.indexes}")
+        # logger.info(f"module names: {node_instance.module_names}")
+        # logger.info(f"module paths: {node_instance.module_paths}")
+        # logger.info(f"starting round numbers: {node_instance.round_number}")
+        # logger.info(f"training apps: {node_instance.data_handlers}")
+
 
         logger.info(f"[{index}] Node {replica_name} using DFL mode")
         listener_thread = threading.Thread(
