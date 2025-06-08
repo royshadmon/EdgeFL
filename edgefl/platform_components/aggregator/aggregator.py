@@ -3,7 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-
+import gzip
 import os
 from asyncio import sleep
 import ast
@@ -358,10 +358,12 @@ class Aggregator:
         return file_write_path
 
     def encode_params(self, new_model_weights):
+        # serialized_data = gzip.compress(pickle.dumps(new_model_weights)) # maybe, so that we don't stored super large models as is
         serialized_data = pickle.dumps(new_model_weights)
         return serialized_data
 
     def decode_params(self, encoded_model_update):
+        # model_weights = pickle.loads(gzip.decompress(encoded_model_update))
         model_weights = pickle.loads(encoded_model_update)
         return model_weights
 
