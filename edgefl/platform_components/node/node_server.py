@@ -18,6 +18,7 @@ import os
 import argparse
 import requests
 import warnings
+import asyncio
 
 from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
@@ -62,6 +63,96 @@ async def lifespan(app: FastAPI):
     # logger.info("Node server shutting down.")
 
 app = FastAPI(lifespan=lifespan)
+
+# self initialization for DFL (no reliance on aggregator server)
+class SelfInitRequest(BaseModel):
+    index: str
+    replica_name: str
+    module_name: str
+    module_file: str
+    db_name: str
+    min_params: int = 2
+    max_rounds: int = 10
+
+@app.post('/self-init')
+def self_init(request: SelfInitRequest):
+    global node_instance, listener_thread, stop_listening_thread
+    try:
+        ip = get_local_ip()
+
+        port = os.getenv("PORT")
+        replica_name = request.replica_name
+        index = request.index
+        module_name = request.module_name
+        module_file = request.module_file
+        min_params = request.min_params
+        max_rounds = request.max_rounds
+
+        db_name = request.db_name # testing winniio_fl + mnist_fl DBs
+
+        # Verify filepath exists
+        module_path = os.path.join(os.getenv('TRAINING_APPLICATION_DIR'), module_file)
+        if not os.path.exists(os.path.join(os.getenv("GITHUB_DIR"), module_path)):
+            raise FileNotFoundError(f"Module '{module_file}' does not exist within the given path: '{module_path}'.")
+
+        # Connect to DB if it's not in the EdgeLake node
+        if db_name not in db_list:
+            connect_to_db(edgelake_node_url, db_name, db_user, db_password, db_host, db_port)
+            db_list.add(db_name)
+
+        # Fetch and check for existing data
+        query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
+        check_data = fetch_data_from_db(edgelake_node_url, query)
+        if not check_data:
+            raise ValueError(f"No data found in the database: {db_name}.")
+
+        # Instantiate the Node class
+        logger.info(f"{replica_name} before initialized")
+        if not node_instance:
+            node_instance = Node(replica_name, ip, port, logger)
+
+        if index not in node_instance.databases:
+            node_instance.databases[index] = db_name
+
+        node_instance.initialize_specific_node_on_index(index, module_name, module_path)
+        node_instance.round_number[index] = 1
+
+        logger.info(f"{replica_name} successfully initialized for ({index})")
+        # logger.info(f"indexes: {node_instance.indexes}")
+        # logger.info(f"module names: {node_instance.module_names}")
+        # logger.info(f"module paths: {node_instance.module_paths}")
+        # logger.info(f"starting round numbers: {node_instance.round_number}")
+        # logger.info(f"training apps: {node_instance.data_handlers}")
+
+
+        logger.info(f"[{index}] Node {replica_name} using DFL mode")
+        listener_thread = threading.Thread(
+            name=f"{replica_name}--DFL-{index}",
+            target=run_dfl_training_loop,
+            args=(node_instance, index, max_rounds, min_params),
+            daemon=True
+        )
+        listener_thread.start()
+
+        return {
+            'status': 'success',
+            'message': 'Node initialized successfully'
+        }
+    except ValueError as e:
+        raise ValueError(
+            f"No data found in the database: {db_name}"
+        )
+    except HTTPException as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"/init-node - {str(e)}"
+        )
+    except ConnectionError as e:
+        raise ConnectionError(
+            f"Unable to access the database tables: {str(e)}"
+        )
+# -- end self init ---
+
 
 
 class InitNodeRequest(BaseModel):
@@ -146,6 +237,7 @@ def init_node(request: InitNodeRequest):
             f"Unable to access the database tables: {str(e)}"
         )
 
+
 '''
 /receive_data [POST] (data)
     - Endpoint to receive data block from the simulated data stream
@@ -209,6 +301,54 @@ def listen_for_start_round(nodeInstance, index, stop_event):
         except Exception as e:
             logger.error(f"[{index}] Error in listener thread: {str(e)}")
             time.sleep(2)
+
+# DFL
+def run_dfl_training_loop(node_instance, index, max_rounds=10, min_params=2):
+    current_round = node_instance.round_number.get(index, 1)
+
+    while current_round <= max_rounds:
+        try:
+            node_instance.logger.info(f"[{index}] [Round {current_round}] Starting decentralized training")
+
+            #0. for first round, just update with default weights
+            if current_round == 1:
+                weights = node_instance.data_handlers[index].get_weights()
+                # Update model with weights
+                node_instance.data_handlers[index].update_model(weights)
+
+            # 1. Get peer models (skip on round 1) then their weights
+            elif current_round > 1:
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Waiting for {min_params} peer models...")
+                # asynchronously poll from blockchain to get other training nodes' model weights
+                peer_params = asyncio.run(node_instance.listen_for_update_dfl(min_params, current_round - 1, index))
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Retrieved {len(peer_params)} peer models")
+                # combine the fetched training nodes' params
+                agg_weights = node_instance.data_handlers[index].aggregate_model_weights(peer_params)
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Aggregated weights from peers")
+                # update the current nodes' model
+                node_instance.data_handlers[index].update_model(agg_weights)
+                node_instance.logger.info(f"[{index}] [Round {current_round}] Done updating the model weights!")
+
+            # 2. Local training with the updated model
+            modelUpdate_metadata = node_instance.dfl_train_model_params(
+                round_number=current_round,
+                index=index
+            )
+            node_instance.logger.info(f"[{index}] [Round {current_round}] Local training complete")
+
+            # 3. Publish to blockchain so that other nodes can fetch
+            node_instance.add_node_params(current_round, modelUpdate_metadata, index)
+            node_instance.logger.info(f"[{index}] [Round {current_round}] Published model to blockchain")
+
+            current_round += 1
+            node_instance.round_number[index] = current_round
+
+            time.sleep(2)  # Optionally throttle to reduce load
+        except Exception as e:
+            node_instance.logger.error(f"[{index}] Error in DFL loop round {current_round}: {str(e)}")
+            time.sleep(5)
+
+
 
 # TODO: move to a (helper) file (i.e. 'node_helpers.py'?)
 # Extracts initParams from the policy 'index-r' at the specified index

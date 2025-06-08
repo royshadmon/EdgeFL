@@ -105,7 +105,8 @@ the listed variables in the following files `mnist1.env`, `mnist2.env`, `mnist3.
 
 Note that you do not need to change the ports, they're preconfigured to work. 
 
-In addition, update the IP address in for the `EXTERNAL_TCP_IP_PORT` and `EXTERNAL_IP` in the `mnist-agg.env` file.
+In addition, update the IP address in for the `EXTERNAL_TCP_IP_PORT` and `EXTERNAL_IP` in the `mnist-agg.env` file. 
+Double check also to make sure that your `GITHUB_DIR` is pointing the right directory.
 
 Now we are ready to start the simulation.
 
@@ -173,7 +174,7 @@ curl -X POST http://localhost:8080/start-training \
 ```
 
 `totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
-the aggregator should wait for before starting the next round.
+the aggregator should wait for before starting the next round. `index` defines the specific model that is being trained (Note: you may run multiple models/indices on a singular training node, but make sure to wait for initialization before sending a new "init" to ensure no data overwrites).
 
 At any point during the training process, you can add additional nodes to the process by calling initialization again on the new nodes 
 (must use the same `index`) and `minParams` will be dynamically adjusted as necessary.
@@ -469,14 +470,28 @@ To take down the containers, simply run:
 docker compose down
 ```
 
+## Decentralized Federated Learning
 
+[Decentralized Federated Learning](https://ieeexplore.ieee.org/document/10743046) is a more secure approach to the basic “centralized” federated learning approach (as seen above), where there is no aggregator node anymore, but rather, each training node acts as their OWN aggregator. The way it works is that each training node waits for a `minParams` number of nodes before it performs the aggregation itself (rather than having one global aggregator do it for all of them). With centralized FL, having an aggregator poses security concerns and lack of reliance since the data is aggregated only with one server. With DFL, having training nodes do aggregation themselves allows for fault-tolerance in case any of them fail.
 
+Example: With node 1, node 2, and node 3, all three first publish their initial params to the blockchain, assuming `minParams` = 2. Node 1 will wait for node 2 and node 3’s initial params, and once fetched, it will aggregate, and node 1 will then publish those model params to the blockchain. Node 2 will do the same, but for node 1 and node 3, and so forth.
 
+Instead of starting the aggregator server (8080), you only need to initialize the training nodes. Example with training node 1:
 
+```
+curl -X POST http://localhost:8081/self-init -H "Content-Type: application/json" -d '{
+  "index": "test-index",
+  "replica_name": "node1",
+  "module_name": "MnistDataHandler",
+  "module_file": "custom_data_handler.py",
+  "db_name": "mnist_fl",
+  "min_params": 2,
+  "max_rounds": 10
+}'
+```
+If using three training nodes, you want to run these commands three times, focusing on each node (change the replica name and port). Be sure that across all three curls, `min_params` and `max_rounds` are the same.
 
-
-
-
+_Note: DFL is still a work in progress for smaller features. Currently supports: dockerization of APIs, edge inference, running multiple models simultaneously; Not supported: updating minParams, continued training_
 
 
 
