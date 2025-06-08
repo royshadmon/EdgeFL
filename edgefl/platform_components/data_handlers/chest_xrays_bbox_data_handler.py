@@ -87,14 +87,14 @@ class ChestXraysBBoxDataHandler():
         # num_classes = len(self.training_generator.class_indices)
 
         model = Sequential([
-            Conv2D(32, (3, 3), activation="relu", input_shape=(224, 224, 3)),
+            Conv2D(16, (3, 3), activation="relu", input_shape=(224, 224, 1)),
+            MaxPooling2D((2, 2)),
+            Conv2D(32, (3, 3), activation="relu"),
             MaxPooling2D((2, 2)),
             Conv2D(64, (3, 3), activation="relu"),
             MaxPooling2D((2, 2)),
-            Conv2D(128, (3, 3), activation="relu"),
-            MaxPooling2D((2, 2)),
             Flatten(),
-            Dense(128, activation="relu"),
+            Dense(64, activation="relu"),
             Dropout(0.5),
             Dense(8, activation="softmax") # 7 unique labels
             # Dense(num_classes, activation="softmax")
@@ -190,6 +190,7 @@ class ChestXraysBBoxDataHandler():
             x_col="file_path",
             y_col="class",
             target_size=(224, 224),
+            color_mode="grayscale",
             batch_size=batch_size,
             class_mode="categorical",
             classes=CLASSES,
@@ -202,6 +203,7 @@ class ChestXraysBBoxDataHandler():
             x_col="file_path",
             y_col="class",
             target_size=(224, 224),
+            color_mode="grayscale",
             batch_size=batch_size,
             class_mode="categorical",
             classes=CLASSES,
@@ -218,19 +220,9 @@ class ChestXraysBBoxDataHandler():
     # TODO: bbox.direct_inference()
     def direct_inference(self, data, labels: list[float]):
         """
-        Run inference on raw input data against given labels (already in WINNIIO format).
+        Run inference on raw input data against given labels (already in respective format).
         Handles data conversion and validation internally.
         """
-
-        # Validate existence and check there is same number of data inputs as number of labels
-        if not data and not labels and len(data) != len(labels):
-            raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")
-
-        # Validate labels/predictions
-        if all([not isinstance(labels[0], t) for t in [int, float, str]]):
-            raise TypeError(
-                f"Labels must be a list of floats, ints, or str."
-            )
         pass
 
     def run_inference(self):
@@ -239,8 +231,8 @@ class ChestXraysBBoxDataHandler():
         y_pred = np.argmax(y_pred, axis=1)
 
         acc = accuracy_score(y_true, y_pred) * 100
-        cm = confusion_matrix(y_true, y_pred, 9)
-        print(cm)
+        # cm = confusion_matrix(y_true, y_pred, 9)
+        # print(cm)
 
         return acc
 
@@ -254,25 +246,12 @@ class ChestXraysBBoxDataHandler():
     @staticmethod
     def validate_data(values):
         """
-        Validates that the input is a dictionary with exactly six specific keys
-        required for sensor data. Checks for missing or extra keys and raises
-        a ValueError with details if the validation fails.
+
 
         Parameters:
-            values (dict): The dictionary to validate. Expected keys are:
-                - 'actuatorState'
-                - 'co2Value'
-                - 'eventCount'
-                - 'humidity'
-                - 'switchStatus'
-                - 'temperature'
 
         Raises:
-            TypeError: If the input is not a dictionary.
-            ValueError: If there are missing or extra keys, or if the dictionary
-                        does not have exactly six keys.
 
         Returns:
-            bool: True if validation passes.
         """
         pass
