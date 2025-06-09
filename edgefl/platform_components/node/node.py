@@ -88,6 +88,7 @@ class Node:
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
             # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replica_name}/{self.index}/")
+            
 
     def initialize_training_app_on_index(self, index):
         try:
@@ -136,6 +137,7 @@ class Node:
                 'status': 'success',
                 'message': f'Added module "{module_name}" to index {index}'
             }
+        
         except Exception as e: # TODO: raise an actual Error
             return {
                 'status': 'error',
