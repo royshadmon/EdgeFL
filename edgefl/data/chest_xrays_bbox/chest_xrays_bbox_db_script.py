@@ -162,6 +162,7 @@ def main():
         print("Dataset already download")
     else:
         print("Downloading Chest XRays (Bounding Box) dataset...")
+        # https://www.kaggle.com/datasets/huthayfahodeb/nih-chest-x-rays-bbox-version
         kaggle.api.dataset_download_files(
             "huthayfahodeb/nih-chest-x-rays-bbox-version",
             "./raw",

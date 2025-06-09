@@ -3,13 +3,13 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-import gzip
+# import gzip
 import os
 from asyncio import sleep
-import ast
+# import ast
 
 import numpy as np
-import requests
+# import requests
 import pickle
 from threading import Lock
 from dotenv import load_dotenv
