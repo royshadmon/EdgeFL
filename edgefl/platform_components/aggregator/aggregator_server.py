@@ -18,6 +18,7 @@ import requests
 import os
 import threading
 import time
+import socket
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
@@ -28,6 +29,7 @@ import warnings
 
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.exceptions import NodeInitializationError
+import json
 
 warnings.filterwarnings("ignore")
 
@@ -127,24 +129,34 @@ def init(request: InitRequest):
             detail=str(e)
         )
 
-def is_node_online(node_url: str):
+def is_node_online(node_conn:tuple):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(2)
     try:
-        response = requests.get(node_url, timeout=2)
+        s.connect(node_conn)
+        s.close()
         return True
-    except requests.exceptions.RequestException:
+    except (socket.timeout, socket.error):
         return False
+
+    # try:
+    #     response = requests.get(node_url, timeout=2)
+    #     return True
+    # except requests.exceptions.RequestException:
+    #     return False
 
 def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
             ip_port = node_url.split('/')[-1].split(':')
+            ip_port[1] = int(ip_port[1])
             logger.info(f"Initializing model at {node_url}")
 
             # Check that node is online; if it's not, then remove it from node_urls and decrement
             # node_count
 
-            if not is_node_online(node_url):
+            if not is_node_online(tuple(ip_port)):
                 with aggregator.lock:
                     if node_url in aggregator.node_urls[index]:
                         aggregator.node_urls[index].remove(node_url)
@@ -174,9 +186,6 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
             })
 
             # init end_round
-
-
-
             with aggregator.lock:
                 if response.status_code == 200:
                     aggregator.node_urls[index].add(node_url)
@@ -184,6 +193,15 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
                 else:
                     # Rollback node count if request fails
                     aggregator.node_count[index] -= 1
+                    #---------- Sanity check pre-ss --------- #
+                    gather_info = {
+                        'name': aggregator.agg_name,
+                        'urls':aggregator.node_urls,
+                        'database': aggregator.databases,
+
+                    }
+                    logger.debug(f"Aggregator Info: {gather_info}")
+                    # ---------- Sanity check pre-ss --------- #
                     raise NodeInitializationError(
                         status_code=response.status_code,
                         detail=f"Failed to initialize node at {node_url}."

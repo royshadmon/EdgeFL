@@ -31,13 +31,23 @@ warnings.filterwarnings("ignore")
 
 load_dotenv()
 
-db_user = os.getenv("PSQL_DB_USER")
+# node that system_query resides on
+QUERY_NODE_URL=f"htt://{os.getenv('QUERY_NODE_URL')}"
+# Edge Node conntaining data
+EDGE_NODE_CONN=os.getenv('QUERY_NODE_URL')
+# Logical database name
+LOGICAL_DATABASE=[os.getenv('LOGICAL_DATABASE')]
+# Table containing trained data
+TRAIN_TABLE=os.getenv('TRAIN_TABLE')
+# Table containing test data
+TEST_TABLE=os.getenv('TEST_TABLE')
+
+
 db_password = os.getenv("PSQL_DB_PASSWORD")
 db_host = os.getenv("PSQL_HOST")
 db_port = os.getenv("PSQL_PORT")
 
-db_list = set()
-
+db_list = os.getenv('LOGICAL_DATABASE').split(',')
 edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 edgelake_node_port = edgelake_node_url.split(":")[2]
 
@@ -50,13 +60,32 @@ node_instance = None
 listener_thread = None
 stop_listening_thread = False
 
+def check_data():
+    sql_stmt = f'sql {LOGICAL_DATABASE} format=json and stat=false "select count(*) as count from %s"'
+    headers = {
+        'command': None,
+        'User-Agent': 'AnyLog/1.23',
+        'destination': EDGE_NODE_CONN 
+    }
+
+    for table in [TRAIN_TABLE, TEST_TABLE]:
+        headers['command'] = sql_stmt % table
+        try:
+            response = requests.get(url=QUERY_NODE, headers=headers)
+            response.raise_for_status()
+            if int(response.json()['Query'][0]['count']) < 1:
+                raise ValueError(f"No data found in the database: {LOGICAL_DATABASE}.{table}")
+        except Exception as error:
+            raise Exception(f"Failed to execute GET for table {LOGICAL_DATABASE}.{table} (Error: {error})")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_list
     # logger.info(f"Node server on port {edgelake_node_port} starting up.")
 
     # Get all connected databases from the EdgeLake node
-    db_list = get_all_databases(edgelake_node_url)
+    db_list = LOGICAL_DATABASE
 
     yield
     # logger.info("Node server shutting down.")
@@ -72,7 +101,7 @@ class InitNodeRequest(BaseModel):
     round_number: int
     module_name: str
     module_path: str
-    db_name: str
+    LOGICAL_DATABASE: str
 
 
 @app.post('/init-node')
@@ -88,26 +117,27 @@ def init_node(request: InitNodeRequest):
         module_name = request.module_name
         module_path = request.module_path
 
-        db_name = request.db_name # testing winniio_fl + mnist_fl DBs
+        LOGICAL_DATABASE = request.LOGICAL_DATABASE # testing winniio_fl + mnist_fl DBs
 
         # Connect to DB if it's not in the EdgeLake node
-        if db_name not in db_list:
-            connect_to_db(edgelake_node_url, db_name, db_user, db_password, db_host, db_port)
-            db_list.add(db_name)
+        # if LOGICAL_DATABASE not in db_list:
+        #     connect_to_db(edgelake_node_url, LOGICAL_DATABASE, db_user, db_password, db_host, db_port)
+        #     db_list.add(LOGICAL_DATABASE)
 
-        # Fetch and check for existing data
-        query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
-        check_data = fetch_data_from_db(edgelake_node_url, query)
-        if not check_data:
-            raise ValueError(f"No data found in the database: {db_name}.")
+        # # Fetch and check for existing data
+        # query = f"sql {LOGICAL_DATABASE} SELECT * FROM node_{replica_name} LIMIT 1"
+        # check_data = fetch_data_from_db(edgelake_node_url, query)
+        # if not check_data:
+        #     raise ValueError(f"No data found in the database: {LOGICAL_DATABASE}.")
 
+        check_data()
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
         if not node_instance:
             node_instance = Node(replica_name, ip, port, logger)
 
         if index not in node_instance.databases:
-            node_instance.databases[index] = db_name
+            node_instance.databases[index] = LOGICAL_DATABASE
 
         node_instance.initialize_specific_node_on_index(index, module_name, module_path)
         node_instance.round_number[index] = most_recent_round # 1 or current round
@@ -134,7 +164,7 @@ def init_node(request: InitNodeRequest):
         }
     except ValueError as e:
         raise ValueError(
-            f"No data found in the database: {db_name}"
+            f"No data found in the database: {LOGICAL_DATABASE}"
         )
     except HTTPException as e:
         raise HTTPException(
@@ -183,7 +213,7 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                 'User-Agent': 'AnyLog/1.23',
                 'command': f'blockchain get {index}-r{current_round}'
             }
-            response = requests.get(edgelake_node_url, headers=headers)
+            response = requests.get(QUERY_NODE_URL, headers=headers)
 
             if response.status_code == 200:
                 data = response.json()
@@ -221,7 +251,7 @@ def get_most_recent_agg_params(index):
             'User-Agent': 'AnyLog/1.23',
             'command': f'blockchain get {policy_name}'
         }
-        response = requests.get(edgelake_node_url, headers=headers)
+        response = requests.get(QUERY_NODE_URL, headers=headers)
 
         if response.status_code == 200:
             data = response.json()

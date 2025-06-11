@@ -3,7 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-import gzip
+
 import logging
 import os
 import pickle
@@ -88,14 +88,13 @@ class Node:
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
             create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
             # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replica_name}/{self.index}/")
-            
 
     def initialize_training_app_on_index(self, index):
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
-            TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index]) # TODO: this takes too long
+            TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
             self.data_handlers[index] = TrainingApp_class(self.replica_name, self.databases[index]) # Create an instance at index
-        except Exception as e: # TODO: raise an actual Error
+        except Exception as e:
             return {
                 'status': 'error',
                 'message': str(e)
@@ -137,8 +136,7 @@ class Node:
                 'status': 'success',
                 'message': f'Added module "{module_name}" to index {index}'
             }
-        
-        except Exception as e: # TODO: raise an actual Error
+        except Exception as e:
             return {
                 'status': 'error',
                 'message': str(e)
@@ -198,7 +196,7 @@ class Node:
                 'status': 'success',
                 'message': 'node model parameters added successfully'
             }
-        except Exception as e: # TODO: raise an actual Error
+        except Exception as e:
             return {
                 'status': 'error',
                 'message': str(e)
@@ -272,12 +270,10 @@ class Node:
         return file_name
 
     def encode_model(self, model_update):
-        # serialized_data = gzip.compress(pickle.dumps(model_update)) # maybe, so that we don't stored super large models as is
         serialized_data = pickle.dumps(model_update)
         return serialized_data
 
     def decode_params(self, encoded_model_update):
-        # model_weights = pickle.loads(gzip.decompress(encoded_model_update))
         model_weights = pickle.loads(encoded_model_update)
         return model_weights
 
