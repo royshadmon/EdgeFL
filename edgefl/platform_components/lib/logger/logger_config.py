@@ -27,7 +27,7 @@ def configure_logging(file_type="app"):
         format="[%(levelname)s] %(message)s",
         handlers=[
             logging.FileHandler(f"{log_directory}/{file_type}.log"),
-            logging.StreamHandler()
+            logging.StreamHandler(sys.stdout)
         ]
     )
 

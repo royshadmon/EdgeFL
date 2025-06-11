@@ -7,7 +7,7 @@ consisting of three training nodes and one aggregator node. Each node will utili
 own EdgeLake node, such that we will deploy four EdgeLake nodes, three of which have 
 operator roles and one with the master role. The master role is a normal EdgeLake operator
 node but also emulates the same blockchain-like functionality of the blockchain-back shared
-metadata layer. For more infomation about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
+metadata layer. For more information about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
 
 The simulation includes the MNIST dataset, where three nodes collaboratively train a global model
 with MNIST data local to each node (i.e., there is no data movement.). Since the simulation instructions
@@ -16,7 +16,7 @@ so emulate physically distributed data. Nevertheless, each node will utilize its
 operator node (running in a Docker container) to truly simulate a distributed environment.
 
 In addition, there is another example custom data handle from our Winniio partners. This dataset
-is comprised of room temperature data used to predict the temperature of a classroom in two hours.
+consists of room temperature data used to predict the temperature of a classroom in two hours.
 
 Before you get started, please follow the configuration steps precisely.
 
@@ -28,45 +28,45 @@ Assumptions:
 Install all necessary Python packages. Tested on Python3.12.
 ```bash
 cd Anylog-Edgelake-Federated-Learning-Platform
-pip install -r edgefl/requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Deploy Postgres container
 Postgres will become available on your inet IP address. You can determine this through the `ifconfig` command. 
 ```bash
 * Start Docker *
-cd edgefl/EdgeLake/postgres
+cd EdgeLake/postgres
 docker compose up -d
 ```
 
 ## Deploy EdgeLake Master node
 ```bash
-cd edgefl/EdgeLake
-make up EDGELAKE_TYPE=master TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
+cd EdgeLake/
+make up EDGELAKE_TYPE=master TAG=1.3.2501 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
 ```
 Now we need to determine the Master node's Docker IP address. Issue the following command
 ```bash
-cd edgefl/EdgeLake
+cd EdgeLake/
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' master
 ```
 
 With this IP, we can now deploy our three EdgeLake operator nodes. For example, let's assume it's `192.1.1.1`.
 
 ## Deploy EdgeLake Operator node
-Update line 61 (LEDGER_CONN) value in the file `edgefl/EdgeLake/docker_makefile/edgelake_operator1.env`
+Update line 61 (LEDGER_CONN) value in the file `EdgeLake/docker_makefile/edgelake_operator1.env`
 to be `LEDGER_CONN=192.1.1.1:32048` (note that you do not need to change the port).
-In addition, update the `DB_IP` in line 31 with the `192.1.1.1` IP. 
+In addition, update the `DB_IP` in line 31 with the Docker network IP of the Postgres container. 
 
 Do the same for the following files:
-- `edgefl/EdgeLake/docker_makefile/edgelake_operator2.env`
-- `edgefl/EdgeLake/docker_makefile/edgelake_operator3.env`
+- `EdgeLake/docker_makefile/edgelake_operator2.env`
+- `EdgeLake/docker_makefile/edgelake_operator3.env`
 
 Now we can start the operator nodes.
 ```bash
-cd edgefl/EdgeLake
-make up EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
-make up EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
-make up EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
+cd EdgeLake/
+make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
+make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
+make up EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
 ```
 
 ## Validating your EdgeLake network is properly setup
@@ -97,7 +97,7 @@ please contact the EdgeLake maintainers through [EdgeLake's Slack Channel](https
 (the join link is at the bottom of the page).
 
 ## Setting up training node and aggregator configurations
-We now need to update the env files in the `edgefl/env_files/` directory. To do this, we need to update
+We now need to update the env files in the `edgefl/env_files/mnist/` directory. To do this, we need to update
 the listed variables in the following files `mnist1.env`, `mnist2.env`, `mnist3.env` with the inet IP (e.g., `192.1.1.1`):
 - `EXTERNAL_IP`
 - `EXTERNAL_TCP_IP_PORT`
@@ -117,7 +117,7 @@ Note that this only needs to be done once. This will create 3 tables `node_node1
 in the `mnist_fl` database. 
 ```bash
 cd edgefl
-dotenv -f env_files/mnist1.env run -- python -m data.mnist.mnist_db_script
+dotenv -f env_files/mnist/mnist1.env run -- python -m data.mnist.mnist_db_script
 ```
 
 If you want to train on more (or less) data edit lines `153` and `154` in `edgefl/data/mnist/mnist_db_script.py`.
@@ -130,14 +130,14 @@ Now that data is loaded into the database continue to the next step.
 Note to execute the below commands in a new terminal. 
 ```bash
 cd edgefl
-dotenv -f env_files/mnist-agg.env run -- python -m platform_components.aggregator.aggregator_server
-dotenv -f env_files/mnist1.env run -- python -m platform_components.node.node_server --p 8081
-dotenv -f env_files/mnist2.env run -- python -m platform_components.node.node_server --p 8082
-dotenv -f env_files/mnist3.env run -- python -m platform_components.node.node_server --p 8083
+dotenv -f env_files/mnist/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
+dotenv -f env_files/mnist/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
+dotenv -f env_files/mnist/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
+dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
 ```
 
 Once all the nodes are running. We can start the training process. Note that you can view the 
-predefined training application file here: `edgefl/platform_components/data_handlers/custom_data_handler.py`.
+predefined training application file here: `custom_data_handler.py`.
 
 ## Initialize model parameters and training application, start training, executing inference
 Execute the following `curl` command to initialize training. As a result of this command,
@@ -154,7 +154,11 @@ curl -X POST http://localhost:8080/init \
     "http://localhost:8081",
     "http://localhost:8082",
     "http://localhost:8083"
-  ]
+  ],
+  "index": "test-index",
+  "module": "MnistDataHandler",
+  "module_file": "custom_data_handler.py",
+  "db_name": "mnist_fl"
 }'
 ```
 After, start the training process:
@@ -163,28 +167,116 @@ curl -X POST http://localhost:8080/start-training \
 -H "Content-Type: application/json" \
 -d '{
   "totalRounds": 10,
-  "minParams": 3
+  "minParams": 3,
+  "index": "test-index"
 }'
 ```
 
 `totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
-the aggregator should wait for before starting the next round. 
+the aggregator should wait for before starting the next round.
+
+At any point during the training process, you can add additional nodes to the process by calling initialization again on the new nodes 
+(must use the same `index`) and `minParams` will be dynamically adjusted as necessary.
+```bash
+curl -X POST http://localhost:8080/init \
+-H "Content-Type: application/json" \
+-d '{
+  "nodeUrls": [
+    "http://localhost:8084"
+  ],
+  "index": "test-index",
+  "module": "MnistDataHandler",
+  "module_file": "custom_data_handler.py",
+  "db_name": "mnist_fl"
+}'
+```
+
+You can also update `minParams` as well during the training process (or anytime after node initialization). The specified `index`
+must exist in order to update `minParams`.
+```bash
+curl -X POST http://localhost:8080/update-minParams \
+-H "Content-Type: application/json" \
+-d '{
+  "updatedMinParams": 3,
+  "index": "test-index"
+}'
+```
+
+Once the training process is complete, you may choose to do additional rounds of training on the same model.
+```bash
+curl -X POST http://localhost:8080/continue-training \
+ -H "Content-Type: application/json" \
+ -d '{
+   "additionalRounds": 3, 
+   "minParams": 4,
+   "index": "test-index"
+ }'
+ ```
 
 At any point, you can execute edge inference directly on the node.
 This can be done on each training node. The output will be the accuracy based on the local test data
 held out from training.
 ```bash
-curl -X POST http://localhost:8081/inference
-curl -X POST http://localhost:8082/inference
-curl -X POST http://localhost:8083/inference
+curl -X POST http://localhost:8081/inference/test-index
+curl -X POST http://localhost:8082/inference/test-index
+curl -X POST http://localhost:8083/inference/test-index
+curl -X POST http://localhost:8084/inference/test-index
 ```
 
 An example output looks like this:
 ```bash
-curl -X POST http://localhost:8081/inference ; curl -X POST http://localhost:8082/inference ; curl -X POST http://localhost:8083/inference
-{"message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
-{"message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
+curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index ; curl -X POST http://localhost:8084/inference/test-index
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
+{"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
+```
+
+You can also do a direct inference on the aggregator which requires inputting test data and its test
+labels (i.e. expected predictions). The label must correspond to the given input and will be used to
+compare against the actual predictions of the model's testing output. The data type of the test data
+can be anything as long as fits the data type of the dataset. Below is an example for MNIST:
+```bash
+curl -X POST http://localhost:8080/direct-inference/test-index \
+-H "Content-Type: application/json" \
+-d '{
+  "input": [
+    [0,244,281,...(780 more numbers),0]
+  ],
+  "labels": [
+    3
+  ]
+}'
+```
+
+Here is one for the WINNIIO dataset:
+```bash
+curl -X POST http://localhost:8080/direct-inference/test-index \
+-H "Content-Type: application/json" \
+-d '{
+  "input": [
+    {
+        "actuatorState": "9770",
+        "co2Value": "418",
+        "eventCount": "0",
+        "humidity": "33.8",
+        "switchStatus": "0.021216271052304",
+        "temperature": "22.02"
+    },
+    {
+        "actuatorState": "0",
+        "co2Value": "425.8333333333333",
+        "eventCount": "0",
+        "humidity": "48.22",
+        "switchStatus": "0.0137001034912",
+        "temperature": "21.67"
+    }
+  ],
+  "labels": [
+    "22.02",
+    "21.59"
+  ]
+}'
 ```
 
 ## Resolving common issues
@@ -228,26 +320,154 @@ If not, then your IP may be wrong.
 
 Note, to detach from EdgeLake, press ctrl+p+q simultaneously. 
 
+### Chest-Xray Bounding Box Model/Data Handler
+
+- Ensure that the kaggle package is installed via requirements.txt
+- Go to [Kaggle](kaggle.com) and create/sign-in to your Kaggle account
+- Go to your account settings
+- Scroll down to PAI and "create new token" and download the JSON
+- Add the json to /home/{user}/.config/kaggle/kaggle.json
+
 ## Redoing simulation / Clean up
 To redo the simulation, you need to delete the `edgefl/file_write` directory.
 In addition, you need to kill and restart the EdgeLake operators and master node.
 To do so, follow the following instructions:
 ```bash
-cd edgefl/EdgeLake
-make clean EDGELAKE_TYPE=master TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
-make clean EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
-make clean EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
-make clean EDGELAKE_TYPE=operator TAG=1.3.2412.8-roy-arm64 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
+cd EdgeLake/
+make clean EDGELAKE_TYPE=master TAG=1.3.2501 EDGELAKE_SERVER_PORT=32048 EDGELAKE_REST_PORT=32049 NODE_NAME=master
+make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32148 EDGELAKE_REST_PORT=32149 NODE_NAME=operator1
+make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32248 EDGELAKE_REST_PORT=32249 NODE_NAME=operator2
+make clean EDGELAKE_TYPE=operator TAG=1.3.2501 EDGELAKE_SERVER_PORT=32348 EDGELAKE_REST_PORT=32349 NODE_NAME=operator3
 ```
 Note that you do not need to restart Postgres.
 After this step, if you want to restart the simulation follow the Deploy EdgeLake Operator/Master Node from above.
 
 To stop Postgres:
 ```bash
-cd edgefl/EdgeLake/postgres
+cd EdgeLake/postgres
 docker compose down
 ```
 
+## Docker Containerization of APIs
+
+The APIs are containerized using Docker. Before starting the APIs, ensure that 
+```bash
+edgefl/env_files/mnist-docker/mnist1.env
+edgefl/env_files/mnist-docker/mnist2.env
+edgefl/env_files/mnist-docker/mnist3.env
+```
+are configured like this:
+```bash
+GITHUB_DIR=/app/edgefl
+
+TRAINING_APPLICATION_DIR=platform_components/data_handlers
+MODULE_NAME=MnistDataHandler
+
+PORT=<operator port num> #(aggregator port num + operator num = operator port num)
+SERVER_TYPE=node
+TMP_DIR=tmp_dir/node<operator number>/
+# External IP Address for CURL commands to Edgelake
+EXTERNAL_IP="<host ip>:32149"
+EXTERNAL_TCP_IP_PORT="<host ip>:32148"
+
+# LOCAL PSQL DB NAME
+PSQL_DB_NAME="mnist_fl"
+PSQL_DB_USER="demo"
+PSQL_DB_PASSWORD="passwd"
+PSQL_HOST=<host ip>
+PSQL_PORT="5432"
+
+FILE_WRITE_DESTINATION="file_write"
+
+EDGELAKE_DOCKER_RUNNING="True"
+EDGELAKE_DOCKER_CONTAINER_NAME="operator<operator number>"
+DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
+```
+The aggregator env file,
+```bash
+edgefl/env_files/mnist-docker/mnist-agg.env
+```
+
+Should be configured like this:
+```bash
+GITHUB_DIR=/app/edgefl/
+
+TRAINING_APPLICATION_DIR=platform_components/data_handlers
+MODULE_NAME=MnistDataHandler
+
+PORT=8080
+SERVER_TYPE=aggregator
+
+TMP_DIR=tmp_dir/agg/
+# External IP Address for CURL commands to Edgelake
+EXTERNAL_IP="<host ip>:32049"
+EXTERNAL_TCP_IP_PORT="<host ip>:32048"
+
+# LOCAL PSQL DB NAME
+PSQL_DB_NAME="mnist_fl"
+PSQL_DB_USER="demo"
+PSQL_DB_PASSWORD="passwd"
+PSQL_HOST=<host ip>
+PSQL_PORT="5432"
+
+FILE_WRITE_DESTINATION="file_write"
+AGG_NAME=agg
+
+EDGELAKE_DOCKER_RUNNING="True"
+EDGELAKE_DOCKER_CONTAINER_NAME=master
+DOCKER_FILE_WRITE_DESTINATION="/app/file_write"
+```
+To build the image, run the following command from the root directory of the project:
+
+```bash
+docker build -t edgefl:latest -f api-containers/Dockerfile .
+```
+
+You can run any of the APIs using Docker Compose. The `docker-compose.yml` file in the `api-containers` directory defines the services for the aggregator and nodes.
+
+To run all of the APIs:
+```bash
+cd api-containers
+docker compose up -d
+```
+
+The run only specific API services in the `docker-compose.yml` file, you can add the `--no-deps` flag to avoid starting dependent services. This is useful for testing or development purposes. 
+The template for running a set of services is as follows:
+```bash
+cd api-containers
+docker compose up -d --no-deps <service1> <service2> ...
+```
+Where `<service1>`, `<service2>`, etc. are the names of services defined in the `docker-compose.yml` file.
+
+
+Example A: to run only the Aggregator
+```bash
+cd api-containers
+docker compose up --no-deps -d aggregator
+```
+Example B: to run the aggregator and two nodes
+```bash
+cd api-containers
+docker compose up --no-deps -d aggregator node1 node2
+```
+You can then add a node by running the following command:
+```bash
+docker compose up --no-deps -d node3
+```
+
+To see the endpoints and interact with the APIs, you can use the following URLs:
+```bash
+127.0.0.1:8080/docs # aggregator
+
+127.0.0.1:8081/docs # nodes
+127.0.0.1:8082/docs
+127.0.0.1:8083/docs
+```
+
+To take down the containers, simply run:
+```bash
+docker compose down
+```
 
 
 

@@ -24,11 +24,12 @@ def write_file(edgelake_node_url, dbms, table, filename):
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'application/octet-stream',  # Specify binary content
         'command': f'file store where dbms = {dbms} and table = {table} and dest = {filename.split("/")[-1]}'
+        # 'command': f'file store where dbms = {dbms} and table = {table} and dest = {filename}'
     }
 
     with open(filename, 'rb') as f:
         binary_data = f.read()
-        response = requests.post(edgelake_node_url, headers=headers, data=binary_data)
+        response = requests.post(edgelake_node_url, headers=headers, data=binary_data, verify=False)
     return response
 
 
@@ -53,7 +54,7 @@ def create_directory_in_container(container_name, directory_path):
         print(f"Failed to create directory. Error: {output.decode('utf-8')}")
 
 
-def copy_file_to_container(container_name, src_path, dest_path):
+def copy_file_to_container(tmp_dir, container_name, src_path, dest_path):
     """
     Copies a file from the host to a container.
 
@@ -65,50 +66,28 @@ def copy_file_to_container(container_name, src_path, dest_path):
     container = client.containers.get(container_name)
 
     # Create a tar archive for the file
-    with tarfile.open("/tmp/temp.tar", mode="w") as tar:
+    with tarfile.open(f"{tmp_dir}/temp.tar", mode="w") as tar:
         tar.add(src_path, arcname=os.path.basename(src_path))
 
     # Open the tar file and send it to the container
-    with open("/tmp/temp.tar", "rb") as tar_file:
+    with open(f"{tmp_dir}/temp.tar", "rb") as tar_file:
         container.put_archive(os.path.dirname(dest_path), tar_file)
 
     # Clean up the temporary tar file
-    os.remove("/tmp/temp.tar")
+    os.remove(f"{tmp_dir}/temp.tar")
     # print(f"Copied {src_path} to {container_name}:{dest_path}")
     # print(f"Received model params")
 
-
-def file_exists_in_container(container_name, file_path):
+def copy_file_from_container(tmp_dir, container_name, src_path, dest_path):
     """
-    Checks if a file exists inside a Docker container.
+    Copies a file from a container to the host machine.
 
     :param container_name: Name or ID of the container
-    :param file_path: Path to the file inside the container
-    :return: True if file exists, False otherwise
-    """
-    client = docker.from_env()
-    container = client.containers.get(container_name)
-
-    exec_result = container.exec_run(f"ls {file_path}")
-
-    return not "No such file or directory" in exec_result.output.decode()
-
-
-def copy_file_from_container(container_name, src_path, dest_path, max_retries=5, wait_time=1):
-    """
-    Copies a file from a Docker container to the host machine and ensures it is fully copied.
-
-    :param container_name: Name or ID of the Docker container
     :param src_path: Path of the source file inside the container
-    :param dest_path: Destination path on the host
-    :param max_retries: Number of retries for file verification
-    :param wait_time: Time (seconds) to wait between retries
-    :return: True if successful, False otherwise
+    :param dest_path: Destination path on the host (directory or full path)
     """
     client = docker.from_env()
     container = client.containers.get(container_name)
-    temp_tar_path = "/tmp/temp_copy.tar"
-
     try:
         # Step 1: Get file size inside the container for verification
         exec_result = container.exec_run(f"stat -c %s {src_path}")
@@ -117,48 +96,43 @@ def copy_file_from_container(container_name, src_path, dest_path, max_retries=5,
             return False
         container_file_size = int(exec_result.output.decode().strip())
 
-        # Step 2: Retrieve file as tar stream
+        # Step 2: Get the file from the container as a tar stream
         tar_stream, _ = container.get_archive(src_path)
 
-        # Step 3: Write tar stream to a temp file
-        with open(temp_tar_path, "wb") as temp_tar:
+        # Step 3: Extract the tar stream to the host
+        with open(f"{tmp_dir}/temp.tar", "wb") as temp_tar:
             for chunk in tar_stream:
                 temp_tar.write(chunk)
             temp_tar.flush()
-            os.fsync(temp_tar.fileno())  # Ensure data is physically written to disk
+            os.fsync(temp_tar.fileno()) # Ensure data is physically written to disk
 
         # Step 4: Extract tar file
-        with tarfile.open(temp_tar_path, "r") as tar:
-            extracted_files = tar.getnames()
-            tar.extractall(path=os.path.dirname(dest_path))
+        with tarfile.open(f"{tmp_dir}/temp.tar", mode="r") as tar:
+            # Extract the file to the desired host location
+            tar.extractall(path=os.path.dirname(dest_path), filter='fully_trusted')
 
-        # Step 5: Move extracted file to the final destination
-        extracted_file = os.path.join(os.path.dirname(dest_path), extracted_files[0])
-        os.rename(extracted_file, dest_path)
+        # Step 5: Move extracted file to final destination
+        extracted_file = os.path.join(os.path.dirname(dest_path), os.path.basename(src_path))
+        os.rename(extracted_file, dest_path) # rename file
 
-        # Step 6: Verify file integrity by checking size
-        for _ in range(max_retries):
+        # Step 6: Verify file integrity
+        for _ in range(5):
             if os.path.exists(dest_path) and os.path.getsize(dest_path) == container_file_size:
                 print(f"✅ Successfully copied {src_path} from {container_name} to {dest_path}")
-                os.remove(temp_tar_path)  # Cleanup temporary tar file
+                os.remove(f"{tmp_dir}/temp.tar")  # Cleanup temporary tar file
                 return True
-            time.sleep(wait_time)
-
+            time.sleep(0.5)
         print(
             f"❌ Verification failed: Expected {container_file_size} bytes, Got {os.path.getsize(dest_path) if os.path.exists(dest_path) else 'Missing'}")
-        return False
-
     except Exception as e:
         print(f"❌ Error: {e}")
-        return False
-
     finally:
-        # Clean up temp tar file if it exists
-        if os.path.exists(temp_tar_path):
-            os.remove(temp_tar_path)
+        # Clean up the temporary tar file
+        if os.path.exists(f"{tmp_dir}/temp.tar"):
+            os.remove(f"{tmp_dir}/temp.tar")
 
 
-def read_file(edgelake_node_url, file_path, dest, ip_port, container_name = None):
+def read_file(edgelake_node_url, file_path, dest, ip_port):
     filename = file_path.split('/')[-1]
     headers = {
         'User-Agent': 'AnyLog/1.23',
@@ -171,13 +145,7 @@ def read_file(edgelake_node_url, file_path, dest, ip_port, container_name = None
     # print(f"FILE GET COMMAND: headers: {headers['command']}")
     try:
         response = requests.post(edgelake_node_url, headers=headers, data='')
-        if response.status_code == 200:
-            if container_name:
-                while not file_exists_in_container(container_name, dest):
-                    time.sleep(3)
-            return response
-        else:
-            raise
+        return response
     except:
         errno, value = sys.exc_info()[:2]
         print(f'Error: {errno}: {value}')
@@ -185,11 +153,6 @@ def read_file(edgelake_node_url, file_path, dest, ip_port, container_name = None
 
 
 def read_file_mongo(edgelake_node_url, dbms, table, filename, dest, ip_port):
-    # headers = {
-    #     'User-Agent': 'AnyLog/1.23',
-    #     'Content-Type': 'text/plain',
-    #     'command': f'file retrieve where dbms = {dbms} and table = {table} and id = {filename} and dest = {dest}'
-    # }
 
     headers = {
         'User-Agent': 'AnyLog/1.23',
@@ -209,8 +172,10 @@ def read_file_mongo(edgelake_node_url, dbms, table, filename, dest, ip_port):
 
 
 if __name__ == '__main__':
-    file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
-    # write_file(f"http://192.168.1.118:32049", "blobs_admin", "my_table",
-    #            f"{file_write_destination}/node1/1-replica-node1.pkl")
-    response = read_file(f"http://192.168.1.118:32048", "blobs_winniio_fl", "node_model_updates", "1-replica-node3.pkl", f"{file_write_destination}/aggregator/1-replica-node1.pkl", "192.53.121.36:32148")
+    # file_write_destination = os.getenv("FILE_WRITE_DESTINATION")
+    response = write_file(f"http://192.168.1.125:32049", "blobs_mydb", "admin",
+               f"/Users/roy/test2.txt")
     print(response.status_code)
+    # the last ip_port variable is the node in which you want to get the file from. edgelake_node_url is the node that acts as your gateway to the anylog network
+    # after the below command, test2.txt should be in /Users/roy/new_dir
+    response = read_file_mongo(f"http://192.168.1.125:32049", "blobs_mydb", "admin", "test2.txt", f"/Users/roy/my_file2.txt", "192.168.1.125:32049")
