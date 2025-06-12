@@ -36,8 +36,8 @@ from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
 
-# load_dotenv("./../../env_files/chest_xrays_bbox/chest_xrays_bbox1.env") # change path if respective env is elsewhere
 
+# load_dotenv("./../../env_files/chest_xrays_bbox/chest_xrays_bbox1.env") # change path if respective env is elsewhere
 
 CLASSES = [
     "Infiltrate",
