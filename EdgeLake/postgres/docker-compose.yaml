@@ -1,17 +1,17 @@
 services:
-  postgres:
+  postgres3:
       image: postgres:14.0-alpine
       environment:
         POSTGRES_USER: demo
         POSTGRES_PASSWORD: passwd
         POSTGRES_DB: mnist_fl
-      container_name: postgres
+      container_name: postgres3
       restart: always
       stdin_open: true
       tty: true
       ports:
-        - "5432:5432"
+        - "5434:5432"
       volumes:
-        - pgdata:/var/lib/postgresql/data
+        - pgdata3:/var/lib/postgresql/data
 volumes:
-  pgdata:
+  pgdata3:

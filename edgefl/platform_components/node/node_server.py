@@ -88,18 +88,20 @@ def init_node(request: InitNodeRequest):
         module_name = request.module_name
         module_path = request.module_path
 
-        db_name = request.db_name # testing winniio_fl + mnist_fl DBs
+        # db_name = request.db_name # testing winniio_fl + mnist_fl DBs
+        db_name = os.getenv("LOGICAL_DATABASE")
+
 
         # Connect to DB if it's not in the EdgeLake node
         if db_name not in db_list:
             connect_to_db(edgelake_node_url, db_name, db_user, db_password, db_host, db_port)
             db_list.add(db_name)
 
-        # Fetch and check for existing data
-        query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
-        check_data = fetch_data_from_db(edgelake_node_url, query)
-        if not check_data:
-            raise ValueError(f"No data found in the database: {db_name}.")
+        # # Fetch and check for existing data
+        # query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
+        # check_data = fetch_data_from_db(edgelake_node_url, query)
+        # if not check_data:
+        #     raise ValueError(f"No data found in the database: {db_name}.")
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")

@@ -9,6 +9,8 @@ import os
 import logging
 
 import numpy as np
+import requests
+
 # import pandas as pd
 # from sklearn.preprocessing import MinMaxScaler
 
@@ -26,6 +28,21 @@ from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
+
+# node that system_query resides on
+QUERY_NODE_URL=f"http://{os.getenv('QUERY_NODE_URL')}"
+# Edge Node containing data
+EDGE_NODE_URL=os.getenv('EDGE_NODE_URL', 'network')
+# Logical database name
+LOGICAL_DATABASE=os.getenv('LOGICAL_DATABASE')
+# Table containing trained data
+TRAIN_TABLE=os.getenv('TRAIN_TABLE')
+# Table containing test data
+TEST_TABLE=os.getenv('TEST_TABLE')
+
+# make sure system query is enabled
+# disconnect dbms system_query
+# connect dbms system_query where type=sqlite and memory = true
 
 class WinniioDataHandler():
     def __init__(self, node_name, db_name):
@@ -56,6 +73,25 @@ class WinniioDataHandler():
         # self.logger.debug("AFTER LOAD DATASET")
         self.node_name = node_name
         self.fl_model = self.model_def()
+
+    def get_data(self, query: str, is_query: bool = True):
+        logger.debug(f'Query: {query}')
+        headers = {
+            'command': query,
+            "User-Agent": 'AnyLog/1.23'
+        }
+        if is_query is True:
+            headers['destination'] = EDGE_NODE_URL
+        try:
+            response = requests.get(url=QUERY_NODE_URL, headers=headers)
+            response.raise_for_status()
+        except Exception as error:
+            logger.error(Exception(f"Failed to execute GET against {QUERY_NODE_URL} (Error: {error})"))
+        try:
+            output = response.json()
+        except:
+            output = response.text
+        return output
 
     def model_def(self):
         time_steps = 1
@@ -94,12 +130,17 @@ class WinniioDataHandler():
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         # db_name = os.getenv("PSQL_DB_NAME")
-        query_train = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+        # query_train = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
+        # query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+        query_train = f"sql {LOGICAL_DATABASE} format=json and stat=false SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM {TRAIN_TABLE} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"sql {LOGICAL_DATABASE} format=json and stat=false SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM {TEST_TABLE} WHERE round_number = {round_number} AND data_type = 'test'"
 
         try:
-            train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
-            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+            # train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
+            # test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+
+            train_data = self.get_data(query=query_train, is_query=True)
+            test_data = self.get_data(query=query_test, is_query=True)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
             query_train_result = np.array(train_data["Query"]) # TODO: watch out when exceeding max rounds stored in the db
@@ -139,16 +180,16 @@ class WinniioDataHandler():
         return (x_train_images_final, y_train_label_final), (x_test_images_final, y_test_label_final)
 
 
-    def get_data(self):
-        """
-        Gets pre-process mnist training and testing data.
-
-        :return: training data
-        :rtype: `tuple`
-        """
-        self.logger.debug(f"Train data shape in get_data: {self.x_train.shape}")
-        self.logger.debug(f"Test data shape in get_data: {self.x_test.shape}")
-        return (self.x_train, self.y_train), (self.x_test, self.y_test)
+    # def get_data(self):
+    #     """
+    #     Gets pre-process mnist training and testing data.
+    #
+    #     :return: training data
+    #     :rtype: `tuple`
+    #     """
+    #     self.logger.debug(f"Train data shape in get_data: {self.x_train.shape}")
+    #     self.logger.debug(f"Test data shape in get_data: {self.x_test.shape}")
+    #     return (self.x_train, self.y_train), (self.x_test, self.y_test)
 
     def get_weights(self):
         return self.fl_model.weights
@@ -199,9 +240,11 @@ class WinniioDataHandler():
         # 3. return test data
         # db_name = os.getenv("PSQL_DB_NAME")
         # query_test = f"sql {db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test'"
-        query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE data_type = 'test'"
+        # query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE data_type = 'test'"
+        query_test = f"sql {LOGICAL_DATABASE} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM {TEST_TABLE} WHERE data_type = 'test'"
 
-        test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+        # test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+        test_data = self.get_data(query=query_test, is_query=True)
 
         # Assuming the data is returned as dictionaries with keys 'x' and 'y'
         query_test_result = np.array(test_data["Query"])
