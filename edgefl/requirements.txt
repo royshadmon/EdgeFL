@@ -24,3 +24,5 @@ cython~=3.0.12
 pydantic~=2.11.0a2
 
 torchvision~=0.17.2
+kaggle~=1.7.4.5
+
