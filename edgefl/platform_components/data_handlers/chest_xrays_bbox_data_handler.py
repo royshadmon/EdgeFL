@@ -35,7 +35,9 @@ from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
 from platform_components.lib.logger.logger_config import configure_logging
 logger = logging.getLogger(__name__)
 
+
 # load_dotenv("./../../env_files/chest_xrays_bbox/chest_xrays_bbox1.env") # change path if respective env is elsewhere
+
 
 CLASSES = [
     "Infiltrate",
@@ -62,8 +64,10 @@ class ChestXraysBBoxDataHandler():
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
+
         self.db_name = os.getenv("LOGICAL_DATABASE")
         self.db_table = os.getenv("TRAIN_TABLE")
+
         # Data Handler Initialization
         self.image_root_dir = os.path.join(os.getenv("GITHUB_DIR"), os.getenv("IMAGE_ROOT_DIR"))
         self.train_df = None
@@ -116,6 +120,7 @@ class ChestXraysBBoxDataHandler():
         :param nb_points: Number of data points to fetch for training and testing datasets.
         :type nb_points: int
         """
+
         query_train = f"""sql {self.db_name} SELECT image, width, height, class, x_min, y_min, x_max, y_max FROM {self.db_table} WHERE round_number = {round_number}AND data_type = 'train'"""
         query_test = f"""sql {self.db_name} SELECT image, width, height, class, x_min, y_min, x_max, y_max FROM {self.db_table} WHERE round_number = {round_number} AND data_type = 'test'"""
 
