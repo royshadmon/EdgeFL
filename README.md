@@ -367,15 +367,19 @@ PORT=<operator port num> #(aggregator port num + operator num = operator port nu
 SERVER_TYPE=node
 TMP_DIR=tmp_dir/node<operator number>/
 # External IP Address for CURL commands to Edgelake
-EXTERNAL_IP="<host ip>:32149"
-EXTERNAL_TCP_IP_PORT="<host ip>:32148"
+EXTERNAL_IP="<EdgeLake ip:port>"
+EXTERNAL_TCP_IP_PORT="<EdgeLake ip:port>"
 
-# LOCAL PSQL DB NAME
-PSQL_DB_NAME="mnist_fl"
-PSQL_DB_USER="demo"
-PSQL_DB_PASSWORD="passwd"
-PSQL_HOST=<host ip>
-PSQL_PORT="5432"
+# node that system_query resides on
+QUERY_NODE_URL="<EdgeLake ip:port>"
+# Edge Node containing data
+EDGE_NODE_URL="<EdgeLake ip:port>"
+# Logical database name
+LOGICAL_DATABASE=mnist_fl
+# Table containing trained data
+TRAIN_TABLE=room_12055_train
+# Table containing test data
+TEST_TABLE=room_12055_test
 
 FILE_WRITE_DESTINATION="file_write"
 

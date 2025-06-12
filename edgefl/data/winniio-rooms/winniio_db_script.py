@@ -175,7 +175,7 @@ def main():
     room_numbers = [12004, 12055, 12090]
     dataframes = []
     for rn in room_numbers:
-        dataset = pd.read_csv(f'/Users/roy/Github-Repos/Anylog-Edgelake-CSE115D/blockchain/data/winniio-rooms/room_{rn}.csv')
+        dataset = pd.read_csv(f'/Users/roy/Github-Repos/EdgeFL/edgefl/data/winniio-rooms/room_{rn}.csv')
         dataset['label'] = dataset['temperature'].shift(-2)
         dataset.dropna(inplace=True)
         dataframes.append(dataset)

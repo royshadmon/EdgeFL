@@ -1,119 +1,88 @@
 import argparse
-import csv
 import os.path
-import ast
 import requests
+
+import pandas as pd
+import numpy as np
 import json
+from sklearn.model_selection import train_test_split
+from tensorflow.python.ops.gen_experimental_dataset_ops import dataset_from_graph
 
-def csv2dict(data_file:str)->list:
-    """
-    Convert data in data_file into dictionary
-    :args:
-        data_file:str - file to read content from
-    :params:
-        csv_data:list - list of data in dictionary format from csv file
-    :return
-        csv_data:list
-    """
-    csv_data = []
-    try:
-        with open(data_file) as csvfile:
-            for row in csv.DictReader(csvfile):
-                csv_data.append(row)
-    except Exception as e:
-        raise Exception(f"Failed to extrapolate data from {data_file} (Error: {e})")
-
-    return csv_data
-
-
-def cleanup_data(csv_data:list)->list:
-    """
-    Given csv data, clean it up by converting to correct data types and add logical database and table names
-    :args:
-        csv_data:list - list of data in dictionary format from csv file
-        db_name:str - name of database
-        table_name:str - name of table
-        process_type:str - type of process to use for cleanup
-    :return:
-        updated csv_data:list
-    """
-    for i in range(len(csv_data)):
-        for column in csv_data[i].keys():
-            try:
-                csv_data[i][column] = ast.literal_eval(csv_data[i][column])
-            except ast.ExceptHandler:
-                # if fails ignore and keep as is
-                pass
-
-    return csv_data
-
-
-def put_data(conn:str, csv_data:list, db_name:str, table_name:str):
-    """
-    Publish data via PUT
-    :args:
-        conn:str - REST connection string
-        csv_data:list - list of data in dictionary format from csv file
-        db_name:str - name of database
-        table_name:str - name of table
-    :params:
-        headers:dict - REST headers
-        payload:str - PUT payload
-        response:requests.Response - REST response
-    """
+def put_data(conn:str, db_name:str, table:str, payload):
     headers = {
         'type': 'json',
         'dbms': db_name,
-        'table': table_name,
+        'table': table,
         'mode': 'streaming',
         'Content-Type': 'text/plain'
     }
-
-    payload = json.dumps(csv_data)
-
     try:
-        response = requests.put(f"http://{conn}", headers=headers, data=payload)
-        response.raise_for_status()
-    except Exception as e:
-        raise Exception(f"Failed to put data to {conn} (Error: {e})")
+        for row in payload:
+            response = requests.put(url=f'http://{conn}', headers=headers, data=json.dumps(row))
+            response.raise_for_status()
+    except Exception as error:
+        raise Exception
 
 
-def main():
-    """
-    The following provides an example for publishing data into AnyLog/EdgeLake via REST PUT - used for Winni.io demo
-    Since the file name is room_12055.csv, I'm removing the .csv and keeping room_12055 as the table name
-    :positional arguments:
-        conn                  REST connection information
-        data_file             comma seperated data files with path
-    options:
-        -h, --help            show this help message and exit
-        --db-name DB_NAME     logical database name
-    :params:
-        data_files:list - comma seperated data files with path
-        file_path:str - path to data file
-        csv_data:list - list of data in dictionary format from csv file
-    :sample-call:
-        python3.10 edgefl/data/publish_data.py 104.237.130.228:32149 edgefl/data/winniio-rooms/room_12055.csv --db-name new_company
-    """
+
+
+# Configuration
+def read_file(file_path:str):
+    full_path = os.path.expanduser(os.path.expandvars(file_path))
+    if not os.path.isfile(full_path):
+        raise FileNotFoundError
+
+    dataset = pd.read_csv(full_path)
+    dataset['label'] = dataset['temperature'].shift(-2)
+    dataset.dropna(inplace=True)
+
+    return  dataset
+
+
+def generate_data(dataset, train_split, test_split, num_rounds):
+    json_output = {
+        "train": [],
+        "test": []
+    }
+
+    df_train, df_test = train_test_split(dataset, train_size=train_split, test_size=test_split)
+    df_train_rounds = np.array_split(df_train, num_rounds)
+    df_test_rounds = np.array_split(df_test, num_rounds)
+
+    for round_counter in range(1, num_rounds+1):
+        train_batch = df_train_rounds[round_counter - 1].copy()
+        train_batch['round_number'] = round_counter
+        train_batch['data_type'] = 'train'
+
+        train_json = train_batch.to_dict(orient="records")
+        json_output["train"].append(train_json)
+
+        test_batch = df_test_rounds[round_counter - 1].copy()
+        test_batch['round_number'] = round_counter
+        test_batch['data_type'] = 'test'
+
+        test_json = test_batch.to_dict(orient="records")
+        json_output["test"].append(test_json)
+
+    return json_output
+
+
+def  main():
     parse = argparse.ArgumentParser()
     parse.add_argument('conn', type=str, default=None, help='REST connection information')
-    parse.add_argument('data_file', type=str, default=None, help='comma seperated data files with path')
-    parse.add_argument('--db-name', type=str, default='my_db', help='logical database name')
+    parse.add_argument('file_path', type=str, default=None, help='CSV file to pull data from')
+    parse.add_argument('--db-name', type=str, default='mnist', help='logical database name')
+    parse.add_argument('--num-rounds', type=int, default=5, help='')
+    parse.add_argument('--train-split', type=int, default=0.8, help='')
+    parse.add_argument('--test-split', type=int, default=0.2, help='')
     args = parse.parse_args()
 
-    data_files = args.data_file.split(',') # separate list of files
-    for data_file in data_files:
-        file_path = os.path.expanduser(os.path.expandvars(data_file))
-        if not os.path.exists(file_path):
-            raise FIOError(f"File {file_path} does not exist")
-        csv_data  = csv2dict(data_file=file_path) # read csv file
+    dataset = read_file(file_path=args.file_path)
+    json_output = generate_data(dataset=dataset, train_split=args.train_split, test_split=args.test_split, num_rounds=args.num_rounds)
 
-        if csv_data:
-            # update data in dict(s) to have proper data type (ex. '1.3' --> 1.3)
-            csv_data = cleanup_data(csv_data=csv_data)
-
-            # publish data
-            put_data(conn=args.conn, csv_data=csv_data, db_name=args.db_name, table_name=os.path.basename(data_file).split('.')[0])
+    table_name = args.file_path.rsplit('\\')[-1].rsplit('/', 1)[-1].split('.csv')[0]
+    for batch_type in json_output:
+        put_data(conn=args.conn, db_name=args.db_name, table=f'{table_name}_{batch_type}', payload=json_output[batch_type])
 
 
 if __name__ == '__main__':

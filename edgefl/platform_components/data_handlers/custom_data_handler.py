@@ -32,13 +32,25 @@ if gpus:
     except RuntimeError as e:
         print(e)
 
+# node that system_query resides on
+QUERY_NODE_URL=f"http://{os.getenv('QUERY_NODE_URL')}"
+# Edge Node containing data
+EDGE_NODE_URL=os.getenv('EDGE_NODE_URL', 'network')
+# Logical database name
+LOGICAL_DATABASE=os.getenv('LOGICAL_DATABASE')
+# Table containing trained data
+TRAIN_TABLE=os.getenv('TRAIN_TABLE')
+# Table containing test data
+TEST_TABLE=os.getenv('TEST_TABLE')
+
+
 class MnistDataHandler():
     def __init__(self, node_name, db_name):
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
-        self.db_name = db_name
+        self.db_name = LOGICAL_DATABASE
 
         # Data Handler Initialization
         self.x_train = None
@@ -223,14 +235,14 @@ class MnistDataHandler():
         # db_name = os.getenv("PSQL_DB_NAME")
 
         # Get number of rows
-        row_count_query = f"sql {self.db_name} SELECT count(*) FROM node_{node_name} WHERE data_type = 'test'"
+        row_count_query = f"sql {self.db_name} SELECT count(*) FROM {TRAIN_TABLE} WHERE data_type = 'test'"
         row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
         num_rows = row_count["Query"][0].get('count(*)')
         # fetch in offsets of 50
         # TODO: Get row offset queries to work
         for offset in range(1):
         # for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {self.db_name} SELECT image, label FROM node_{node_name} WHERE data_type = 'test' LIMIT 50"
+            query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} WHERE data_type = 'test' LIMIT 50"
             test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
@@ -276,8 +288,8 @@ class MnistDataHandler():
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         # db_name = os.getenv("PSQL_DB_NAME")
-        query_train = f"sql {self.db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"sql {self.db_name} SELECT image, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
+        query_train = f"sql {self.db_name} SELECT image, label FROM {TRAIN_TABLE} WHERE round_number = {round_number} AND data_type = 'train'"
+        query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} WHERE round_number = {round_number} AND data_type = 'test'"
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
