@@ -268,56 +268,17 @@ class WinniioDataHandler():
         aggregated_params = FedAvg_aggregate(weights)
         return aggregated_params
 
-    def direct_inference(self, data, labels: list[float]):
+    def direct_inference(self, data):
         """
         Run inference on raw input data against given labels (already in WINNIIO format).
         Handles data conversion and validation internally.
         """
 
-        # Validate existence and check there is same number of data inputs as number of labels
-        if not data and not labels and len(data) != len(labels):
-            raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")
-
-        # Validate labels/predictions
-        if all([not isinstance(labels[0], t) for t in [int, float, str]]):
-            raise TypeError(
-                f"Labels must be a list of floats, ints, or str."
-            )
-
-        # Set up the test data properly
-        test_data = []
-        test_labels = []
-        for values, label in zip(data, labels):
-            self.validate_sensor_data(values) # values: {'exact_key1': str, 'exact_key2': str, ...}
-            values = np.array(list(values.values()), dtype=np.float32) # just get the floats
-            test_data.append(values)
-            test_labels.append(label)
-
-        # Convert test data into final numpy arrays
-        test_data_final = np.array(test_data, dtype=np.float32).reshape(-1, 1, 6)
-        test_labels_final = np.array(test_labels, dtype=np.float32)
-
-        # Get prediction (on-batch) and reshape
-        predictions = self.fl_model.predict_on_batch(test_data_final)
-        predictions = predictions.reshape(-1)
-
-        # Set up prediction results
-        i = 1
-        res = {}
-        for prediction, label in zip(predictions, test_labels_final):
-            res[i] = f"{prediction} --> {label}"
-            i += 1
-            if len(res) == 10:
-                break
-
-        # Do data calculations to send along with results
-        mae = mean_absolute_error(test_labels_final, predictions)
-        mse = mean_squared_error(test_labels_final, predictions)
-        rmse = np.sqrt(mse)
-        r2 = r2_score(test_labels_final, predictions)
-        reg_accuracy = self.regression_accuracy(test_labels_final, predictions, threshold=0.1)
+        data = data.reshape(-1, 1, 6)
+        predictions = self.fl_model.predict_on_batch(data)
         self.logger.info(f"[Inference] Step 5: Edge inference complete")
-        return {"results": str(res), "mae": mae, "mse": mse, "rmse": rmse, "r2": r2, "reg_accuracy": reg_accuracy}
+        return predictions.reshape(-1)
+
 
     def run_inference(self):
         x_test_images, y_test_labels = self.get_all_test_data(self.node_name)

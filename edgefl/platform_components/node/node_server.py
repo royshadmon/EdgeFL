@@ -263,7 +263,8 @@ def inference(index):
         )
 
 class InferenceRequest(BaseModel):
-    input: list[float] = [244.46153846153845, 453, 0, 52.29666666666667, 0.0375170724933045, 20.515]
+    input: list[float]
+    index: str
 
 # TODO: add index and reformat response to FastAPI PlainTextResponse
 # @app.route('/infer', methods=['POST'])
@@ -272,20 +273,16 @@ def direct_inference(request: InferenceRequest):
     """Inference on current model w/ data passed in."""
     try:
         float_list = request.input
-        if len(float_list) != 6:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="ML model input needs to be of len 6"
-            )
-        results = node_instance.direct_inference(np.array(float_list))
+        index = request.index
+        results = node_instance.direct_inference(index, np.array(float_list))
         response = {
             'prediction': str(results),
         }
         return response
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Error executing inference on model. Check inference function in data handler"
         )
 
 if __name__ == '__main__':
