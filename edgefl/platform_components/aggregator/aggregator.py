@@ -99,10 +99,12 @@ class Aggregator:
             }
 
         try:
-            data = f'''<my_policy = {{"index" : {{
+            data = f'''<my_policy = {{"{index}" : {{
+                                        "policy_type": "init",
                                         "name": "{index}",
                                         "module_name": "{module_name}",
                                         "module_path": "{module_path}",
+                                        "ip_port": "{self.edgelake_tcp_node_ip_port}",
                                         "db_name": "{db_name}"
             }} }}>'''
             success = False
@@ -199,25 +201,28 @@ class Aggregator:
         return policies[0]  # attributes: name, module_name, module_path, id, date, ledger
 
     # Deletes and inserts index-rx with updated initParams ('blockchain update to' not working)
-    def store_most_recent_agg_params(self, initParams_link, index):
+    def store_most_recent_agg_params(self, initParams_link, index, round_number):
         try:
-            policy_name = f"{index}-r"
-            old_policy_id = get_policy_id_by_name(self.edgelake_node_url, policy_name)
-
-            # Deleting old policy
-            delete_success = False
-            while old_policy_id and not delete_success:
-                response = delete_policy(self.edgelake_node_url, old_policy_id)
-                if response.status_code == 200:
-                    delete_success = True
-                else:
-                    sleep(np.random.randint(1,3))
+            # policy_name = index
+            # old_policy_id = get_policy_id_by_name(self.edgelake_node_url, index)
+            #
+            # # Deleting old policy
+            # delete_success = False
+            # while old_policy_id and not delete_success:
+            #     response = delete_policy(self.edgelake_node_url, old_policy_id)
+            #     if response.status_code == 200:
+            #         delete_success = True
+            #     else:
+            #         sleep(np.random.randint(1,3))
 
             # Inserting policy back in with updated initParams link
-            data = f'''<my_policy = {{"{policy_name}" : {{
+            data = f'''<my_policy = {{"{index}" : {{
                                                     "index" : "{index}",
+                                                    "policy_type" : "RoundStart",
                                                     "node_type": "aggregator",
+                                                    "round_number": {round_number},
                                                     "initParams": "{initParams_link}",
+                                                    "node_id": "{self.agg_name}",
                                                     "ip_port": "{self.edgelake_tcp_node_ip_port}"
                                           }} }}>'''
             insert_success = False
@@ -252,10 +257,13 @@ class Aggregator:
         try:
             # Format data exactly like the example curl command but with your values
             # NOTE: ask why are we adding the node num from agg
-            data = f'''<my_policy = {{"{index}-r{round_number}" : {{
+            data = f'''<my_policy = {{"{index}" : {{
                                         "index" : "{index}",
+                                        "policy_type": "RoundStart",
                                         "node_type": "aggregator",
+                                        "round_number": {round_number},
                                         "initParams": "{initParams_link}",
+                                        "node_id": "{self.agg_name}",
                                         "ip_port": "{self.edgelake_tcp_node_ip_port}"
                               }} }}>'''
             success = False

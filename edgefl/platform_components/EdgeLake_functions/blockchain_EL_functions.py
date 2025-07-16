@@ -92,8 +92,8 @@ def get_policies(el_url, policy_type='*', condition=None):
         policies.append(policy[policy_type])
     return policies # [{'attr1': ..., 'attr2': ..., ...}, {'attr1': ..., 'attr2': ..., ...}, ...]
 
-def get_policies(el_url, policy_type='*', condition=None):
-    command = f'blockchain get {policy_type} {condition if condition else ""}'
+def get_policies(el_url, index='*', condition=None):
+    command = f'blockchain get {index} {condition if condition else ""}'
     headers = {
         'User-Agent': 'AnyLog/1.23',
         'Content-Type': 'text/plain',
@@ -106,7 +106,7 @@ def get_policies(el_url, policy_type='*', condition=None):
     data = response.json() # [{policy_name: {..., 'id': ..., ...}}]
     policies = []
     for policy in data:
-        policies.append(policy[policy_type])
+        policies.append(policy[index])
     return policies # [{'attr1': ..., 'attr2': ..., ...}, {'attr1': ..., 'attr2': ..., ...}, ...]
 
 

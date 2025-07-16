@@ -183,20 +183,23 @@ def listen_for_start_round(nodeInstance, index, stop_event):
         try:
             headers = {
                 'User-Agent': 'AnyLog/1.23',
-                'command': f'blockchain get {index}-r{current_round}'
+                'command': f'blockchain get {index} where round_number = {current_round} and node_type = aggregator'
             }
             response = requests.get(edgelake_node_url, headers=headers)
 
             if response.status_code == 200:
                 data = response.json()
                 # logger.debug(f"Response Data: {data}")  # Debugging line
-
-                round_data = None
-                for item in data:
-                    # Check if the key exists in the current dictionary
-                    if f'{index}-r{current_round}' in item:
-                        round_data = item[f'{index}-r{current_round}']
-                        break  # Stop searching once the current round's data is found
+                # if no policies, then wait 2 seconds
+                if not data:
+                    time.sleep(2)
+                    continue
+                round_data = data[0].get(index)
+                # for item in data:
+                #     # Check if the key exists in the current dictionary
+                #     if f'{index}-r{current_round}' in item:
+                #         round_data = item.get(index).get("initParams")
+                #         break  # Stop searching once the current round's data is found
 
                 if round_data:
                     logger.debug(f"[{index}] Round Data: {round_data}")  # Debugging line
@@ -221,7 +224,7 @@ def get_most_recent_agg_params(index):
     try:
         headers = {
             'User-Agent': 'AnyLog/1.23',
-            'command': f'blockchain get {policy_name}'
+            'command': f'blockchain get {index}'
         }
         response = requests.get(edgelake_node_url, headers=headers)
 

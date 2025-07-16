@@ -89,8 +89,8 @@ class WinniioDataHandler():
             logger.error(Exception(f"Failed to execute GET against {QUERY_NODE_URL} (Error: {error})"))
         try:
             output = response.json()
-        except:
-            output = response.text
+        except Exception as error:
+            output = error
         return output
 
     def model_def(self):

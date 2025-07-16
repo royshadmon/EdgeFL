@@ -68,6 +68,7 @@ class Node:
         # Initializing index specific data in this node
         self.initialize_index(index)
         self.set_module_at_index(index, module_name, module_path)
+        # TODO: Pull training file
         self.initialize_training_app_on_index(index)
         self.initialize_file_write_paths_on_index(index)
 
@@ -146,8 +147,8 @@ class Node:
 
     # Gets data of specified index in blockchain if it exists, otherwise returns None
     def get_index_data_in_blockchain(self, index):
-        where_condition = f"where name = {index}"
-        policies = get_policies(self.edgelake_node_url, "index", where_condition)
+        where_condition = f"where policy_type = init"
+        policies = get_policies(self.edgelake_node_url, index, where_condition)
         if not policies:
             return None
         if len(policies) > 1: # dev check
@@ -171,8 +172,10 @@ class Node:
     def add_node_params(self, round_number, model_metadata, index):
         self.logger.debug(f"[{index}] in add_node_params")
         try:
-            data = f'''<my_policy = {{"{index}-a{round_number}" : {{
+            data = f'''<my_policy = {{"{index}" : {{
                                 "node" : "{self.replica_name}",
+                                "round_number" : {round_number},
+                                "policy_type": "submodel",
                                 "index": "{index}",
                                 "node_type": "training",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                

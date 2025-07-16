@@ -88,7 +88,8 @@ def init(request: InitRequest):
 
         # Verify filepath exists
         module_path = os.path.join(aggregator.training_app_dir, module_file)
-        if not os.path.exists(os.path.join(os.getenv("GITHUB_DIR"), module_path)):
+        module_path = os.path.join(os.getenv("GITHUB_DIR"), module_path)
+        if not os.path.exists(module_path):
             raise FileNotFoundError(f"Module '{module_file}' does not exist within the given path: '{module_path}'.")
 
         # Set up index and specific data
@@ -296,8 +297,10 @@ def start_training(aggregator, initial_params, starting_round, end_round, index)
             # print(initial_params) # debugging
             logger.info(f"[{index}][Round {r}] Step 4 Complete: model parameters aggregated")
 
+            starting_round += 1
+
             # Track the last agg model file because it's not stored in a policy after the last round
-            aggregator.store_most_recent_agg_params(initial_params, index)
+            # aggregator.store_most_recent_agg_params(initial_params, index, starting_round)
 
             # Then, update aggregator's model at 'index'
             local_path_of_initial_params = f"{aggregator.file_write_destination}/{index}/{r}-{aggregator.agg_name}_update.json"
@@ -312,7 +315,7 @@ def start_training(aggregator, initial_params, starting_round, end_round, index)
 
             aggregator.training_apps[index].update_model(weights)
 
-            starting_round += 1
+
 
         logger.info(f"[{index}] Training completed successfully")
         return {
@@ -390,7 +393,8 @@ async def listen_for_update_agg(min_params, round_number, index):
             # Fetch policies containing the node models at index and round number
             params_response = requests.get(url, headers={
                 'User-Agent': 'AnyLog/1.23',
-                "command": f"blockchain get {index}-a{round_number}"
+                # "command": f"blockchain get {index}-a{round_number}"
+                "command": f"blockchain get {index} where round_number={round_number} and node_type=training"
             })
             params_response.raise_for_status()  # != 200
 
@@ -398,14 +402,14 @@ async def listen_for_update_agg(min_params, round_number, index):
             if result:
                 # Extract all trained_params into a list
                 node_params_links = [
-                    item[f'{index}-a{round_number}']['trained_params_local_path']
+                    item.get(index).get('trained_params_local_path')
                     for item in result
-                    if f'{index}-a{round_number}' in item
+                    if index in item
                 ]
                 ip_ports = [
-                    item[f'{index}-a{round_number}']['ip_port']
+                    item.get(index).get('ip_port')
                     for item in result
-                    if f'{index}-a{round_number}' in item
+                    if index in item
                 ]
 
                 # Updates decoded_params with newly fetched decoded params (with node link as key)
@@ -531,7 +535,8 @@ def get_last_round_number(index):
         # Query the blockchain for all 'r' prefixed keys to find the highest round number
         response = requests.get(url, headers={
             'User-Agent': 'AnyLog/1.23',
-            "command": f"blockchain get * where [index] = {index} and [node_type] = aggregator"
+            # "command": f"blockchain get * where [index] = {index} and [node_type] = aggregator"
+            "command": f"blockchain get {index} where node_type = aggregator"
         })
 
         if response.status_code == 200:
