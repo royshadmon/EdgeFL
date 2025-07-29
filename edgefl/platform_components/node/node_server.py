@@ -6,10 +6,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 from starlette.responses import PlainTextResponse
 
 # from dotenv import load_dotenv
-from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, fetch_data_from_db, \
+from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, \
     connect_to_db, get_all_databases
 from platform_components.node.node import Node
-import numpy as np
+# import numpy as np
 import logging
 import threading
 import time
@@ -148,38 +148,39 @@ def init_node(request: InitNodeRequest):
             f"Unable to access the database tables: {str(e)}"
         )
 
-'''
-/receive_data [POST] (data)
-    - Endpoint to receive data block from the simulated data stream
-'''
-class ReceiveDataRequest(BaseModel):
-    index: str
-    data: list
-
-# @app.route('/receive_data', methods=['POST'])
-@app.post('/receive_data')
-def receive_data(request: ReceiveDataRequest):
-    if not node_instance:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Node instance not initialized"
-        )
-    if request.data:
-        node_instance.add_data_batch(request.index, np.array(request.data))
-        return {
-            "status": "data_received",
-            "batch_size": len(request.data)
-        }
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="No Data Provided"
-    )
+# '''
+# /receive_data [POST] (data)
+#     - Endpoint to receive data block from the simulated data stream
+# '''
+# class ReceiveDataRequest(BaseModel):
+#     index: str
+#     data: list
+#
+# # @app.route('/receive_data', methods=['POST'])
+# @app.post('/receive_data')
+# def receive_data(request: ReceiveDataRequest):
+#     if not node_instance:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Node instance not initialized"
+#         )
+#     if request.data:
+#         node_instance.add_data_batch(request.index, np.array(request.data))
+#         return {
+#             "status": "data_received",
+#             "batch_size": len(request.data)
+#         }
+#     raise HTTPException(
+#         status_code=status.HTTP_400_BAD_REQUEST,
+#         detail="No Data Provided"
+#     )
 
 def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.round_number[index]
 
-    logger.debug(f"[{index}] listening for start round {current_round}")
+    logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
     while True:
+
         try:
             headers = {
                 'User-Agent': 'AnyLog/1.23',
@@ -209,6 +210,7 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                     nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
                     logger.info(f"[{index}][Round {current_round}] Step 3 Complete: Model parameters published")
                     current_round += 1
+                    logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
 
             time.sleep(5)  # Poll every 2 seconds
         except Exception as e:
@@ -277,7 +279,7 @@ def direct_inference(request: InferenceRequest):
     try:
         float_list = request.input
         index = request.index
-        results = node_instance.direct_inference(index, np.array(float_list))
+        results = node_instance.direct_inference(index, float_list)
         response = {
             'prediction': str(results),
         }

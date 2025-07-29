@@ -3,13 +3,11 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-# import gzip
+
 import os
 from asyncio import sleep
-# import ast
 
-import numpy as np
-# import requests
+# import numpy as np
 import pickle
 from threading import Lock
 from dotenv import load_dotenv
@@ -113,7 +111,8 @@ class Aggregator:
                 if response.status_code == 200:
                     success = True
                 else:
-                    sleep(np.random.randint(2, 5))
+                    # sleep(np.random.randint(2, 5))
+                    sleep(3)
 
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
@@ -231,7 +230,8 @@ class Aggregator:
                 if response.status_code == 200:
                     insert_success = True
                 else:
-                    sleep(np.random.randint(2, 5))
+                    # sleep(np.random.randint(2, 5))
+                    sleep(3)
 
                     if check_policy_inserted(self.edgelake_node_url, data):
                         insert_success = True
@@ -273,7 +273,8 @@ class Aggregator:
                 if response.status_code == 200:
                     success = True
                 else:
-                    sleep(np.random.randint(5,15))
+                    # sleep(np.random.randint(5,15))
+                    sleep(5)
 
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True

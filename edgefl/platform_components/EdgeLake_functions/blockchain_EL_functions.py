@@ -254,7 +254,7 @@ def connect_to_db(edgelake_node_url, db_name, user, password, ip, port):
         raise ConnectionError(f"Unable to connect to database: {e}")
 
 
-def fetch_data_from_db(edgelake_node_url, query):
+def fetch_data_from_db(edgelake_node_url, query, tcp_ip_port):
     """
     Fetch data from the database using an HTTP request with the provided SQL query.
 
@@ -265,7 +265,9 @@ def fetch_data_from_db(edgelake_node_url, query):
     """
     headers = {
         'User-Agent': 'AnyLog/1.23',
-        'command': query,
+        'destination': tcp_ip_port,
+        'command': f'{query}',
+        'subset': 'false'
     }
 
     try:

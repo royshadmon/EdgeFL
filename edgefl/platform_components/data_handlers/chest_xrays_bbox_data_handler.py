@@ -223,7 +223,7 @@ class ChestXraysBBoxDataHandler():
         return aggregated_params
 
     # TODO: bbox.direct_inference()
-    def direct_inference(self, data, labels: list[float]):
+    def direct_inference(self, data):
         """
         Run inference on raw input data against given labels (already in respective format).
         Handles data conversion and validation internally.

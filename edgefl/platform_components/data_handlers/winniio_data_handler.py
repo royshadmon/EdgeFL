@@ -57,6 +57,7 @@ class WinniioDataHandler():
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
+        self.tcp_ip_port = os.getenv("EXTERNAL_TCP_IP_PORT")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.db_name = db_name
 
@@ -273,7 +274,7 @@ class WinniioDataHandler():
         Run inference on raw input data against given labels (already in WINNIIO format).
         Handles data conversion and validation internally.
         """
-
+        data = np.array(data)
         data = data.reshape(-1, 1, 6)
         predictions = self.fl_model.predict_on_batch(data)
         self.logger.info(f"[Inference] Step 5: Edge inference complete")

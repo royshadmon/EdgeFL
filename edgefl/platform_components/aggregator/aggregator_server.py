@@ -12,7 +12,6 @@ from starlette.responses import PlainTextResponse
 from platform_components.aggregator.aggregator import Aggregator
 import asyncio
 import logging
-import numpy as np
 import pickle
 import requests
 import os

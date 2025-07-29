@@ -9,15 +9,12 @@ import os
 import pickle
 from asyncio import sleep
 
-# import keras
-import numpy as np
-# from keras import layers, optimizers, models
+# import numpy as np
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted, \
     get_policies
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
-from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
 from dotenv import load_dotenv
@@ -189,7 +186,8 @@ class Node:
                 if response.status_code == 200:
                     success = True
                 else:
-                    sleep(np.random.randint(5,15))
+                    # sleep(np.random.randint(5,15))
+                    sleep(5)
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
 

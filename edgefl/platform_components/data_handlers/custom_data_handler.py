@@ -49,6 +49,7 @@ class MnistDataHandler():
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
+        self.tcp_ip_port = os.getenv("EXTERNAL_TCP_IP_PORT")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
         self.db_name = LOGICAL_DATABASE
 
@@ -144,22 +145,25 @@ class MnistDataHandler():
 
         return acc
 
-    def direct_inference(self, data, labels: list[int]):
+    # TODO this function doesn't work
+    def direct_inference(self, data):
         """
         Run inference on raw input data against given labels (already in MNIST format).
         Handles data conversion and validation internally.
         """
         # TODO: add another input type that allows for raw images to work (would be converted properly)
 
+        return None
+        data = np.array(data)
         # Validate existence and check that there is the same number of data inputs as number of labels
-        if not data and not labels and len(data) != len(labels):
-            raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")
+        # if not data and not labels and len(data) != len(labels):
+        #     raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")
 
         # Validate labels/predictions and convert labels into a numpy array
-        if not isinstance(labels[0], int):
-            raise TypeError(
-                f"Labels must be a list of integers."
-            )
+        # if not isinstance(labels[0], int):
+        #     raise TypeError(
+        #         f"Labels must be a list of integers."
+        #     )
 
         # Set up the test data properly
         test_images = []
@@ -183,7 +187,7 @@ class MnistDataHandler():
         # Convert test data into final numpy arrays
         img_rows, img_cols = 28, 28
         test_images_final = np.array(test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
-        test_labels_final = np.array(test_labels, dtype=np.int64)
+        # test_labels_final = np.array(test_labels, dtype=np.int64)
 
         # Get predictions
         with tf.device(device):
@@ -235,15 +239,15 @@ class MnistDataHandler():
         # db_name = os.getenv("PSQL_DB_NAME")
 
         # Get number of rows
-        row_count_query = f"sql {self.db_name} SELECT count(*) FROM {TRAIN_TABLE} WHERE data_type = 'test'"
-        row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query)
+        row_count_query = f"sql {self.db_name} SELECT count(*) FROM {TEST_TABLE}"
+        row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query, self.tcp_ip_port)
         num_rows = row_count["Query"][0].get('count(*)')
         # fetch in offsets of 50
         # TODO: Get row offset queries to work
         for offset in range(1):
         # for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} WHERE data_type = 'test' LIMIT 50"
-            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+            query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} LIMIT 50"
+            test_data = fetch_data_from_db(self.edgelake_node_url, query_test, self.tcp_ip_port)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
             query_test_result = np.array(test_data["Query"]) # TODO: watch out when exceeding max rounds stored in the db
@@ -288,12 +292,12 @@ class MnistDataHandler():
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         # db_name = os.getenv("PSQL_DB_NAME")
-        query_train = f"sql {self.db_name} SELECT image, label FROM {TRAIN_TABLE} WHERE round_number = {round_number} AND data_type = 'train'"
-        query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} WHERE round_number = {round_number} AND data_type = 'test'"
+        query_train = f"sql {self.db_name} SELECT image, label FROM {TRAIN_TABLE} WHERE round_number = {round_number}"
+        query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} WHERE round_number = {round_number}"
 
         try:
-            train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
-            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+            train_data = fetch_data_from_db(self.edgelake_node_url, query_train, self.tcp_ip_port)
+            test_data = fetch_data_from_db(self.edgelake_node_url, query_test, self.tcp_ip_port)
 
             # Assuming the data is returned as dictionaries with keys 'x' and 'y'
             query_train_result = np.array(train_data["Query"])
