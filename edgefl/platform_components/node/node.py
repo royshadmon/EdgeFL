@@ -49,12 +49,9 @@ class Node:
 
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replica_name)
         self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replica_name)
+        self.training_application_dir = os.path.join(self.github_dir, os.getenv("TRAINING_APPLICATION_DIR"))
         self.docker_file_write_destination = None
         # =====
-
-        # Initialize Firebase database connection
-        self.database_url = os.getenv("DATABASE_URL")
-        self.mongo_db_name = os.getenv('MONGO_DB_NAME')
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
@@ -90,7 +87,7 @@ class Node:
 
     def initialize_training_app_on_index(self, index):
         try:
-            training_app_path = os.path.join(self.github_dir, self.module_paths[index])
+            training_app_path = os.path.join(self.training_application_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index]) # TODO: this takes too long
             self.data_handlers[index] = TrainingApp_class(self.replica_name, self.databases[index]) # Create an instance at index
         except Exception as e: # TODO: raise an actual Error

@@ -2,7 +2,7 @@ import argparse
 import requests
 import json
 from torchvision import datasets
-
+import time
 
 def __put_data(conn:str, payload:(list or str or dict), headers:dict):
     """
@@ -15,9 +15,9 @@ def __put_data(conn:str, payload:(list or str or dict), headers:dict):
         response:requests response object
     """
     try:
-        response = requests.put(url=f"http://{conn}", data=payload, headers=headers)
-        response.raise_for_status()
-        return response
+        for row in payload:
+            response = requests.put(url=f"http://{conn}", data=json.dumps(row), headers=headers)
+            response.raise_for_status()
     except Exception as e:
         raise Exception(f"Failed to execute POST against {conn} (Error: {e})")
 
@@ -45,7 +45,18 @@ def main():
     parse.add_argument('--num-rows', type=int, default=50, help='')
     # parse.add_argument('--test-split', type=int, default=0.2, help='')
 
+    # create tsd_info
     args = parse.parse_args()
+
+    for cmd_type in ['drop', 'create']:
+        try:
+            response = requests.post(f'http://{args.conn}', headers={'command': f"{cmd_type} table tsd_info where dbms=almgm",
+                                                   'User-Agent': 'AnyLog/1.23'})
+            response.raise_for_status()
+        except Exception as e:
+            print("Failed to execute POST against {args.conn} (Error: {e})")
+            # raise Exception(f"Failed to execute POST against {args.conn} (Error: {e})")
+
 
     TRAIN_SAMPLES_PER_ROUND = int(args.num_rows)
     TEST_SAMPLES_PER_ROUND = int(TRAIN_SAMPLES_PER_ROUND * 0.2)
@@ -60,13 +71,13 @@ def main():
         train_images = train_dataset.data[train_idx:train_end]
         train_labels = train_dataset.targets[train_idx:train_end]
 
-        rows = [{"image": img.numpy().flatten().tolist(), "label": int(label), "round_number": round_num} for img, label in zip(train_images, train_labels)]
-        json_train = json.dumps(rows)
+        json_train = [{"image": img.numpy().flatten().tolist(), "label": int(label), "round_number": round_num} for img, label in zip(train_images, train_labels)]
+        # json_train = json.dumps(rows)
         header = create_header(db_name=args.db_name, table_name="mnist_train")
 
+        print("Inserting to mnist_train")
         try:
-            response = __put_data(conn=args.conn, headers=header, payload=json_train)
-            response.raise_for_status()
+            __put_data(conn=args.conn, headers=header, payload=json_train)
         except Exception as error:
             raise Exception
 
@@ -74,14 +85,14 @@ def main():
         test_images = test_dataset.data[test_idx:test_end]
         test_labels = test_dataset.targets[test_idx:test_end]
 
-        rows = [{"image": img.numpy().flatten().tolist(), "label": int(label), "round_number": round_num} for img, label in
+        json_test = [{"image": img.numpy().flatten().tolist(), "label": int(label), "round_number": round_num} for img, label in
                 zip(test_images, test_labels)]
-        json_test = json.dumps(rows)
+        # json_test = json.dumps(rows)
         header = create_header(db_name=args.db_name, table_name="mnist_test")
 
+        print("Inserting to mnist_test")
         try:
-            response = __put_data(conn=args.conn, headers=header, payload=json_test)
-            response.raise_for_status()
+            __put_data(conn=args.conn, headers=header, payload=json_test)
         except Exception as error:
             raise Exception
 

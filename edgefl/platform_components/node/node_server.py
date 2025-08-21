@@ -70,9 +70,6 @@ class InitNodeRequest(BaseModel):
     replica_port: str
     replica_index: str
     round_number: int
-    module_name: str
-    module_path: str
-    db_name: str
 
 
 @app.post('/init-node')
@@ -85,8 +82,12 @@ def init_node(request: InitNodeRequest):
         port = request.replica_port
         replica_name = request.replica_name
         index = request.replica_index
-        module_name = request.module_name
-        module_path = request.module_path
+
+        module_name = os.getenv("MODULE_NAME")
+        module_file = os.getenv("MODULE_FILE")
+
+        # module_name = request.module_name
+        # module_path = request.module_path
 
         # db_name = request.db_name # testing winniio_fl + mnist_fl DBs
         db_name = os.getenv("LOGICAL_DATABASE")
@@ -111,7 +112,7 @@ def init_node(request: InitNodeRequest):
         if index not in node_instance.databases:
             node_instance.databases[index] = db_name
 
-        node_instance.initialize_specific_node_on_index(index, module_name, module_path)
+        node_instance.initialize_specific_node_on_index(index, module_name, module_file)
         node_instance.round_number[index] = most_recent_round # 1 or current round
 
         logger.info(f"{replica_name} successfully initialized for ({index})")

@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 
 # node that system_query resides on
-QUERY_NODE_URL=f"http://{os.getenv('QUERY_NODE_URL')}"
+QUERY_NODE_URL=f"http://{os.getenv('EXTERNAL_IP')}"
 # Edge Node containing data
-EDGE_NODE_URL=os.getenv('EDGE_NODE_URL', 'network')
+EDGE_NODE_URL=os.getenv('EXTERNAL_TCP_IP_PORT', 'network')
 # Logical database name
 LOGICAL_DATABASE=os.getenv('LOGICAL_DATABASE')
 # Table containing trained data

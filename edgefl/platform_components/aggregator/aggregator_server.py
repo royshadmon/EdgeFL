@@ -51,9 +51,6 @@ training_processes = {}
 class InitRequest(BaseModel):
     nodeUrls: list[str]
     index: str
-    module: str
-    module_file: str
-    db_name: str
 
 class TrainingRequest(BaseModel):
     totalRounds: int
@@ -82,8 +79,13 @@ def init(request: InitRequest):
     try:
         # Initialize the nodes on specified index and send the contract address
         node_urls, index = request.nodeUrls, request.index
-        module_name, module_file = request.module, request.module_file
-        db_name = request.db_name
+
+        module_name = os.getenv("MODULE_NAME")
+        module_file = os.getenv("MODULE_FILE")
+
+        # module_name, module_file = request.module, request.module_file
+        # db_name = request.db_name
+        db_name = os.getenv("LOGICAL_DATABASE")
 
         # Verify filepath exists
         module_path = os.path.join(aggregator.training_app_dir, module_file)
@@ -98,7 +100,7 @@ def init(request: InitRequest):
         if not index in aggregator.round_number:
             aggregator.round_number[index] = 1
 
-        initialize_nodes(node_urls, index, module_name, module_path, db_name)
+        initialize_nodes(node_urls, index)
 
         aggregator.set_module_at_index(index, module_name, module_path)
         aggregator.initialize_index_on_blockchain(index, module_name, module_path, db_name)
@@ -134,7 +136,7 @@ def is_node_online(node_url: str):
     except requests.exceptions.RequestException:
         return False
 
-def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_name):
+def initialize_nodes(node_urls: list[str], index):
     """Send the deployed contract address to multiple node servers."""
     def init_node(node_url: str):
         try:
@@ -167,10 +169,7 @@ def initialize_nodes(node_urls: list[str], index, module_name, module_path, db_n
                 'replica_port': ip_port[1],
                 'replica_name': replica_name,
                 'replica_index': index,
-                'round_number': aggregator.round_number[index],
-                'module_name': module_name,
-                'module_path': module_path,
-                'db_name': db_name
+                'round_number': aggregator.round_number[index]
             })
 
             # init end_round
