@@ -20,7 +20,6 @@ from sklearn.model_selection import train_test_split
 
 # load_dotenv()
 
-db_name = os.getenv("PSQL_DB_NAME")
 dir_path_prefix = os.getenv("GITHUB_DIR")
 
 
@@ -80,7 +79,6 @@ def main():
     time.sleep(2)
 
     # Configuration
-    NUM_NODES = 1
     NUM_ROUNDS = args.num_rounds
     TRAIN_SAMPLES_PER_ROUND = 0.8 # this and below is percentages of total dataset
     TEST_SAMPLES_PER_ROUND = 0.2

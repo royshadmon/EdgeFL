@@ -197,16 +197,14 @@ at the data handler template for more information.
 curl -X POST http://localhost:8081/inference/test-index
 curl -X POST http://localhost:8082/inference/test-index
 curl -X POST http://localhost:8083/inference/test-index
-curl -X POST http://localhost:8084/inference/test-index
 ```
 
 An example output looks like this:
 ```bash
-curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index ; curl -X POST http://localhost:8084/inference/test-index
+curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index 
 {"index":"test-index","message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
 {"index":"test-index","message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
 {"index":"test-index","message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
 ```
 
 You can also do a direct inference on the aggregator which requires inputting test data and its test

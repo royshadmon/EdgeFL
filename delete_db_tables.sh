@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Variables - comma separated host:port list
-#DB_HOSTS="192.168.1.125:5432,192.168.1.125:5433,192.168.1.125:5434"
-DB_HOSTS="192.168.1.125:5433"
+DB_HOSTS="192.168.1.125:5432,192.168.1.125:5433,192.168.1.125:5434"
+#DB_HOSTS="192.168.1.125:5433"
 DB_NAME="mnist_fl"
 DB_USER="demo"
 
