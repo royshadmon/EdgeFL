@@ -9,14 +9,14 @@ operator roles and one with the master role. The master role is a normal EdgeLak
 node but also emulates the same blockchain-like functionality of the blockchain-back shared
 metadata layer. For more information about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
 
-The simulation includes the MNIST dataset, where three nodes collaboratively train a global model
-with MNIST data local to each node (i.e., there is no data movement.). Since the simulation instructions
-are for a single machine, each node will query the same Postgres database but on different tables
-so emulate physically distributed data. Nevertheless, each node will utilize its own EdgeLake 
+There are three demos supported, where each operator will locally train a ML model
+utilizing its local data and EdgeFL will dynamically facilitate model sharing and aggregation
+via the aggregator node. The value here is that there is no data movement. 
+Since the demo instructions
+are for a single machine, althoug they can be easily adapted to execute on multiple
+physical machine, we will deploy multiple Postgres databases, one for each EdgeLake operator,
+to emulate physically distributed data. Nevertheless, each node will utilize its own EdgeLake 
 operator node (running in a Docker container) to truly simulate a distributed environment.
-
-In addition, there is another example custom data handle from our Winniio partners. This dataset
-consists of room temperature data used to predict the temperature of a classroom in two hours.
 
 Before you get started, please follow the configuration steps precisely.
 
