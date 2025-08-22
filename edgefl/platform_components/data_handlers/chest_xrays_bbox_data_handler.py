@@ -11,23 +11,17 @@ import logging
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from keras.src.metrics.metrics_utils import confusion_matrix
-
-# from sklearn.preprocessing import MinMaxScaler
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
-from keras import layers, optimizers, models
-from tensorflow.python import keras
 
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.src.models import Sequential
+
+from keras.src.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from keras.src.legacy.preprocessing.image import ImageDataGenerator
+from keras.src.callbacks import ModelCheckpoint, EarlyStopping
 
 from sklearn.metrics import mean_squared_error, accuracy_score
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import r2_score
+
 
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
 from platform_components.model_fusion_algorithms.FedAvg import FedAvg_aggregate
@@ -63,10 +57,12 @@ class ChestXraysBBoxDataHandler():
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
+        self.tcp_ip_port = os.getenv("EXTERNAL_TCP_IP_PORT")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 
         self.db_name = os.getenv("LOGICAL_DATABASE")
-        self.db_table = os.getenv("TRAIN_TABLE")
+        self.train_table = os.getenv("TRAIN_TABLE")
+        self.test_table = os.getenv("TEST_TABLE")
 
         # Data Handler Initialization
         self.image_root_dir = os.path.join(os.getenv("GITHUB_DIR"), os.getenv("IMAGE_ROOT_DIR"))
@@ -121,20 +117,20 @@ class ChestXraysBBoxDataHandler():
         :type nb_points: int
         """
 
-        query_train = f"""sql {self.db_name} SELECT image, width, height, class, x_min, y_min, x_max, y_max FROM {self.db_table} WHERE round_number = {round_number}AND data_type = 'train'"""
-        query_test = f"""sql {self.db_name} SELECT image, width, height, class, x_min, y_min, x_max, y_max FROM {self.db_table} WHERE round_number = {round_number} AND data_type = 'test'"""
+        query_train = f"""sql {self.db_name} SELECT filename, width, height, class, x_min, y_min, x_max, y_max FROM {self.train_table} WHERE round_number = {round_number}"""
+        query_test = f"""sql {self.db_name} SELECT filename, width, height, class, x_min, y_min, x_max, y_max FROM {self.test_table} WHERE round_number = {round_number}"""
 
         try:
-            train_data = fetch_data_from_db(self.edgelake_node_url, query_train)
-            test_data = fetch_data_from_db(self.edgelake_node_url, query_test)
+            train_data = fetch_data_from_db(self.edgelake_node_url, query_train, self.tcp_ip_port)
+            test_data = fetch_data_from_db(self.edgelake_node_url, query_test,self.tcp_ip_port)
 
             # Convert the data into dataframes suitable for the data generator
-            train_df = pd.DataFrame(train_data["Query"], columns=["image", "width", "height", "class", "x_min", "y_min", "x_max", "y_max"])
-            test_df = pd.DataFrame(test_data["Query"], columns=["image", "width", "height", "class", "x_min", "y_min", "x_max", "y_max"])
+            train_df = pd.DataFrame(train_data["Query"], columns=["filename", "width", "height", "class", "x_min", "y_min", "x_max", "y_max"])
+            test_df = pd.DataFrame(test_data["Query"], columns=["filename", "width", "height", "class", "x_min", "y_min", "x_max", "y_max"])
 
             # Add the full path of the image; currently, image is the filename
-            train_df["file_path"] = train_df["image"].apply(lambda x: os.path.join(self.image_root_dir, x))
-            test_df["file_path"] = test_df["image"].apply(lambda x: os.path.join(self.image_root_dir, x))
+            train_df["file_path"] = train_df["filename"].apply(lambda x: os.path.join(self.image_root_dir, x))
+            test_df["file_path"] = test_df["filename"].apply(lambda x: os.path.join(self.image_root_dir, x))
 
             self.train_df = train_df
             self.test_df = test_df

@@ -15,3 +15,7 @@ docker~=7.1.0
 #tensorflow~=2.16.2
 #skorch>=0.15.0
 #torchvision~=0.17.2
+#kaggle~=1.7.4.5
+#starlette~=0.46.1
+#scipy~=1.13.1
+#matplotlib~=3.9.4
