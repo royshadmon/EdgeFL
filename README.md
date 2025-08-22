@@ -13,7 +13,7 @@ There are three demos supported, where each operator will locally train a ML mod
 utilizing its local data and EdgeFL will dynamically facilitate model sharing and aggregation
 via the aggregator node. The value here is that there is no data movement. 
 Since the demo instructions
-are for a single machine, althoug they can be easily adapted to execute on multiple
+are for a single machine, although they can be easily adapted to execute on multiple
 physical machine, we will deploy multiple Postgres databases, one for each EdgeLake operator,
 to emulate physically distributed data. Nevertheless, each node will utilize its own EdgeLake 
 operator node (running in a Docker container) to truly simulate a distributed environment.
@@ -130,8 +130,9 @@ connect dbms mnist_fl where type = psql and user = [user] and password = [passwo
 The demo instructions can be found the the `EdgeFL/Demo-READMEs/` directory.
 
 We currently have two demos:
-- MNIST handwriting dataset 
-- Winniio temperature, telemetry dataset. Thank you to your partners [Winniio](https://www.winniio.io)!
+- [MNIST handwriting dataset demo](Demo-READMEs/MNIST.md)
+- [Winniio demo on temperature prediction](Demo-READMEs/WINNIIO.md), a telemetry dataset. Thank you to your partners [Winniio homepage](https://www.winniio.io)!
+- [Xray detection bounding box](Demo-READMEs/Chest-Xray-BoundingBox.md)
 
 
 ## Resolving common issues
