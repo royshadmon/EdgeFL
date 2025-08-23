@@ -93,8 +93,8 @@ EDGE_NODE_URL=os.getenv('EXTERNAL_TCP_IP_PORT', 'network')
 ##################################################
 
 
-class YourDataHandlerClassName():
-    def __init__(self, node_name, db_name):
+class YourDataHandlerClassName(): # This is also the MODULE_NAME
+    def __init__(self, node_name):
         """
         Initialize.
 

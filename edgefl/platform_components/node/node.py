@@ -89,7 +89,7 @@ class Node:
         try:
             training_app_path = os.path.join(self.training_application_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index]) # TODO: this takes too long
-            self.data_handlers[index] = TrainingApp_class(self.replica_name, self.databases[index]) # Create an instance at index
+            self.data_handlers[index] = TrainingApp_class(self.replica_name) # Create an instance at index
         except Exception as e: # TODO: raise an actual Error
             return {
                 'status': 'error',

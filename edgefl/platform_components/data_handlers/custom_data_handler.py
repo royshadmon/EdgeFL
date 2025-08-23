@@ -45,7 +45,7 @@ TEST_TABLE=os.getenv('TEST_TABLE')
 
 
 class MnistDataHandler():
-    def __init__(self, node_name, db_name):
+    def __init__(self, node_name):
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)

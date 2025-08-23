@@ -45,7 +45,7 @@ CLASSES = [
 ]
 
 class ChestXraysBBoxDataHandler():
-    def __init__(self, node_name, db_name):
+    def __init__(self, node_name):
         """
         Initialize.
 
