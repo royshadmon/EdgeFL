@@ -137,7 +137,7 @@ class Aggregator:
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
-            self.training_apps[index] = TrainingApp_class('aggregator', self.databases[index]) # Create an instance at index
+            self.training_apps[index] = TrainingApp_class('aggregator') # Create an instance at index
         except Exception as e:
             return {
                 'status': 'error',
