@@ -9,14 +9,14 @@ operator roles and one with the master role. The master role is a normal EdgeLak
 node but also emulates the same blockchain-like functionality of the blockchain-back shared
 metadata layer. For more information about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
 
-The simulation includes the MNIST dataset, where three nodes collaboratively train a global model
-with MNIST data local to each node (i.e., there is no data movement.). Since the simulation instructions
-are for a single machine, each node will query the same Postgres database but on different tables
-so emulate physically distributed data. Nevertheless, each node will utilize its own EdgeLake 
+There are three demos supported, where each operator will locally train a ML model
+utilizing its local data and EdgeFL will dynamically facilitate model sharing and aggregation
+via the aggregator node. The value here is that there is no data movement. 
+Since the demo instructions
+are for a single machine, although they can be easily adapted to execute on multiple
+physical machine, we will deploy multiple Postgres databases, one for each EdgeLake operator,
+to emulate physically distributed data. Nevertheless, each node will utilize its own EdgeLake 
 operator node (running in a Docker container) to truly simulate a distributed environment.
-
-In addition, there is another example custom data handle from our Winniio partners. This dataset
-consists of room temperature data used to predict the temperature of a classroom in two hours.
 
 Before you get started, please follow the configuration steps precisely.
 
@@ -25,18 +25,30 @@ Assumptions:
  - Downloaded / cloned the repository.
  - Have Docker installed.
 
-Install all necessary Python packages. Tested on Python3.12.
+Install all necessary Python packages. Tested on Python3.12. Make sure to add all required Python packages to 
+your `requirement.txt` file. In addition, you can also utilize a Python virtual environment, see the [venv docs](https://docs.python.org/3/library/venv.html).  
 ```bash
-cd Anylog-Edgelake-Federated-Learning-Platform
+cd EdgeFL
 pip install -r requirements.txt
 ```
 
 ## Deploy Postgres container
+You will need one Postgres container for each EdgeLake operator. 
 Postgres will become available on your inet IP address. You can determine this through the `ifconfig` command. 
 ```bash
 * Start Docker *
 cd EdgeLake/postgres
-docker compose up -d
+make up NAME=postgres1 HOST_PORT=5432 VOLUME=pgdata1
+make up NAME=postgres2 HOST_PORT=5433 VOLUME=pgdata2
+make up NAME=postgres3 HOST_PORT=5434 VOLUME=pgdata3
+```
+Note that you can change the default POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB in the Makefile
+or add them as arguments to the `make up` command. 
+To kill these services:
+```bash
+make clean NAME=postgres1
+make clean NAME=postgres2
+make clean NAME=postgres3
 ```
 
 ## Deploy EdgeLake Master node
@@ -96,188 +108,32 @@ The `+` signifies that the nodes are all members of EdgeLake's p2p network. If y
 please contact the EdgeLake maintainers through [EdgeLake's Slack Channel](https://lfedge.org/projects/edgelake/)
 (the join link is at the bottom of the page).
 
-## Setting up training node and aggregator configurations
-We now need to update the env files in the `edgefl/env_files/mnist/` directory. To do this, we need to update
-the listed variables in the following files `mnist1.env`, `mnist2.env`, `mnist3.env` with the inet IP (e.g., `192.1.1.1`):
-- `EXTERNAL_IP`
-- `EXTERNAL_TCP_IP_PORT`
-- `PSQL_HOST`  
-
-Note that you do not need to change the ports, they're preconfigured to work. 
-
-In addition, update the IP address in for the `EXTERNAL_TCP_IP_PORT` and `EXTERNAL_IP` in the `mnist-agg.env` file.
-
-Now we are ready to start the simulation.
-
-# Running Simulation
-The first step is to load data the MNIST data to the Postgres database. 
-
-## Loading Data Instructions
-Note that this only needs to be done once. This will create 3 tables `node_node1`, `node_node2`, `node_node3` 
-in the `mnist_fl` database. 
+More over, make sure each operator is connected to the DBMS (the demos utilize the DBMS `mnist_fl`).
 ```bash
-cd edgefl
-dotenv -f env_files/mnist/mnist1.env run -- python -m data.mnist.mnist_db_script
+docker attach operator1
+EL operator1 +> get databases
+
+Active DBMS Connections
+Logical DBMS Database Type Owner  IP:Port            Configuration                                   Storage
+------------|-------------|------|------------------|-----------------------------------------------|----------|
+almgm       |psql         |system|192.168.1.125:5433|Autocommit On, Failed to pull Fsync            |Persistent|
+mnist_fl    |psql         |user  |192.168.1.125:5433|Autocommit Off, Failed to pull Fsync           |Persistent|
+system_query|psql         |system|192.168.1.125:5433|Autocommit Off, Unflagged, Failed to pull Fsync|Persistent|
+```
+If you don't see the `mnist_fl` line, then you will need to execute the following EdgeLake CLI command
+and re-execute the above command:
+```bash
+connect dbms mnist_fl where type = psql and user = [user] and password = [password] and ip = [ip] and port = [port] and memory = true 
 ```
 
-If you want to train on more (or less) data edit lines `153` and `154` in `edgefl/data/mnist/mnist_db_script.py`.
-Moreover, if you'd like to train over more than 10 rounds, edit line `152`. 
-Note that training on more data will result in a model with higher accuracy at the model inference step below.
+# Demos
+The demo instructions can be found the the `EdgeFL/Demo-READMEs/` directory.
 
-Now that data is loaded into the database continue to the next step.
+We currently have two demos:
+- [MNIST handwriting dataset demo](Demo-READMEs/MNIST.md)
+- [Winniio demo on temperature prediction](Demo-READMEs/WINNIIO.md), a telemetry dataset. Thank you to your partners [Winniio homepage](https://www.winniio.io)!
+- [Xray detection bounding box](Demo-READMEs/Chest-Xray-BoundingBox.md)
 
-## Starting aggregator and training nodes
-Note to execute the below commands in a new terminal. 
-```bash
-cd edgefl
-dotenv -f env_files/mnist/mnist-agg.env run -- uvicorn platform_components.aggregator.aggregator_server:app --host 0.0.0.0 --port 8080
-dotenv -f env_files/mnist/mnist1.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8081
-dotenv -f env_files/mnist/mnist2.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8082
-dotenv -f env_files/mnist/mnist3.env run -- uvicorn platform_components.node.node_server:app --host 0.0.0.0 --port 8083
-```
-
-Once all the nodes are running. We can start the training process. Note that you can view the 
-predefined training application file here: `custom_data_handler.py`.
-
-## Initialize model parameters and training application, start training, executing inference
-Execute the following `curl` command to initialize training. As a result of this command,
-each of the training nodes should be printing out a set of model weights to the screen.
-If you do not see this, then your data connector is correctly set up. Please see the resolving
-common issues section below.
-
-To initialize training do the following:
-```bash
-curl -X POST http://localhost:8080/init \
--H "Content-Type: application/json" \
--d '{
-  "nodeUrls": [
-    "http://localhost:8081",
-    "http://localhost:8082",
-    "http://localhost:8083"
-  ],
-  "index": "test-index",
-  "module": "MnistDataHandler",
-  "module_file": "custom_data_handler.py",
-  "db_name": "mnist_fl"
-}'
-```
-After, start the training process:
-```bash
-curl -X POST http://localhost:8080/start-training \
--H "Content-Type: application/json" \
--d '{
-  "totalRounds": 10,
-  "minParams": 3,
-  "index": "test-index"
-}'
-```
-
-`totalRounds` defines how many continuous rounds to train for. `minParams` defines how many parameters
-the aggregator should wait for before starting the next round.
-
-At any point during the training process, you can add additional nodes to the process by calling initialization again on the new nodes 
-(must use the same `index`) and `minParams` will be dynamically adjusted as necessary.
-```bash
-curl -X POST http://localhost:8080/init \
--H "Content-Type: application/json" \
--d '{
-  "nodeUrls": [
-    "http://localhost:8084"
-  ],
-  "index": "test-index",
-  "module": "MnistDataHandler",
-  "module_file": "custom_data_handler.py",
-  "db_name": "mnist_fl"
-}'
-```
-
-You can also update `minParams` as well during the training process (or anytime after node initialization). The specified `index`
-must exist in order to update `minParams`.
-```bash
-curl -X POST http://localhost:8080/update-minParams \
--H "Content-Type: application/json" \
--d '{
-  "updatedMinParams": 3,
-  "index": "test-index"
-}'
-```
-
-Once the training process is complete, you may choose to do additional rounds of training on the same model.
-```bash
-curl -X POST http://localhost:8080/continue-training \
- -H "Content-Type: application/json" \
- -d '{
-   "additionalRounds": 3, 
-   "minParams": 4,
-   "index": "test-index"
- }'
- ```
-
-At any point, you can execute edge inference directly on the node.
-This can be done on each training node. The output will be the accuracy based on the local test data
-held out from training.
-```bash
-curl -X POST http://localhost:8081/inference/test-index
-curl -X POST http://localhost:8082/inference/test-index
-curl -X POST http://localhost:8083/inference/test-index
-curl -X POST http://localhost:8084/inference/test-index
-```
-
-An example output looks like this:
-```bash
-curl -X POST http://localhost:8081/inference/test-index ; curl -X POST http://localhost:8082/inference/test-index ; curl -X POST http://localhost:8083/inference/test-index ; curl -X POST http://localhost:8084/inference/test-index
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"92.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"88.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"86.0","status":"success"}
-{"index":"test-index","message":"Inference completed successfully","model_accuracy":"84.0","status":"success"}
-```
-
-You can also do a direct inference on the aggregator which requires inputting test data and its test
-labels (i.e. expected predictions). The label must correspond to the given input and will be used to
-compare against the actual predictions of the model's testing output. The data type of the test data
-can be anything as long as fits the data type of the dataset. Below is an example for MNIST:
-```bash
-curl -X POST http://localhost:8080/direct-inference/test-index \
--H "Content-Type: application/json" \
--d '{
-  "input": [
-    [0,244,281,...(780 more numbers),0]
-  ],
-  "labels": [
-    3
-  ]
-}'
-```
-
-Here is one for the WINNIIO dataset:
-```bash
-curl -X POST http://localhost:8080/direct-inference/test-index \
--H "Content-Type: application/json" \
--d '{
-  "input": [
-    {
-        "actuatorState": "9770",
-        "co2Value": "418",
-        "eventCount": "0",
-        "humidity": "33.8",
-        "switchStatus": "0.021216271052304",
-        "temperature": "22.02"
-    },
-    {
-        "actuatorState": "0",
-        "co2Value": "425.8333333333333",
-        "eventCount": "0",
-        "humidity": "48.22",
-        "switchStatus": "0.0137001034912",
-        "temperature": "21.67"
-    }
-  ],
-  "labels": [
-    "22.02",
-    "21.59"
-  ]
-}'
-```
 
 ## Resolving common issues
 After executing the init `curl` request, if your training nodes do not print out model weights,
@@ -285,8 +141,7 @@ then they do not have access to the data.
 The first step is to double check that you loaded data into your Postgres instance.
 Make sure that you have the following:
 1. `mnist_fl` database
-2. Three tables: `node_node1`, `node_node2`, `node_node3`
-3. Make sure there's actually data in those tables. 
+2. Make sure there's actually data in those tables.
 
 Another step to double check is that the EdgeLake operator nodes are connected to the database.  
 To do so you can docker attach to each container and check.
@@ -318,15 +173,81 @@ connect dbms mnist_fl where type = psql and user = demo and password = passwd an
 where the `192.1.1.1` is your inet ip from above. It should output `database connected`. 
 If not, then your IP may be wrong. 
 
+You can also view all your database tables for a certain DBMS
+```bash
+EL operator1 +> get tables where dbms = mnist_fl
+
+Database Table name                                           Local DBMS Blockchain
+--------|----------------------------------------------------|----------|----------|
+mnist_fl|mnist_test                                          | V        | V        |
+        |mnist_train                                         | V        | V        |
+        |par_mnist_train_2025_07_01_d14_insert_timestamp     | V        | -        |
+        |par_room_12004_test_2025_07_01_d14_insert_timestamp | V        | -        |
+        |par_room_12004_train_2025_07_01_d14_insert_timestamp| V        | -        |
+        |room_12004_test                                     | V        | V        |
+        |room_12004_train                                    | V        | V        |
+        |room_12055_test                                     | -        | V        |
+        |room_12055_train                                    | -        | V        |
+        |room_12090_test                                     | -        | V        |
+        |room_12090_train                                    | -        | V        |
+```
+
+View the tables hosted by each EdgeLake operator:
+```bash
+EL operator1 +> get data nodes
+
+Company     DBMS     Table            Cluster ID                       Cluster Status Node Name Member ID External IP/Port    Local IP/Port    Main Node Status
+-----------|--------|----------------|--------------------------------|--------------|---------|---------|-------------------|----------------|----|-----------|
+New Company|mnist_fl|room_12055_train|1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|room_12055_test |1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|room_12004_train|1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|room_12004_test |1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|room_12090_train|1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|room_12090_test |1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|mnist_train     |1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+New Company|mnist_fl|mnist_test      |1a4a2c6f59161cf5f7b242abcacf6ba2|active        |operator1|       79|104.60.100.77:32148|172.17.0.3:32148| +  |active     |
+           |        |                |                                |active        |operator2|      208|104.60.100.77:32248|172.17.0.4:32248| +  |active     |
+           |        |                |                                |active        |operator3|       65|104.60.100.77:32348|172.17.0.5:32348| +  |active     |
+```
+
+View row count by operator:
+```bash
+EL operator1 +> get rows count where dbms=mnist_fl
+
+DBMS Name Table Name                                           Rows Count
+---------|----------------------------------------------------|----------|
+mnist_fl |mnist_test                                          |         0|
+         |mnist_train                                         |         0|
+         |par_mnist_train_2025_07_01_d14_insert_timestamp     |        50|
+         |par_room_12004_test_2025_07_01_d14_insert_timestamp |      1576|
+         |par_room_12004_train_2025_07_01_d14_insert_timestamp|      6300|
+         |room_12004_test                                     |         0|
+         |room_12004_train                                    |         0|
+
+EL operator1 +> run client (192.168.1.125:32148) sql mnist_fl select count(*) from mnist_train
+[39]
+EL operator1 +>
+{"Query":[{"count(*)":50}],
+"Statistics":[{"Count": 1,
+                "Time":"00:00:00",
+                "Nodes": 1}]}
+```
+
 Note, to detach from EdgeLake, press ctrl+p+q simultaneously. 
-
-### Chest-Xray Bounding Box Model/Data Handler
-
-- Ensure that the kaggle package is installed via requirements.txt
-- Go to [Kaggle](kaggle.com) and create/sign-in to your Kaggle account
-- Go to your account settings
-- Scroll down to PAI and "create new token" and download the JSON
-- Add the json to /home/{user}/.config/kaggle/kaggle.json
 
 ## Redoing simulation / Clean up
 To redo the simulation, you need to delete the `edgefl/file_write` directory.

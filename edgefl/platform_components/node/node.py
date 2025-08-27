@@ -9,15 +9,12 @@ import os
 import pickle
 from asyncio import sleep
 
-# import keras
-import numpy as np
-# from keras import layers, optimizers, models
+# import numpy as np
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted, \
     get_policies
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_to_container, create_directory_in_container
 from platform_components.EdgeLake_functions.mongo_file_store import read_file, write_file, copy_file_from_container
-from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.helpers.LoadClassFromFile import load_class_from_file
 
 from dotenv import load_dotenv
@@ -52,12 +49,9 @@ class Node:
 
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.replica_name)
         self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.replica_name)
+        self.training_application_dir = os.path.join(self.github_dir, os.getenv("TRAINING_APPLICATION_DIR"))
         self.docker_file_write_destination = None
         # =====
-
-        # Initialize Firebase database connection
-        self.database_url = os.getenv("DATABASE_URL")
-        self.mongo_db_name = os.getenv('MONGO_DB_NAME')
 
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
@@ -68,6 +62,7 @@ class Node:
         # Initializing index specific data in this node
         self.initialize_index(index)
         self.set_module_at_index(index, module_name, module_path)
+        # TODO: Pull training file
         self.initialize_training_app_on_index(index)
         self.initialize_file_write_paths_on_index(index)
 
@@ -92,9 +87,9 @@ class Node:
 
     def initialize_training_app_on_index(self, index):
         try:
-            training_app_path = os.path.join(self.github_dir, self.module_paths[index])
+            training_app_path = os.path.join(self.training_application_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index]) # TODO: this takes too long
-            self.data_handlers[index] = TrainingApp_class(self.replica_name, self.databases[index]) # Create an instance at index
+            self.data_handlers[index] = TrainingApp_class(self.replica_name) # Create an instance at index
         except Exception as e: # TODO: raise an actual Error
             return {
                 'status': 'error',
@@ -146,8 +141,8 @@ class Node:
 
     # Gets data of specified index in blockchain if it exists, otherwise returns None
     def get_index_data_in_blockchain(self, index):
-        where_condition = f"where name = {index}"
-        policies = get_policies(self.edgelake_node_url, "index", where_condition)
+        where_condition = f"where policy_type = init"
+        policies = get_policies(self.edgelake_node_url, index, where_condition)
         if not policies:
             return None
         if len(policies) > 1: # dev check
@@ -171,8 +166,10 @@ class Node:
     def add_node_params(self, round_number, model_metadata, index):
         self.logger.debug(f"[{index}] in add_node_params")
         try:
-            data = f'''<my_policy = {{"{index}-a{round_number}" : {{
+            data = f'''<my_policy = {{"{index}" : {{
                                 "node" : "{self.replica_name}",
+                                "round_number" : {round_number},
+                                "policy_type": "submodel",
                                 "index": "{index}",
                                 "node_type": "training",
                                 "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
@@ -186,7 +183,8 @@ class Node:
                 if response.status_code == 200:
                     success = True
                 else:
-                    sleep(np.random.randint(5,15))
+                    # sleep(np.random.randint(5,15))
+                    sleep(5)
                     if check_policy_inserted(self.edgelake_node_url, data):
                         success = True
 

@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 
 # node that system_query resides on
-QUERY_NODE_URL=f"http://{os.getenv('QUERY_NODE_URL')}"
+QUERY_NODE_URL=f"http://{os.getenv('EXTERNAL_IP')}"
 # Edge Node containing data
-EDGE_NODE_URL=os.getenv('EDGE_NODE_URL', 'network')
+EDGE_NODE_URL=os.getenv('EXTERNAL_TCP_IP_PORT', 'network')
 # Logical database name
 LOGICAL_DATABASE=os.getenv('LOGICAL_DATABASE')
 # Table containing trained data
@@ -45,7 +45,7 @@ TEST_TABLE=os.getenv('TEST_TABLE')
 # connect dbms system_query where type=sqlite and memory = true
 
 class WinniioDataHandler():
-    def __init__(self, node_name, db_name):
+    def __init__(self, node_name):
         """
         Initialize.
 
@@ -57,8 +57,9 @@ class WinniioDataHandler():
         # configure_logging(f"node_server_{port}")
         configure_logging("node_server_data_handler")
         self.logger = logging.getLogger(__name__)
+        self.tcp_ip_port = os.getenv("EXTERNAL_TCP_IP_PORT")
         self.edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
-        self.db_name = db_name
+
 
         # Data Handler Initialization
         self.x_train = None
@@ -89,8 +90,8 @@ class WinniioDataHandler():
             logger.error(Exception(f"Failed to execute GET against {QUERY_NODE_URL} (Error: {error})"))
         try:
             output = response.json()
-        except:
-            output = response.text
+        except Exception as error:
+            output = error
         return output
 
     def model_def(self):
@@ -123,15 +124,6 @@ class WinniioDataHandler():
         :rtype: tuple
         """
 
-        # these queries will depend on how we've uploaded mnist data and use round_number param in query
-        # we are pulling batched data for each round
-        # query_train = f"SELECT * FROM {node_name}"
-        # self.logger.debug(query_train)
-        # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
-
-        # db_name = os.getenv("PSQL_DB_NAME")
-        # query_train = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'train'"
-        # query_test = f"sql {self.db_name} SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM node_{node_name} WHERE round_number = {round_number} AND data_type = 'test'"
         query_train = f"sql {LOGICAL_DATABASE} format=json and stat=false SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM {TRAIN_TABLE} WHERE round_number = {round_number} AND data_type = 'train'"
         query_test = f"sql {LOGICAL_DATABASE} format=json and stat=false SELECT actuatorState, co2Value, eventCount, humidity, switchStatus, temperature, label FROM {TEST_TABLE} WHERE round_number = {round_number} AND data_type = 'test'"
 
@@ -273,7 +265,7 @@ class WinniioDataHandler():
         Run inference on raw input data against given labels (already in WINNIIO format).
         Handles data conversion and validation internally.
         """
-
+        data = np.array(data)
         data = data.reshape(-1, 1, 6)
         predictions = self.fl_model.predict_on_batch(data)
         self.logger.info(f"[Inference] Step 5: Edge inference complete")

@@ -11,16 +11,17 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the current directory contents into the container at /app
-COPY api-containers/ /app/api-containers
+COPY api-containers/app.py /app/api-containers/app.py
 
 # Copy the sibling edgefl directory (using a relative path)
-COPY edgefl/ /app/edgefl
+COPY edgefl/platform_components /app/edgefl/platform_components
+
+COPY edgefl/env_files /app/edgefl
 
 # List directories to debug
 RUN ls -la /app
-RUN ls -la /app/api-containers
+#RUN ls -la /app/api-containers
 
 # Define environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
-

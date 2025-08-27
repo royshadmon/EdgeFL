@@ -18,15 +18,15 @@ import time
 
 # load_dotenv()
 
-conn = psycopg2.connect(
-        database=os.getenv("PSQL_DB_NAME"),
-        user=os.getenv("PSQL_DB_USER"),
-        password=os.getenv("PSQL_DB_PASSWORD"),
-        host=os.getenv("PSQL_HOST"),
-        port=os.getenv("PSQL_PORT"),
-    )
-conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-cur = conn.cursor()
+# conn = psycopg2.connect(
+#         database=os.getenv("PSQL_DB_NAME"),
+#         user=os.getenv("PSQL_DB_USER"),
+#         password=os.getenv("PSQL_DB_PASSWORD"),
+#         host=os.getenv("PSQL_HOST"),
+#         port=os.getenv("PSQL_PORT"),
+#     )
+# conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+# cur = conn.cursor()
 
 
 def create_database():
@@ -154,7 +154,7 @@ def main():
     TEST_SAMPLES_PER_ROUND = 100
 
     print("Creating database...")
-    create_database()
+    # create_database()
     
     print("Downloading MNIST dataset...")
     train_dataset = datasets.MNIST('..', train=True, download=True)
@@ -173,7 +173,7 @@ def main():
             print(f"\nProcessing {node_name}")
             
             # Create table for this node
-            table_name = create_node_table(conn, node_name)
+            # table_name = create_node_table(conn, node_name)
             
             # Process each round
             for round_num in range(1, NUM_ROUNDS + 1):
