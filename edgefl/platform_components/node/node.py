@@ -212,9 +212,7 @@ class Node:
 
         # First round initialization
         if round_number == 1 and not aggregator_model_params_db_link:
-            # weights = self.local_training_handler.fl_model.get_model_update()
             weights = self.data_handlers[index].get_weights()
-            # model_update = self.data_handlers[index].get_model_update()
         else:
             try:
                 # Extract the key from the URL
@@ -226,8 +224,6 @@ class Node:
                 else:
                     response = read_file(self.edgelake_node_url, aggregator_model_params_db_link, f'{self.file_write_destination}/{index}/{filename}', ip_ports)
 
-
-                # response = requests.get(link)
                 if response.status_code == 200:
                     sleep(1)
                     with open(

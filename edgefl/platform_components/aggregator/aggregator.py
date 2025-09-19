@@ -62,9 +62,6 @@ class Aggregator:
         self.docker_file_write_destination = None
         # =====
 
-        # Initialize Firebase database connection
-        self.database_url = os.getenv('DATABASE_URL')
-
         if os.getenv("EDGELAKE_DOCKER_RUNNING").lower() == "false":
             self.docker_running = False
         else:

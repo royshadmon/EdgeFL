@@ -1,7 +1,7 @@
 services:
   # Aggregator Server
   aggregator:
-    image: edgefl:latest
+    image: edgefl:0.1-arm
     restart: always
     env_file:
       - ../edgefl/env_files/winniio_docker/winniio-agg.env
@@ -28,7 +28,7 @@ services:
 
   # Node Server 1
   node1:
-    image: edgefl:latest
+    image: edgefl:0.1-arm
     restart: always
     env_file:
       - ../edgefl/env_files/winniio_docker/winniio1.env
@@ -56,7 +56,7 @@ services:
 
   # Node Server 2
   node2:
-    image: edgefl:latest
+    image: edgefl:0.1-arm
     restart: always
     env_file:
       - ../edgefl/env_files/winniio_docker/winniio2.env

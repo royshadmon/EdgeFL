@@ -31,19 +31,13 @@ warnings.filterwarnings("ignore")
 
 load_dotenv()
 
-db_user = os.getenv("PSQL_DB_USER")
-db_password = os.getenv("PSQL_DB_PASSWORD")
-db_host = os.getenv("PSQL_HOST")
-db_port = os.getenv("PSQL_PORT")
-
-db_list = set()
-
 edgelake_node_url = f'http://{os.getenv("EXTERNAL_IP")}'
 edgelake_node_port = edgelake_node_url.split(":")[2]
 
 configure_logging(f"node_server_{edgelake_node_port}")
+
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
+# logger.setLevel(logging.DEBUG)  # Excludes WARNING, ERROR, CRITICAL
 
 # Initialize the Node instance
 node_instance = None
@@ -52,12 +46,6 @@ stop_listening_thread = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_list
-    # logger.info(f"Node server on port {edgelake_node_port} starting up.")
-
-    # Get all connected databases from the EdgeLake node
-    db_list = get_all_databases(edgelake_node_url)
-
     yield
     # logger.info("Node server shutting down.")
 
@@ -86,23 +74,7 @@ def init_node(request: InitNodeRequest):
         module_name = os.getenv("MODULE_NAME")
         module_file = os.getenv("MODULE_FILE")
 
-        # module_name = request.module_name
-        # module_path = request.module_path
-
-        # db_name = request.db_name # testing winniio_fl + mnist_fl DBs
         db_name = os.getenv("LOGICAL_DATABASE")
-
-
-        # Connect to DB if it's not in the EdgeLake node
-        if db_name not in db_list:
-            connect_to_db(edgelake_node_url, db_name, db_user, db_password, db_host, db_port)
-            db_list.add(db_name)
-
-        # # Fetch and check for existing data
-        # query = f"sql {db_name} SELECT * FROM node_{replica_name} LIMIT 1"
-        # check_data = fetch_data_from_db(edgelake_node_url, query)
-        # if not check_data:
-        #     raise ValueError(f"No data found in the database: {db_name}.")
 
         # Instantiate the Node class
         logger.info(f"{replica_name} before initialized")
@@ -137,7 +109,7 @@ def init_node(request: InitNodeRequest):
         }
     except ValueError as e:
         raise ValueError(
-            f"No data found in the database: {db_name}"
+            f"No data found in the database: {os.getenv("LOGICAL_DATABASE")}"
         )
     except HTTPException as e:
         raise HTTPException(
@@ -149,39 +121,12 @@ def init_node(request: InitNodeRequest):
             f"Unable to access the database tables: {str(e)}"
         )
 
-# '''
-# /receive_data [POST] (data)
-#     - Endpoint to receive data block from the simulated data stream
-# '''
-# class ReceiveDataRequest(BaseModel):
-#     index: str
-#     data: list
-#
-# # @app.route('/receive_data', methods=['POST'])
-# @app.post('/receive_data')
-# def receive_data(request: ReceiveDataRequest):
-#     if not node_instance:
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Node instance not initialized"
-#         )
-#     if request.data:
-#         node_instance.add_data_batch(request.index, np.array(request.data))
-#         return {
-#             "status": "data_received",
-#             "batch_size": len(request.data)
-#         }
-#     raise HTTPException(
-#         status_code=status.HTTP_400_BAD_REQUEST,
-#         detail="No Data Provided"
-#     )
 
 def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.round_number[index]
 
     logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
     while True:
-
         try:
             headers = {
                 'User-Agent': 'AnyLog/1.23',
@@ -191,7 +136,6 @@ def listen_for_start_round(nodeInstance, index, stop_event):
 
             if response.status_code == 200:
                 data = response.json()
-                # logger.debug(f"Response Data: {data}")  # Debugging line
                 # if no policies, then wait 2 seconds
                 if not data:
                     time.sleep(2)
