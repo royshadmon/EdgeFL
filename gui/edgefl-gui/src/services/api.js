@@ -4,6 +4,7 @@
  */
 
 
+
 /**
  * Generic API call function
  */
@@ -41,7 +42,8 @@ const apiCall = async (url, options = {}) => {
  * Initialize EDGEFL with node URLs and index
  */
 export const initializeEDGEFL = async (serverUrl, { nodeUrls, index }) => {
-  return apiCall(`http://${serverUrl}/init`, {
+  console.log(`${serverUrl}/init`);
+  return apiCall(`${serverUrl}/init`, {
     method: 'POST',
     body: JSON.stringify({
       nodeUrls: nodeUrls.filter(url => url.trim() !== ''),
@@ -54,7 +56,7 @@ export const initializeEDGEFL = async (serverUrl, { nodeUrls, index }) => {
  * Start training with specified parameters
  */
 export const startTraining = async (serverUrl, { totalRounds, minParams, index }) => {
-  return apiCall(`http://${serverUrl}/start-training`, {
+  return apiCall(`${serverUrl}/start-training`, {
     method: 'POST',
     body: JSON.stringify({
       totalRounds: parseInt(totalRounds),
@@ -68,7 +70,7 @@ export const startTraining = async (serverUrl, { totalRounds, minParams, index }
  * Run inference with input data
  */
 export const runInference = async (serverUrl, { input, index }) => {
-  return apiCall(`http://${serverUrl}/infer`, {
+  return apiCall(`${serverUrl}/infer`, {
     method: 'POST',
     body: JSON.stringify({
       input: [input],

@@ -99,10 +99,7 @@ const InferPage = () => {
 
       <div className="navigation-buttons">
         <button onClick={() => navigate('/start-training')} className="btn-secondary">
-          ← Previous: Start Training
-        </button>
-        <button onClick={() => navigate('/init')} className="btn-secondary">
-          ← Back to Initialize
+          ← Previous
         </button>
       </div>
     </div>

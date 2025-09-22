@@ -121,7 +121,7 @@ const InitPage = () => {
 
       <div className="navigation-buttons">
         <button onClick={() => navigate('/start-training')} className="btn-primary">
-          Next: Start Training →
+          Next →
         </button>
       </div>
     </div>

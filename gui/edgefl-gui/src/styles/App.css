@@ -396,7 +396,7 @@ code {
 
 .navigation-buttons .btn-primary,
 .navigation-buttons .btn-secondary {
-  min-width: 180px;
+  min-width: 120px;
   padding: 12px 20px;
   font-weight: 500;
 }

@@ -110,10 +110,10 @@ const StartTrainingPage = () => {
 
       <div className="navigation-buttons">
         <button onClick={() => navigate('/init')} className="btn-secondary">
-          ← Previous: Initialize
+          ← Previous
         </button>
         <button onClick={() => navigate('/infer')} className="btn-primary">
-          Next: Inference →
+          Next →
         </button>
       </div>
     </div>
