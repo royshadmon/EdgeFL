@@ -12,6 +12,7 @@ export const useServer = () => {
 
 export const ServerProvider = ({ children }) => {
   const [nodeUrl, setNodeUrl] = useState('localhost:8080');
+  const [indexValue, setIndexValue] = useState('test-index');
 
   const getServerUrl = () => {
     return nodeUrl.startsWith('http://') || nodeUrl.startsWith('https://') 
@@ -23,6 +24,8 @@ export const ServerProvider = ({ children }) => {
     nodeUrl,
     setNodeUrl,
     serverUrl: getServerUrl(),
+    indexValue,
+    setIndexValue,
   };
 
   return (

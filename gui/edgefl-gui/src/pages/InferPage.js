@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServer } from '../contexts/ServerContext';
 import { runInference, validateInputArray, generateSampleArray } from '../services/api';
+import InputDataSelector from '../components/InputDataSelector';
 
 const InferPage = () => {
   const navigate = useNavigate();
-  const { serverUrl } = useServer();
+  const { serverUrl, indexValue, setIndexValue } = useServer();
   const [inputData, setInputData] = useState('');
-  const [index, setIndex] = useState('test-index');
+  const [inputType, setInputType] = useState('json');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
@@ -17,6 +18,11 @@ const InferPage = () => {
     setInputData(JSON.stringify(array, null, 2));
   };
 
+  const handleDataChange = (data, type) => {
+    setInputData(data);
+    setInputType(type);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -24,8 +30,20 @@ const InferPage = () => {
     setResponse(null);
 
     try {
-      const inputArray = validateInputArray(inputData);
-      const data = await runInference(serverUrl, { input: inputArray, index });
+      let inputArray;
+      
+      if (inputType === 'json') {
+        inputArray = validateInputArray(inputData);
+      } else if (inputType === 'jpg' || inputType === 'wav') {
+        // For file uploads, we'll need to process the file
+        // For now, we'll show an error that this feature is coming soon
+        throw new Error(`${inputType.toUpperCase()} file processing is coming soon!`);
+      } else if (inputType === 'draw') {
+        // For grid drawings, the data is already in the correct format
+        inputArray = typeof inputData === 'string' ? JSON.parse(inputData) : inputData;
+      }
+      
+      const data = await runInference(serverUrl, { input: inputArray, index: indexValue });
       setResponse(data);
     } catch (err) {
       setError(err.message);
@@ -44,7 +62,7 @@ const InferPage = () => {
       <form onSubmit={handleSubmit} className="form-container">
         <div className="info-box">
           <h3>Inference Configuration</h3>
-          <p>Provide a 28x28 array of input data for inference. This is typically image data (e.g., MNIST digits).</p>
+          <p>Choose your input data type and provide the data for inference.</p>
         </div>
 
         <div className="form-group">
@@ -52,31 +70,26 @@ const InferPage = () => {
           <input
             type="text"
             id="index"
-            value={index}
-            onChange={(e) => setIndex(e.target.value)}
+            value={indexValue}
+            onChange={(e) => setIndexValue(e.target.value)}
             placeholder="test-index"
             required
           />
           <small>Index name to use for inference</small>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="inputData">Input Data (28x28 Array):</label>
-          <textarea
-            id="inputData"
-            value={inputData}
-            onChange={(e) => setInputData(e.target.value)}
-            placeholder="Enter a 28x28 JSON array..."
-            rows={8}
-            required
-          />
-          <small>Provide a 28x28 array in JSON format. Use the "Generate Sample Data" button for a quick start.</small>
-        </div>
+        <InputDataSelector
+          inputData={inputData}
+          setInputData={setInputData}
+          onDataChange={handleDataChange}
+        />
 
         <div className="button-group">
-          <button type="button" onClick={generateSampleData} className="btn-secondary">
-            Generate Sample Data
-          </button>
+          {inputType === 'json' && (
+            <button type="button" onClick={generateSampleData} className="btn-secondary">
+              Generate Sample Data
+            </button>
+          )}
           <button type="submit" disabled={loading} className="btn-primary">
             {loading ? 'Running Inference...' : 'Run Inference'}
           </button>

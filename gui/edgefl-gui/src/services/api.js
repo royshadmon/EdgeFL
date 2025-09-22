@@ -70,6 +70,11 @@ export const startTraining = async (serverUrl, { totalRounds, minParams, index }
  * Run inference with input data
  */
 export const runInference = async (serverUrl, { input, index }) => {
+    console.log(`${serverUrl}/infer`);
+    console.log({
+      input: [input],
+      index: index.trim()
+    });
   return apiCall(`${serverUrl}/infer`, {
     method: 'POST',
     body: JSON.stringify({

@@ -5,10 +5,9 @@ import { startTraining } from '../services/api';
 
 const StartTrainingPage = () => {
   const navigate = useNavigate();
-  const { serverUrl } = useServer();
+  const { serverUrl, indexValue, setIndexValue } = useServer();
   const [totalRounds, setTotalRounds] = useState(10);
   const [minParams, setMinParams] = useState(3);
-  const [index, setIndex] = useState('test-index');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
@@ -20,7 +19,7 @@ const StartTrainingPage = () => {
     setResponse(null);
 
     try {
-      const data = await startTraining(serverUrl, { totalRounds, minParams, index });
+      const data = await startTraining(serverUrl, { totalRounds, minParams, index: indexValue });
       setResponse(data);
       // Navigate to next page after successful training start
       setTimeout(() => {
@@ -79,8 +78,8 @@ const StartTrainingPage = () => {
           <input
             type="text"
             id="index"
-            value={index}
-            onChange={(e) => setIndex(e.target.value)}
+            value={indexValue}
+            onChange={(e) => setIndexValue(e.target.value)}
             placeholder="test-index"
             required
           />

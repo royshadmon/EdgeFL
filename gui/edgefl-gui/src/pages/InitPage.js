@@ -5,9 +5,8 @@ import { initializeEDGEFL } from '../services/api';
 
 const InitPage = () => {
   const navigate = useNavigate();
-  const { serverUrl } = useServer();
+  const { serverUrl, indexValue, setIndexValue } = useServer();
   const [nodeUrls, setNodeUrls] = useState(['http://localhost:8081', 'http://localhost:8082', 'http://localhost:8083']);
-  const [index, setIndex] = useState('test-index');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
@@ -34,7 +33,7 @@ const InitPage = () => {
     setResponse(null);
 
     try {
-      const data = await initializeEDGEFL(serverUrl, { nodeUrls, index });
+      const data = await initializeEDGEFL(serverUrl, { nodeUrls, index: indexValue });
       setResponse(data);
       // Navigate to next page after successful init
       setTimeout(() => {
@@ -60,8 +59,8 @@ const InitPage = () => {
           <input
             type="text"
             id="index"
-            value={index}
-            onChange={(e) => setIndex(e.target.value)}
+            value={indexValue}
+            onChange={(e) => setIndexValue(e.target.value)}
             placeholder="Enter index name"
             required
           />
