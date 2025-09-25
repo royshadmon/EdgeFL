@@ -25,3 +25,6 @@ RUN ls -la /app
 # Define environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+
+CMD ["python", "/app/api-containers/app.py"]
+
