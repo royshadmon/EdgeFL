@@ -34,7 +34,7 @@ const InferPage = () => {
       
       if (inputType === 'json') {
         inputArray = validateInputArray(inputData);
-      } else if (inputType === 'jpg' || inputType === 'wav') {
+      } else if (inputType === 'png' || inputType === 'jpg' || inputType === 'wav') {
         // For file uploads, we'll need to process the file
         // For now, we'll show an error that this feature is coming soon
         throw new Error(`${inputType.toUpperCase()} file processing is coming soon!`);

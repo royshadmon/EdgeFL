@@ -55,7 +55,7 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
           setInputData('Invalid JSON file');
           if (onDataChange) onDataChange('Invalid JSON file', inputType);
         }
-      } else if (inputType === 'jpg' || inputType === 'wav') {
+      } else if (inputType === 'png' || inputType === 'jpg' || inputType === 'wav') {
         // For binary files, we'll store the file info and let the parent handle the actual file
         setInputData(`File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
         if (onDataChange) onDataChange(file, inputType);
@@ -78,6 +78,7 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
         {[
           { value: 'json', label: 'JSON Array', icon: '📄' },
           { value: 'jpg', label: 'JPG Image', icon: '🖼️' },
+          { value: 'png', label: 'PNG Image', icon: '🖼️' },
           { value: 'wav', label: 'WAV Audio', icon: '🎵' },
           { value: 'draw', label: 'Draw Canvas', icon: '✏️' }
         ].map(({ value, label, icon }) => (
@@ -122,7 +123,12 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
         <input
           type="file"
           id="fileUpload"
-          accept={inputType === 'jpg' ? '.jpg,.jpeg' : inputType === 'wav' ? '.wav' : '.json'}
+          accept={inputType === 'png' ? '.png' : inputType === 'jpg' ? '.jpg,.jpeg' : inputType === 'wav' ? '.wav' : '.json'}
+          // accept={
+          //   inputType === 'image' ? '.jpg,.jpeg,.png' :
+          //   inputType === 'audio' ? '.wav' :
+          //   '.json'
+          // }
           onChange={handleFileUpload}
           className="file-input"
         />
@@ -139,6 +145,7 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
       </div>
       <small>
         {inputType === 'jpg' && 'Upload a JPG image file for inference.'}
+        {inputType === 'png' && 'Upload a PNG image file for inference.'}
         {inputType === 'wav' && 'Upload a WAV audio file for inference.'}
         {inputType === 'json' && 'Upload a JSON file containing your data array.'}
       </small>
@@ -185,7 +192,7 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
       {renderInputTypeSelector()}
       
       {inputType === 'json' && renderJsonInput()}
-      {(inputType === 'jpg' || inputType === 'wav') && renderFileUpload()}
+      {(inputType === 'png' || inputType === 'jpg' || inputType === 'wav') && renderFileUpload()}
       {inputType === 'draw' && renderDrawCanvas()}
     </div>
   );
