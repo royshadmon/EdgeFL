@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServer } from '../contexts/ServerContext';
-import {runInference, validateInputArray, generateSampleArray, validateAndProcessImage} from '../services/api';
+import {runInference, validateInputArray, generateSampleArray, validateAndProcessImage, evaluateTestSet} from '../services/api';
 import InputDataSelector from '../components/InputDataSelector';
 
 const InferPage = () => {
@@ -12,6 +12,9 @@ const InferPage = () => {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
+  const [testEvalLoading, setTestEvalLoading] = useState(false);
+  const [testEvalResponse, setTestEvalResponse] = useState(null);
+  const [testEvalError, setTestEvalError] = useState(null);
 
   const generateSampleData = () => {
     const array = generateSampleArray();
@@ -67,6 +70,21 @@ const InferPage = () => {
     }
   };
 
+  const handleTestSetEvaluation = async () => {
+    setTestEvalLoading(true);
+    setTestEvalError(null);
+    setTestEvalResponse(null);
+
+    try {
+      const data = await evaluateTestSet(serverUrl, indexValue);
+      setTestEvalResponse(data);
+    } catch (err) {
+      setTestEvalError(err.message);
+    } finally {
+      setTestEvalLoading(false);
+    }
+  };
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -109,6 +127,21 @@ const InferPage = () => {
             {loading ? 'Running Inference...' : 'Run Inference'}
           </button>
         </div>
+
+        <div className="button-group" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+          <button 
+            type="button" 
+            onClick={handleTestSetEvaluation} 
+            disabled={testEvalLoading || !indexValue.trim()} 
+            className="btn-primary"
+            style={{ backgroundColor: '#28a745' }}
+          >
+            {testEvalLoading ? 'Evaluating Test Set...' : 'Evaluate Test Set'}
+          </button>
+          <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
+            Run model evaluation against the test dataset for index: {indexValue || 'test-index'}
+          </small>
+        </div>
       </form>
 
       {error && (
@@ -122,6 +155,20 @@ const InferPage = () => {
         <div className="success-message">
           <h3>Inference Results:</h3>
           <pre>{JSON.stringify(response, null, 2)}</pre>
+        </div>
+      )}
+
+      {testEvalError && (
+        <div className="error-message">
+          <h3>Test Set Evaluation Error:</h3>
+          <p>{testEvalError}</p>
+        </div>
+      )}
+
+      {testEvalResponse && (
+        <div className="success-message">
+          <h3>Test Set Evaluation Results:</h3>
+          <pre>{JSON.stringify(testEvalResponse, null, 2)}</pre>
         </div>
       )}
 

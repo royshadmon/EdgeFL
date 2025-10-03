@@ -102,6 +102,20 @@ export const runInference = async (serverUrl, { input, index }) => {
 };
 
 /**
+ * Evaluate model against test set
+ */
+export const evaluateTestSet = async (serverUrl, index) => {
+  console.log(`${serverUrl}/inference/${index.trim()}`);
+  
+  return apiCall(`${serverUrl}/inference/${index.trim()}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+  });
+};
+
+/**
  * Process PNG for xray FL  demo. this function will only work for the xray dataset
  */
 export const validateAndProcessImage = (file) => {

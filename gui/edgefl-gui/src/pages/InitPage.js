@@ -35,10 +35,6 @@ const InitPage = () => {
     try {
       const data = await initializeEDGEFL(serverUrl, { nodeUrls, index: indexValue });
       setResponse(data);
-      // Navigate to next page after successful init
-      setTimeout(() => {
-        navigate('/start-training');
-      }, 2000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -114,14 +110,16 @@ const InitPage = () => {
           <h3>Success!</h3>
           <p>EDGEFL has been initialized successfully.</p>
           <pre>{JSON.stringify(response, null, 2)}</pre>
-          <p>Redirecting to next step...</p>
+          <p>Click Next to continue to training setup.</p>
         </div>
       )}
 
       <div className="navigation-buttons">
-        <button onClick={() => navigate('/start-training')} className="btn-primary">
-          Next →
-        </button>
+        {response && (
+          <button onClick={() => navigate('/start-training')} className="btn-primary">
+            Next →
+          </button>
+        )}
       </div>
     </div>
   );

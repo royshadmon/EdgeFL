@@ -21,10 +21,6 @@ const StartTrainingPage = () => {
     try {
       const data = await startTraining(serverUrl, { totalRounds, minParams, index: indexValue });
       setResponse(data);
-      // Navigate to next page after successful training start
-      setTimeout(() => {
-        navigate('/infer');
-      }, 2000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -103,7 +99,7 @@ const StartTrainingPage = () => {
           <h3>Success!</h3>
           <p>Training has been started successfully.</p>
           <pre>{JSON.stringify(response, null, 2)}</pre>
-          <p>Redirecting to inference step...</p>
+          <p>Click Next to continue to inference step.</p>
         </div>
       )}
 
@@ -111,9 +107,11 @@ const StartTrainingPage = () => {
         <button onClick={() => navigate('/init')} className="btn-secondary">
           ← Previous
         </button>
-        <button onClick={() => navigate('/infer')} className="btn-primary">
-          Next →
-        </button>
+        {response && (
+          <button onClick={() => navigate('/infer')} className="btn-primary">
+            Next →
+          </button>
+        )}
       </div>
     </div>
   );

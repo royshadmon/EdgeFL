@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
   const [inputType, setInputType] = useState('json');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   
   // Grid state for draw canvas
   const [gridData, setGridData] = useState(() => 
@@ -13,6 +14,7 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
     setInputType(type);
     setInputData('');
     setSelectedFile(null);
+    setImagePreview(null);
     // Reset grid when switching away from draw
     if (type !== 'draw') {
       setGridData(Array(28).fill().map(() => Array(28).fill(0)));
@@ -44,29 +46,39 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
 
     setSelectedFile(file);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (inputType === 'json') {
-        try {
-          const jsonData = JSON.parse(e.target.result);
-          setInputData(JSON.stringify(jsonData, null, 2));
-          if (onDataChange) onDataChange(JSON.stringify(jsonData, null, 2), inputType);
-        } catch (error) {
-          setInputData('Invalid JSON file');
-          if (onDataChange) onDataChange('Invalid JSON file', inputType);
-        }
-      } else if (inputType === 'png' || inputType === 'jpg' || inputType === 'wav') {
-        // For binary files, we'll store the file info and let the parent handle the actual file
+    // Create image preview for image files
+    if (inputType === 'png' || inputType === 'jpg') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
         setInputData(`File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
         if (onDataChange) onDataChange(file, inputType);
-      }
-    };
-
-    if (inputType === 'json') {
-      reader.readAsText(file);
+      };
+      reader.readAsDataURL(file);
     } else {
-      // For binary files, we'll pass the file object to parent
-      if (onDataChange) onDataChange(file, inputType);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (inputType === 'json') {
+          try {
+            const jsonData = JSON.parse(e.target.result);
+            setInputData(JSON.stringify(jsonData, null, 2));
+            if (onDataChange) onDataChange(JSON.stringify(jsonData, null, 2), inputType);
+          } catch (error) {
+            setInputData('Invalid JSON file');
+            if (onDataChange) onDataChange('Invalid JSON file', inputType);
+          }
+        } else if (inputType === 'wav') {
+          setInputData(`File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+          if (onDataChange) onDataChange(file, inputType);
+        }
+      };
+
+      if (inputType === 'json') {
+        reader.readAsText(file);
+      } else if (inputType === 'wav') {
+        // For audio files, we'll pass the file object to parent
+        if (onDataChange) onDataChange(file, inputType);
+      }
     }
   };
 
@@ -140,6 +152,23 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
           <div className="file-info">
             <span className="file-name">{selectedFile.name}</span>
             <span className="file-size">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+          </div>
+        )}
+        {imagePreview && (inputType === 'png' || inputType === 'jpg') && (
+          <div className="image-preview-container">
+            <h4>Image Preview:</h4>
+            <img 
+              src={imagePreview} 
+              alt="Uploaded image preview" 
+              className="image-preview"
+              style={{
+                maxWidth: '300px',
+                maxHeight: '300px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                marginTop: '10px'
+              }}
+            />
           </div>
         )}
       </div>
