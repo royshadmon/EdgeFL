@@ -101,6 +101,9 @@ export const runInference = async (serverUrl, { input, index }) => {
   });
 };
 
+/**
+ * Process PNG for xray FL  demo. this function will only work for the xray dataset
+ */
 export const validateAndProcessImage = (file) => {
   return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith('image/png')) {
