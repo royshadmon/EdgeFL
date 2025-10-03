@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # load_dotenv("./../../env_files/chest_xrays_bbox/chest_xrays_bbox1.env") # change path if respective env is elsewhere
 
 CLASSES = [
-    "Infiltrate",
+    "Pulmonary Infiltrate",
     "Atelectasis",
     "Pneumonia",
     "Cardiomegaly",
@@ -225,6 +225,12 @@ class ChestXraysBBoxDataHandler():
         Handles data conversion and validation internally.
         """
         pass
+        data = np.array(data)
+        reshaped_array = data.reshape((1, 224, 224, 1))  # Add batch dimension
+        res = self.fl_model.predict(reshaped_array)
+        pred = np.argmax(res, axis=1)
+        return CLASSES[pred[0]]
+
 
     def run_inference(self):
         y_true = self.testing_generator.classes

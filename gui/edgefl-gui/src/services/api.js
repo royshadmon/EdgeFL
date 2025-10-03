@@ -101,6 +101,46 @@ export const runInference = async (serverUrl, { input, index }) => {
   });
 };
 
+export const validateAndProcessImage = (file) => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/png')) {
+      return reject(new Error('Please upload a valid PNG image.'));
+    }
+
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img.src = reader.result;
+    };
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 224;
+      canvas.height = 224;
+      const ctx = canvas.getContext('2d');
+
+      ctx.drawImage(img, 0, 0, 224, 224);
+      const imageData = ctx.getImageData(0, 0, 224, 224);
+      const grayData = new Float32Array(224 * 224);
+
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const r = imageData.data[i];
+        const g = imageData.data[i + 1];
+        const b = imageData.data[i + 2];
+        grayData[i / 4] = (r + g + b) / 3 / 255; // grayscale + normalization
+      }
+
+      resolve(grayData);
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read the image file.'));
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
 
 /**
  * Utility function to validate 28x28 array

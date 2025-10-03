@@ -7,7 +7,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import argparse
 from dotenv import load_dotenv
-from starlette.responses import PlainTextResponse
+
+from fastapi.responses import JSONResponse
+from fastapi.responses import PlainTextResponse
+
 
 from platform_components.aggregator.aggregator import Aggregator
 import asyncio
@@ -124,11 +127,17 @@ def init(request: InitRequest):
         failed_nodes = [url for url in node_urls if url not in aggregator.node_urls[index]]
 
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
-        return (f"{{\n'status': 'success',\n"
-                f" 'message': 'Initialization request finished.',\n"
-                f" 'initialized nodes': '{initialized_nodes}',\n"
-                f" 'failed nodes': '{failed_nodes}'\n"
-                f"}}\n")
+
+        return JSONResponse(content={
+            'status': 'success',
+            'message': 'Initialization request finished.',
+            'initialized nodes': f'{initialized_nodes}',
+            'failed nodes': f'{failed_nodes}'
+        })
+
+
+
+
     except FileNotFoundError as e:
         logger.error(f"{str(e)}")
         raise HTTPException(

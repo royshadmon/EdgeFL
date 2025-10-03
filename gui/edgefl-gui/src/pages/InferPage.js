@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useServer } from '../contexts/ServerContext';
-import { runInference, validateInputArray, generateSampleArray } from '../services/api';
+import {runInference, validateInputArray, generateSampleArray, validateAndProcessImage} from '../services/api';
 import InputDataSelector from '../components/InputDataSelector';
 
 const InferPage = () => {
@@ -29,20 +29,35 @@ const InferPage = () => {
     setError(null);
     setResponse(null);
 
+    let inputArray;
     try {
-      let inputArray;
-      
+
       if (inputType === 'json') {
         inputArray = validateInputArray(inputData);
       } else if (inputType === 'png' || inputType === 'jpg' || inputType === 'wav') {
         // For file uploads, we'll need to process the file
         // For now, we'll show an error that this feature is coming soon
-        throw new Error(`${inputType.toUpperCase()} file processing is coming soon!`);
+
+        try {
+            const floatArray = await validateAndProcessImage(inputData);
+            console.log('Float32Array:', floatArray);
+
+            inputArray = Array.from(floatArray);
+            console.log('Converted to regular array:', inputArray);
+
+            // You can now send `inputArray` to your FastAPI backend
+          } catch (error) {
+            console.error('Error processing image:', error.message);
+          }
+
+          // console.log(inputArray)
+        // throw new Error(`${inputType.toUpperCase()} file processing is coming soon!`);
       } else if (inputType === 'draw') {
         // For grid drawings, the data is already in the correct format
         inputArray = typeof inputData === 'string' ? JSON.parse(inputData) : inputData;
       }
-      
+
+      console.log("FINAL ARRAY:", inputArray)
       const data = await runInference(serverUrl, { input: inputArray, index: indexValue });
       setResponse(data);
     } catch (err) {
