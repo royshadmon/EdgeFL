@@ -81,7 +81,7 @@ class Node:
         if self.docker_running:
             self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.replica_name)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
+            create_directory_in_container(self.edgelake_node_url, self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
             # create_directory_in_container(self.docker_container_name, f"{self.docker_file_write_destination}/{self.replica_name}/{self.index}/")
             
 
@@ -172,7 +172,8 @@ class Node:
                                 "policy_type": "submodel",
                                 "index": "{index}",
                                 "node_type": "training",
-                                "ip_port": "{self.edgelake_tcp_node_ip_port}",                                
+                                "ip_port": "{self.edgelake_tcp_node_ip_port}", 
+                                "rest_ip_port": "{self.edgelake_node_url}",                              
                                 "trained_params_local_path": "{model_metadata}"
             }} }}>'''
 
@@ -207,7 +208,7 @@ class Node:
         - Uses updated aggregator model params and updates local model
         - Gets local data and runs training on updated model
     '''
-    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, index):
+    def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, rest_ip_port, index):
         self.logger.debug(f"[{index}] in train_model_params for round {round_number}")
 
         # First round initialization
@@ -218,11 +219,11 @@ class Node:
                 # Extract the key from the URL
                 filename = aggregator_model_params_db_link.split('/')[-1]
                 if self.docker_running:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link,
-                                         f'{self.docker_file_write_destination}/{index}/{filename}', ip_ports)
-                    copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name, f'{self.docker_file_write_destination}/{index}/{filename}', f'{self.file_write_destination}/{index}/{filename}')
+                    # response = read_file(rest_ip_port, aggregator_model_params_db_link,
+                    #                      f'{self.docker_file_write_destination}/{index}/{filename}', ip_ports)
+                    response = copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name, rest_ip_port,aggregator_model_params_db_link, f'{self.file_write_destination}/{index}/{filename}', ip_ports)
                 else:
-                    response = read_file(self.edgelake_node_url, aggregator_model_params_db_link, f'{self.file_write_destination}/{index}/{filename}', ip_ports)
+                    response = read_file(rest_ip_port, aggregator_model_params_db_link, f'{self.file_write_destination}/{index}/{filename}', ip_ports)
 
                 if response.status_code == 200:
                     sleep(1)
@@ -261,7 +262,7 @@ class Node:
 
         if self.docker_running:
             self.logger.debug(f'[{index}] written to container at {f"{self.docker_file_write_destination}/{index}/{file}"}')
-            copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
+            copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, self.edgelake_node_url, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
             return f'{self.docker_file_write_destination}/{index}/{file}'
         return file_name
 

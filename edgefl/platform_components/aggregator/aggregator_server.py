@@ -410,11 +410,18 @@ async def listen_for_update_agg(min_params, round_number, index):
                     if index in item
                 ]
 
+                rest_ip_ports = [
+                    item.get(index).get('rest_ip_port')
+                    for item in result
+                    if index in item
+                ]
+
                 # Updates decoded_params with newly fetched decoded params (with node link as key)
                 aggregator.fetch_decoded_params(
                     decoded_params_dict=decoded_params,
                     node_param_download_links=node_params_links,
                     ip_ports=ip_ports,
+                    rest_ip_ports=rest_ip_ports,
                     index=index
                 )
 

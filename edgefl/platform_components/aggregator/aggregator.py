@@ -81,7 +81,7 @@ class Aggregator:
         if self.docker_running:
             self.docker_file_write_destination = os.path.join(os.getenv("DOCKER_FILE_WRITE_DESTINATION"), self.agg_name)
             self.docker_container_name = os.getenv("EDGELAKE_DOCKER_CONTAINER_NAME")
-            create_directory_in_container(self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
+            create_directory_in_container(self.edgelake_node_url, self.docker_container_name, os.path.join(self.docker_file_write_destination, index))
             # create_directory_in_container(self.docker_container_name,
             #                               f"{self.docker_file_write_destination}/aggregator/")
 
@@ -100,6 +100,7 @@ class Aggregator:
                                         "module_name": "{module_name}",
                                         "module_path": "{module_path}",
                                         "ip_port": "{self.edgelake_tcp_node_ip_port}",
+                                        "rest_ip_port": "{self.edgelake_node_url}",
                                         "db_name": "{db_name}"
             }} }}>'''
             success = False
@@ -219,7 +220,8 @@ class Aggregator:
                                                     "round_number": {round_number},
                                                     "initParams": "{initParams_link}",
                                                     "node_id": "{self.agg_name}",
-                                                    "ip_port": "{self.edgelake_tcp_node_ip_port}"
+                                                    "ip_port": "{self.edgelake_tcp_node_ip_port}",
+                                                    "rest_ip_port": "{self.edgelake_node_url}"
                                           }} }}>'''
             insert_success = False
             while not insert_success:
@@ -261,7 +263,8 @@ class Aggregator:
                                         "round_number": {round_number},
                                         "initParams": "{initParams_link}",
                                         "node_id": "{self.agg_name}",
-                                        "ip_port": "{self.edgelake_tcp_node_ip_port}"
+                                        "ip_port": "{self.edgelake_tcp_node_ip_port}",
+                                        "rest_ip_port": "{self.edgelake_node_url}"
                               }} }}>'''
             success = False
             while not success:
@@ -291,7 +294,7 @@ class Aggregator:
                 'message': str(e)
             }
 
-    def fetch_decoded_params(self, decoded_params_dict, node_param_download_links, ip_ports, index):
+    def fetch_decoded_params(self, decoded_params_dict, node_param_download_links, ip_ports, rest_ip_ports, index):
         # use the node_param_download_links to get all the file
         # in the form of tuples, like ["('blobs_admin', 'node_model_updates', '1-replica-node1.pkl')"]
         # node_ref = db.reference('node_model_updates')
@@ -308,13 +311,13 @@ class Aggregator:
                 local_path = f'{self.file_write_destination}/{index}/{filename}'
                 if self.docker_running:
                     docker_file_path = f'{self.docker_file_write_destination}/{index}/{filename}'
-                    response = read_file(self.edgelake_node_url, path,
-                                         docker_file_path, ip_ports[i])
-                    copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name,
-                                             docker_file_path,
-                                             local_path)
+                    # response = read_file(rest_ip_ports[i], path,
+                    #                      docker_file_path, ip_ports[i])
+                    response = copy_file_from_container(os.path.join(self.tmp_dir, index), self.docker_container_name,
+                                             rest_ip_ports[i], node_param_download_links[i],
+                                             local_path, ip_ports[i])
                 else:
-                    response = read_file(self.edgelake_node_url, path,
+                    response = read_file(rest_ip_ports[i], path,
                                          local_path, ip_ports[i])
 
                 if response.status_code != 200:
@@ -356,7 +359,7 @@ class Aggregator:
 
         if self.docker_running:
             docker_file_write_path = f'{self.docker_file_write_destination}/{index}/{round_number}-{self.agg_name}_update.json'
-            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name,
+            copy_file_to_container(os.path.join(self.tmp_dir,index), self.docker_container_name, self.edgelake_node_url,
                                    file_write_path,
                                    docker_file_write_path)
             return docker_file_write_path

@@ -151,7 +151,8 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                     logger.debug(f"[{index}] Round Data: {round_data}")  # Debugging line
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
-                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, index)
+                    rest_ip_port = round_data.get('rest_ip_port', '')
+                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, rest_ip_port, index)
                     nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
                     logger.info(f"[{index}][Round {current_round}] Step 3 Complete: Model parameters published")
                     current_round += 1
