@@ -21,6 +21,9 @@ import warnings
 
 from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
+
+from fastapi.middleware.cors import CORSMiddleware
+
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
@@ -50,6 +53,14 @@ async def lifespan(app: FastAPI):
     # logger.info("Node server shutting down.")
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or specify your frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 class InitNodeRequest(BaseModel):
@@ -214,7 +225,7 @@ def inference(index):
         )
 
 class InferenceRequest(BaseModel):
-    input: list[float]
+    input: list
     index: str
 
 # TODO: add index and reformat response to FastAPI PlainTextResponse

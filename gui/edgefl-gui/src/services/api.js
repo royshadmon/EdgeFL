@@ -45,12 +45,26 @@ export const initializeEDGEFL = async (serverUrl, { nodeUrls, index }) => {
   console.log(`${serverUrl}/init`);
   return apiCall(`${serverUrl}/init`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify({
       nodeUrls: nodeUrls.filter(url => url.trim() !== ''),
       index: index.trim()
     }),
   });
 };
+
+// export const initializeEDGEFL = async (serverUrl, { nodeUrls, index }) => {
+//   console.log(`${serverUrl}/init`);
+//   return apiCall(`${serverUrl}/init`, {
+//     method: 'POST',
+//     body: JSON.stringify({
+//       nodeUrls: nodeUrls.filter(url => url.trim() !== ''),
+//       index: index.trim()
+//     }),
+//   });
+// };
 
 /**
  * Start training with specified parameters
@@ -69,20 +83,24 @@ export const startTraining = async (serverUrl, { totalRounds, minParams, index }
 /**
  * Run inference with input data
  */
+// export const runInference = async (serverUrl, { input, index }) => {
+
 export const runInference = async (serverUrl, { input, index }) => {
-    console.log(`${serverUrl}/infer`);
-    console.log({
-      input: [input],
-      index: index.trim()
-    });
+  console.log(`${serverUrl}/infer`);
+  console.log({ input, index: index.trim() });
+
   return apiCall(`${serverUrl}/infer`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify({
-      input: [input],
+      input: input,
       index: index.trim()
     }),
   });
 };
+
 
 /**
  * Utility function to validate 28x28 array

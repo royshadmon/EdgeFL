@@ -20,6 +20,9 @@ import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
+
+from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
@@ -32,6 +35,16 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 load_dotenv()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or specify your frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 configure_logging("aggregator_server")
 logger = logging.getLogger(__name__)
