@@ -22,10 +22,11 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
     if (onDataChange) onDataChange('', type);
   };
 
-  const toggleGridCell = (row, col) => {
+  const drawGridCell = (row, col) => {
+    // Only allow turning cells on (drawing), not erasing
     const newGridData = gridData.map((rowData, r) => 
       rowData.map((cell, c) => 
-        r === row && c === col ? (cell === 1 ? 0 : 1) : cell
+        r === row && c === col ? 1 : cell
       )
     );
     setGridData(newGridData);
@@ -192,10 +193,10 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
                 <div
                   key={`${rowIndex}-${colIndex}`}
                   className={`grid-cell ${cell ? 'filled' : ''}`}
-                  onClick={() => toggleGridCell(rowIndex, colIndex)}
+                  onClick={() => drawGridCell(rowIndex, colIndex)}
                   onMouseEnter={(e) => {
                     if (e.buttons === 1) { // Left mouse button is pressed
-                      toggleGridCell(rowIndex, colIndex);
+                      drawGridCell(rowIndex, colIndex);
                     }
                   }}
                 />
@@ -208,11 +209,11 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
             Clear Grid
           </button>
           <div className="grid-info">
-            <small>Click cells to draw. Click and drag to draw continuously.</small>
+            <small>Click cells to draw. Click and drag to draw continuously. Use "Clear Grid" to erase all.</small>
           </div>
         </div>
       </div>
-      <small>Draw on the 28x28 grid above. Each cell represents a pixel in your drawing.</small>
+      <small>Draw on the 28x28 grid above. Each cell represents a pixel in your drawing. You can only draw (turn cells on) - use "Clear Grid" to start over.</small>
     </div>
   );
 
