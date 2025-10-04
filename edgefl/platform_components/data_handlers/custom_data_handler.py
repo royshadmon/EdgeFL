@@ -152,9 +152,10 @@ class MnistDataHandler():
         Handles data conversion and validation internally.
         """
         # TODO: add another input type that allows for raw images to work (would be converted properly)
-
-        return None
         data = np.array(data)
+        res = self.fl_model.predict(data.reshape(1, 28, 28, 1))
+        return np.argmax(res, axis=1)
+
         # Validate existence and check that there is the same number of data inputs as number of labels
         # if not data and not labels and len(data) != len(labels):
         #     raise ValueError(f"Data and labels lists must have the same length ({len(data)} != {len(labels)}).")

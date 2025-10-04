@@ -7,7 +7,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import argparse
 from dotenv import load_dotenv
-from starlette.responses import PlainTextResponse
+
+from fastapi.responses import JSONResponse
+from fastapi.responses import PlainTextResponse
+
 
 from platform_components.aggregator.aggregator import Aggregator
 import asyncio
@@ -20,6 +23,9 @@ import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
+
+from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip
@@ -32,6 +38,16 @@ warnings.filterwarnings("ignore")
 
 app = FastAPI()
 load_dotenv()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or specify your frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 configure_logging("aggregator_server")
 logger = logging.getLogger(__name__)
@@ -111,11 +127,17 @@ def init(request: InitRequest):
         failed_nodes = [url for url in node_urls if url not in aggregator.node_urls[index]]
 
         logger.info(f"Initialized nodes with index ({index}): {aggregator.node_urls[index]}")
-        return (f"{{\n'status': 'success',\n"
-                f" 'message': 'Initialization request finished.',\n"
-                f" 'initialized nodes': '{initialized_nodes}',\n"
-                f" 'failed nodes': '{failed_nodes}'\n"
-                f"}}\n")
+
+        return JSONResponse(content={
+            'status': 'success',
+            'message': 'Initialization request finished.',
+            'initialized nodes': f'{initialized_nodes}',
+            'failed nodes': f'{failed_nodes}'
+        })
+
+
+
+
     except FileNotFoundError as e:
         logger.error(f"{str(e)}")
         raise HTTPException(
@@ -427,6 +449,7 @@ async def listen_for_update_agg(min_params, round_number, index):
 
             # If enough parameters or not getting ALL parameters in time, get the URL
             if len(decoded_params) >= min_params or (decoded_params and not check_chances):
+
                 aggregated_params_link = aggregator.aggregate_model_params(
                     decoded_params=list(decoded_params.values()),
                     round_number=round_number,

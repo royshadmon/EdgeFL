@@ -3,7 +3,8 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-from starlette.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
+from fastapi.responses import PlainTextResponse
 
 # from dotenv import load_dotenv
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, \
@@ -21,6 +22,9 @@ import warnings
 
 from uvicorn import run
 from fastapi import FastAPI, HTTPException, status
+
+from fastapi.middleware.cors import CORSMiddleware
+
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
@@ -50,6 +54,14 @@ async def lifespan(app: FastAPI):
     # logger.info("Node server shutting down.")
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or specify your frontend origin
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 
 class InitNodeRequest(BaseModel):
@@ -200,13 +212,13 @@ def inference(index):
                 detail="Index must be specified."
             )
         results = node_instance.inference(index)
-        response = (f"{{"
-                    f"'index': '{index}',"
-                    f" 'status': 'success',"
-                    f" 'message': 'Inference completed successfully',"
-                    f" 'model_accuracy': '{str(results)}'"
-                    f"}}\n")
-        return response
+        response = {
+                    'index': f'{index}',
+                    'status': 'success',
+                    'message': 'Inference completed successfully',
+                    'model_accuracy': f'{str(results)}'
+                    }
+        return JSONResponse(content=response)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -214,7 +226,7 @@ def inference(index):
         )
 
 class InferenceRequest(BaseModel):
-    input: list[float]
+    input: list
     index: str
 
 # TODO: add index and reformat response to FastAPI PlainTextResponse

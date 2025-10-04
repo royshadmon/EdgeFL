@@ -1,14 +1,19 @@
 services:
-  ${NODE_NAME}:
+  ${CONTAINER_NAME}:
     image: ${IMAGE}
     restart: always
-    env_file:
-      - ${ENV_FILE}
     container_name: ${CONTAINER_NAME}
     ports:
-      - ${PORT}:${PORT}
-    command: ["python", "/app/api-containers/app.py", "--env-file", "/app/edgefl/env_files/mnist-docker/mnist-agg.env"]
+      - "${PORT}:${PORT}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${CONTAINER_NAME}_data:/app/data
+    command: [
+      "python",
+      "/app/api-containers/app.py",
+      "--env-file", "${ENV_FILE}",
+      "--port", "${PORT}"
+    ]
 
-
-
-
+volumes:
+  ${CONTAINER_NAME}_data:

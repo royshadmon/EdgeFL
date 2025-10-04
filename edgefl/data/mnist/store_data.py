@@ -41,7 +41,7 @@ def main():
     # parse.add_argument('image_file', type=__validate_file, default=None, help='image gz file')
     # parse.add_argument('label_file', type=__validate_file, default=None, help='label gz file')
     parse.add_argument('--db-name', type=str, default='mnist', help='logical database name')
-    parse.add_argument('--num-rounds', type=int, default=5, help='Number of training rounds to add')
+    parse.add_argument('--num-rounds', type=int, default=20, help='Number of training rounds to add')
     parse.add_argument('--num-rows', type=int, default=50, help='')
     # parse.add_argument('--test-split', type=int, default=0.2, help='')
 
