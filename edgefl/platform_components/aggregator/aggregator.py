@@ -58,6 +58,7 @@ class Aggregator:
         # self.fetch_indexes_and_modules()
 
         self.file_write_destination = os.path.join(self.github_dir, os.getenv("FILE_WRITE_DESTINATION"), self.agg_name)
+
         self.tmp_dir = os.path.join(self.github_dir, os.getenv("TMP_DIR"), self.agg_name)
         self.docker_file_write_destination = None
         # =====
@@ -135,12 +136,13 @@ class Aggregator:
         try:
             training_app_path = os.path.join(self.github_dir, self.module_paths[index])
             TrainingApp_class = load_class_from_file(training_app_path, self.module_names[index])
-            self.training_apps[index] = TrainingApp_class('aggregator') # Create an instance at index
+            self.training_apps[index] = TrainingApp_class(self.agg_name) # Create an instance at index
         except Exception as e:
             return {
                 'status': 'error',
                 'message': str(e)
             }
+
 
     # On startup, indexes, modules, and module_paths caches are empty, so refill
     def fetch_indexes_and_modules(self):
@@ -161,15 +163,15 @@ class Aggregator:
                     'status': 'error',
                     'message': f'Index "{index}" already has a module: "{self.module_names[index]}"'
                 }
-            elif index_data:  # module already stored in blockchain but not cache, so fetch
-                self.logger.info(
-                    f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.')
-                self.module_names[index] = index_data['module_name']
-                self.module_paths[index] = index_data['module_path']                # self.databases[index] = index_data['db_name'] # done in the server for now
-                return {
-                    'status': 'error',
-                    'message': f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.'
-                }
+            # elif index_data:  # module already stored in blockchain but not cache, so fetch
+            #     self.logger.info(
+            #         f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.')
+            #     self.module_names[index] = index_data['module_name']
+            #     self.module_paths[index] = index_data['module_path']                # self.databases[index] = index_data['db_name'] # done in the server for now
+            #     return {
+            #         'status': 'error',
+            #         'message': f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.'
+            #     }
 
             # New index, so set new module
             self.module_names[index] = module_name
@@ -302,6 +304,7 @@ class Aggregator:
         # Loop through each provided download link to retrieve node parameter objects
         for i, path in enumerate(node_param_download_links):
             # Don't fetch for existing paths
+
             if path in decoded_params_dict:
                 continue
 
@@ -331,18 +334,14 @@ class Aggregator:
                     data = pickle.load(f)
                 if not data:
                     raise ValueError(f"Missing model_weights in data from file: {filename}")
-
                 decoded_params_dict[path] = LocalModelUpdate(weights=data)
-
             except Exception as e:
                 self.logger.error(f"Error retrieving data from link {filename}: {str(e)}")
                 continue
 
     def aggregate_model_params(self, decoded_params, round_number, index):
-
         aggregate_params_weights = self.training_apps[index].aggregate_model_weights(decoded_params)
         aggregate_model_update = LocalModelUpdate(weights=aggregate_params_weights)
-
         # encode params back to string
         encoded_params = self.encode_params(aggregate_model_update)
 

@@ -1,0 +1,17 @@
+services:
+  edgefl_node:
+    image: edgefl:latest
+    restart: always
+#    env_file:
+#      - /app/edgefl/mnist-docker/mnist-agg.env
+    container_name: aggregator
+    ports:
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: [
+      "python",
+      "/app/api-containers/app.py",
+      "--env-file", "/app/edgefl/mnist-docker/mnist-agg.env",
+      "--port", "8080"
+    ]

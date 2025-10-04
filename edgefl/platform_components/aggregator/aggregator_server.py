@@ -449,6 +449,7 @@ async def listen_for_update_agg(min_params, round_number, index):
 
             # If enough parameters or not getting ALL parameters in time, get the URL
             if len(decoded_params) >= min_params or (decoded_params and not check_chances):
+
                 aggregated_params_link = aggregator.aggregate_model_params(
                     decoded_params=list(decoded_params.values()),
                     round_number=round_number,

@@ -3,7 +3,8 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
-from starlette.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
+from fastapi.responses import PlainTextResponse
 
 # from dotenv import load_dotenv
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, \
@@ -211,13 +212,13 @@ def inference(index):
                 detail="Index must be specified."
             )
         results = node_instance.inference(index)
-        response = (f"{{"
-                    f"'index': '{index}',"
-                    f" 'status': 'success',"
-                    f" 'message': 'Inference completed successfully',"
-                    f" 'model_accuracy': '{str(results)}'"
-                    f"}}\n")
-        return response
+        response = {
+                    'index': f'{index}',
+                    'status': 'success',
+                    'message': 'Inference completed successfully',
+                    'model_accuracy': f'{str(results)}'
+                    }
+        return JSONResponse(content=response)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

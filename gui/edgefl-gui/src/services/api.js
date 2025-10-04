@@ -108,7 +108,7 @@ export const evaluateTestSet = async (serverUrl, index) => {
   console.log(`${serverUrl}/inference/${index.trim()}`);
   
   return apiCall(`${serverUrl}/inference/${index.trim()}`, {
-    method: 'GET',
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },

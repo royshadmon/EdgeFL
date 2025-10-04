@@ -18,6 +18,8 @@ COPY edgefl/platform_components /app/edgefl/platform_components
 
 COPY edgefl/env_files /app/edgefl
 
+COPY edgefl/data/chest_xrays_bbox/ /app/edgefl/data/chest_xrays_bbox
+
 # List directories to debug
 RUN ls -la /app
 #RUN ls -la /app/api-containers
