@@ -54,6 +54,21 @@ A modern React-based graphical user interface for the EDGEFL (Edge Federated Lea
 4. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
+### Start with Docker
+1. Go to the GUI directory where the `package.json` file is located.
+```bash
+cd EdgeFL/gui/edgefl-gui
+```
+2. Build the docker image
+```bash
+docker build -t edgefl-gui:latest .
+```
+3. Start the docker container
+```bash
+docker run -p 3000:3000 edgefl-gui:latest
+```
+4. Go to http://127.0.0.1:3000/init
+
 ## Usage Guide
 
 ### Step 1: Initialize EDGEFL
