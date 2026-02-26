@@ -67,7 +67,7 @@ class MnistDataHandler():
         self.fl_model = self.model_def()
 
         # load the datasets from SQL
-        if self.node_name != 'aggregator': # for now, aggregator only allows for direct inference
+        if self.node_name != 'agg': # for now, aggregator only allows for direct inference
             (self.x_train, self.y_train), (self.x_test, self.y_test) = self.load_dataset(node_name, 1)
 
             # pre-process the datasets
