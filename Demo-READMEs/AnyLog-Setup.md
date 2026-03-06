@@ -27,8 +27,7 @@ This is the **primary method** for running EdgeFL with AnyLog on Apple Silicon M
 ## 1. Prerequisites
 
 - **Docker Desktop** — installed and running
-- **AnyLog license key** — obtain from https://www.anylog.network/download
-- **AnyLog ARM Docker image** — downloaded as `AnyLog-ARM.tar`
+- **AnyLog Docker image** — Currently not publicly available. For those interested in trying AnyLog, fill out the form at https://www.anylog.network/download to receive a license key and email roy[at]anylog[dot]co for more information.
 - **docker-compose (latest)** — install via Homebrew (`brew install docker-compose`); older versions may cause issues
 - **Python 3.10+** with `venv` support
 
@@ -36,18 +35,22 @@ This is the **primary method** for running EdgeFL with AnyLog on Apple Silicon M
 
 ## 2. Docker Image Setup
 
-Load the AnyLog ARM image and verify it:
+Load the AnyLog Docker image (ARM or AMD) and verify it:
 
 ```bash
-docker load < /path/to/AnyLog-ARM.tar
+docker load < /path/to/AnyLog-[ARCHITECTURE].tar
 
 docker image ls | grep anylog
-# Expected: anylogco/anylog-network   ucsc-arm   <image-id>   789MB
+# Expected: anylogco/anylog-network   [TAG]   <image-id>   ~789MB
 ```
+
+Note the image tag from the output — you'll need it in the configuration step.
 
 ---
 
 ## 3. Docker-Compose Repository
+
+> **Note:** These setup instructions are for **local environment only**. For instructions on deploying AnyLog globally, reach out to the AnyLog team.
 
 Clone and check out the correct branch:
 
@@ -64,11 +67,13 @@ git pull origin roy-local
 
 ### Create the credentials file
 
+Export your AnyLog license key to a file in a directory of your choice. For example:
+
 ```bash
-mkdir -p ~/.credentials
+mkdir -p [YOUR_CREDENTIALS_DIRECTORY]
 ```
 
-Create `~/.credentials/.anylog_key.env` with your license key:
+Create `[YOUR_CREDENTIALS_DIRECTORY]/.anylog_key.env` with your license key:
 
 ```
 ANYLOG_LICENSE="56b3d57....269ff{'company':'Guest','expiration':'somedate','type':'beta'}"
@@ -79,7 +84,7 @@ ANYLOG_LICENSE="56b3d57....269ff{'company':'Guest','expiration':'somedate','type
 Add the following to your shell profile (e.g. `~/.zshrc`) so it loads automatically:
 
 ```bash
-source ~/.credentials/.anylog_key.env
+source [YOUR_CREDENTIALS_DIRECTORY]/.anylog_key.env
 export ANYLOG_LICENSE
 ```
 
@@ -97,11 +102,13 @@ All commands below assume you are in the `docker-compose` repository root.
 
 ### 5a. Set the Docker image tag
 
-In the repo's `Makefile`, change line 7 to:
+In the repo's `Makefile`, change line 7 to match your AnyLog image tag:
 
 ```makefile
-export TAG ?= ucsc-arm
+export TAG ?= [YOUR_IMAGE_TAG]
 ```
+
+To find your image tag, run `docker image ls | grep anylog` and use the tag from the output.
 
 ### 5b. Set the license key in the master config
 
@@ -210,7 +217,7 @@ While attached to an operator:
 get databases
 ```
 
-You should see `almgm`, `customers`, and `system_query` (or `mnist_fl` if previously configured):
+You should see `almgm` and `system_query`, and either `customers` or `mnist_fl`:
 
 ```
 Active DBMS Connections
@@ -291,6 +298,8 @@ to:
 ```
 
 ### 9b. Insert data into each operator
+
+Insert data into each operator using the logical database name (in this case, `mnist_fl`):
 
 ```bash
 cd edgefl/data/mnist

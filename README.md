@@ -20,8 +20,9 @@ Before you get started, please follow the configuration steps precisely.
 
 ## Prerequisites
 - Docker Desktop installed and running
-- Git with repository cloned
-- **AnyLog users only:** AnyLog license key and Docker image loaded (see [AnyLog Setup Guide](Demo-READMEs/AnyLog-Setup.md) sections 2-4)
+- Python 3.12
+- Git
+- **AnyLog users only:** AnyLog license key and Docker image (see [AnyLog Setup Guide](Demo-READMEs/AnyLog-Setup.md) for details on obtaining access)
 
 ## Python Environment Setup
 ```bash
@@ -264,6 +265,8 @@ Edit files in `edgefl/env_files/mnist/` and set:
 > **Note:** If you get SQL connection errors, try `EXTERNAL_TCP_IP_PORT="network"` instead.
 
 ### Insert MNIST Data
+
+Insert data into each operator using the logical database name (in this case, `mnist_fl`):
 
 ```bash
 cd edgefl/data/mnist
