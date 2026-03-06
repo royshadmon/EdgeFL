@@ -16,8 +16,8 @@ In this README we provide an example of a 3 training node and 1 aggregator setup
 Since these instructions target a single machine (adaptable to multiple), we deploy multiple Postgres databases (one per operator) to emulate distributed data. Each node runs in a Docker container to simulate a true distributed environment.
 
 **Supported backends:**
-- **AnyLog** (primary): Requires license key and Docker image. See [AnyLog Setup Guide](Demo-READMEs/AnyLog-Setup.md) for detailed steps.
-- **EdgeLake** (alternative, open-source): See [EdgeLake Setup Guide](Demo-READMEs/EdgeLake-Setup.md) for detailed steps.
+- **AnyLog** (primary): Requires license key and Docker image. See [AnyLog Setup Guide](AnylogNetworkSetup/AnyLog-Setup.md) for detailed steps.
+- **EdgeLake** (alternative, open-source): See [EdgeLake Setup Guide](AnylogNetworkSetup/EdgeLake-Setup.md) for detailed steps.
 
 For more about EdgeLake, visit the [EdgeLake website](https://edgelake.github.io/).
 
@@ -29,7 +29,7 @@ Before you get started, please follow the configuration steps precisely.
 - Docker Desktop installed and running
 - Python 3.12
 - Git
-- **AnyLog users only:** AnyLog license key and Docker image (see [AnyLog Setup Guide](Demo-READMEs/AnyLog-Setup.md) for details on obtaining access)
+- **AnyLog users only:** AnyLog license key and Docker image (see [AnyLog Setup Guide](AnylogNetworkSetup/AnyLog-Setup.md) for details on obtaining access)
 
 ## Python Environment Setup
 ```bash
@@ -248,8 +248,8 @@ Expected output:
 EdgeFL supports three demos. The following shows the unified setup for MNIST (the most common demo). For other demos and platform-specific details, see the guides below.
 
 **Detailed setup guides:**
-- [AnyLog Setup Guide (Apple Silicon)](Demo-READMEs/AnyLog-Setup.md) — Primary method with license
-- [EdgeLake Setup Guide (Apple Silicon)](Demo-READMEs/EdgeLake-Setup.md) — Open-source alternative
+- [AnyLog Setup Guide (Apple Silicon)](AnylogNetworkSetup/AnyLog-Setup.md) — Primary method with license
+- [EdgeLake Setup Guide (Apple Silicon)](AnylogNetworkSetup/EdgeLake-Setup.md) — Open-source alternative
 - [MNIST demo details](Demo-READMEs/MNIST.md)
 - [Winniio temperature prediction](Demo-READMEs/WINNIIO.md)
 - [Chest X-ray bounding box](Demo-READMEs/Chest-Xray-BoundingBox.md)
