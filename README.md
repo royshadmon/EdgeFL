@@ -2,9 +2,16 @@
 
 ## Overview
 
-EdgeFL simulates a continuous Federated Learning (FL) lifecycle with three training nodes and one aggregator node. Each node connects to either an **AnyLog** or **EdgeLake** backend (choose one). You'll deploy four backend nodes: three operators and one master. The master emulates blockchain-like shared metadata functionality.
+EdgeFL enables federated learning across an AnyLog or EdgeLake network that is composed of data distributed across multiple nodes.
 
-EdgeFL supports three demos where each operator locally trains a model using its own data. EdgeFL dynamically facilitates model sharing and aggregation via the aggregator—**no data movement required**. 
+The following is instructions to simulate the continuous Federated Learning (FL) lifecycle 
+consisting of three training nodes and one aggregator node. Each node will utilize its
+own EdgeLake node, such that we will deploy four EdgeLake nodes, three of which have 
+operator roles and one with the master role. The master role is a normal EdgeLake operator
+node but also emulates the same blockchain-like functionality of the blockchain-back shared
+metadata layer. For more information about EdgeLake and how it operates, check the [EdgeLake website](https://edgelake.github.io/).
+
+In this README we provide an example of a 3 training node and 1 aggregator setup, but note that you can include as many nodes in the training process as needed. This README describes three demos where each operator locally trains a model using its own data. EdgeFL dynamically facilitates model sharing and aggregation via the aggregator—**no data movement required**. We currently have three demos available for users to try EdgeFL and we also provide instructions on creating your own demo or production deployment ([see writing your own data handler](Demo-READMEs/Writing-A-Custom-DataHandler.md)).
 
 Since these instructions target a single machine (adaptable to multiple), we deploy multiple Postgres databases (one per operator) to emulate distributed data. Each node runs in a Docker container to simulate a true distributed environment.
 
