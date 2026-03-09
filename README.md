@@ -107,6 +107,14 @@ Save this IP (e.g., `192.1.1.1`) for operator configuration.
 - `docker-compose/docker_makefile/anylog_operator2.env`
 - `docker-compose/docker_makefile/anylog_operator3.env`
 
+> **Important for AnyLog users:** Ensure the following base config settings are set correctly in your configuration files:
+> ```
+> TCP_BIND=true
+> REST_BIND=true
+> BROKER_BIND=false
+> ```
+> Otherwise, you might experience issues with network connectivity with multiple IP addresses per node.
+
 **Start operators:**
 
 **EdgeLake:**

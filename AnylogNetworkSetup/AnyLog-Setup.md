@@ -124,7 +124,18 @@ to:
 LICENSE_KEY=$ANYLOG_LICENSE
 ```
 
-### 5c. Disable NoSQL/Blobs in each operator config
+### 5c. Set required base config settings
+
+In every base config file (master and operators: `docker-makefiles/master-configs/base_configs.env`, `docker-makefiles/operator1-configs/base_configs.env`, etc.), ensure the following are set:
+
+```env
+TCP_BIND=true
+REST_BIND=true
+BROKER_BIND=false
+```
+Otherwise, you might experience issues with network connectivity with multiple IP addresses per node.
+
+### 5d. Disable NoSQL/Blobs in each operator config
 
 In every operator base config file (e.g. `docker-makefiles/operator1-configs/base_configs.env`, etc.), set:
 
