@@ -131,7 +131,7 @@ In every base config file (master and operators: `docker-makefiles/master-config
 ```env
 TCP_BIND=true
 REST_BIND=true
-BROKER_BIND=false
+BROKER_BIND=true
 ```
 Otherwise, you might experience issues with network connectivity with multiple IP addresses per node.
 
@@ -589,3 +589,11 @@ docker volume rm $(docker volume ls -q | grep '^docker-compose-files_')
 | Missing `tensorflow` or `scikit-learn` errors | `pip3 install tensorflow scikit-learn` in your venv |
 | `docker-compose` command fails | Install the latest version via `brew install docker-compose` |
 | `mnist_fl` database not visible in `get databases` | Manually connect: `connect dbms mnist_fl where type = psql and user = demo and password = passwd and ip = 127.0.0.1 and port = 5432 and memory = true` |
+
+Some individuals might experience issues with the ports/IP addresses not setting up correctly. If you're not on Linux, you might need to change these lines in the `update_docker_compose.sh` file to be uncommented:
+```
+if [[ "$(uname -s)" != "Linux" ]] ; then
+  TEMPLATE_COMPOSE_FILE="docker-makefiles/docker-compose-template-ports-base.yaml"
+fi
+```
+I left mine commented and had no issue, but for others, uncommenting these lines might help.
