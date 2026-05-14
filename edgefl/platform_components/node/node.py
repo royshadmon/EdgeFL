@@ -9,6 +9,9 @@ import os
 import pickle
 from asyncio import sleep
 
+import json      # needed to serialize accuracy rows before sending to AnyLog
+import requests   # needed to PUT accuracy data to AnyLog REST endpoint
+
 # import numpy as np
 
 from platform_components.EdgeLake_functions.blockchain_EL_functions import insert_policy, check_policy_inserted, \
@@ -116,12 +119,12 @@ class Node:
                     'message': f'Index "{index}" already has a module: "{self.module_names[index]}"'
                 }
             elif index_data: # module already stored in blockchain but not cache, so fetch
-                self.logger.info(f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.')
+                self.logger.info(f'Index "{index}" already has a module in the blockchain: "{index_data["module_name"]}". Fetching now.')   #3.11fix '' => ""
                 self.module_names[index] = index_data['module_name']
                 self.module_paths[index] = index_data['module_path']
                 return {
                     'status': 'success',
-                    'message': f'Index "{index}" already has a module in the blockchain: "{index_data['module_name']}". Fetching now.'
+                    'message': f'Index "{index}" already has a module in the blockchain: "{index_data["module_name"]}". Fetching now.' #3.11fix '' => ""
                 }
 
             # New index, so set new module
@@ -208,6 +211,17 @@ class Node:
         - Uses updated aggregator model params and updates local model
         - Gets local data and runs training on updated model
     '''
+    # Comes in from 
+    # CORE FUNCTION. In order:
+    # Round 1: Calls data_handler.get_weights() - user the initial random wegiths TODO: check what these are 
+    # Round 2+: Download the aggregated .json file, deserialize via pickle.load(), extract newUpdates -> decode weights
+    # 3) Data_handler.update_model(weights) - load those weights into the local Keras model TODO: Learn more about keras model
+    # 4) run_inference() -> capture the initial_accuracy (baseline before training)
+    # 5) data_hadnler.train(round_number) -> Local training runs
+    # 6) run_inference() -> capture the final_accruacy (how much this node improved)
+    # 7) pickle.dumps(model_params) -> serialize new weights
+    # 8) save to disk as {round}-replica-{node_name}.pkl
+    # 9) return {'model_path': ..., 'initial_accuracy': ..., 'final_accuracy': ...}
     def train_model_params(self, aggregator_model_params_db_link, round_number, ip_ports, rest_ip_port, index):
         self.logger.debug(f"[{index}] in train_model_params for round {round_number}")
 
@@ -244,12 +258,18 @@ class Node:
 
         # Update model with weights
         self.data_handlers[index].update_model(weights)
+        
+        # Accuracy of the aggregator's global weights on this node's local test set (pre-training baseline)
+        initial_accuracy = self.data_handlers[index].run_inference()
 
         # Train model
         # model_update = self.local_training_handler.train({})
         # print(f"[INFO] [{index}][Round {round_number}] ========== Model training progress ==========")
         model_params = self.data_handlers[index].train(round_number)
         self.logger.info(f"[{index}][Round {round_number}] Step 2 Complete: Model training done")
+        
+        # Accuracy after local training — change from initial_accuracy shows this node's contribution
+        final_accuracy = self.data_handlers[index].run_inference()
 
         # Save and return new weights
         encoded_params = self.encode_model(model_params)
@@ -263,8 +283,10 @@ class Node:
         if self.docker_running:
             self.logger.debug(f'[{index}] written to container at {f"{self.docker_file_write_destination}/{index}/{file}"}')
             copy_file_to_container(os.path.join(self.tmp_dir, index), self.docker_container_name, self.edgelake_node_url, file_name, f"{self.docker_file_write_destination}/{index}/{file}")
-            return f'{self.docker_file_write_destination}/{index}/{file}'
-        return file_name
+            # Return dict so the caller gets the model path AND both accuracy snapshots for storage
+            return {'model_path': f'{self.docker_file_write_destination}/{index}/{file}', 'initial_accuracy': initial_accuracy, 'final_accuracy': final_accuracy}
+        # Return dict so the caller gets the model path AND both accuracy snapshots for storage
+        return {'model_path': file_name, 'initial_accuracy': initial_accuracy, 'final_accuracy': final_accuracy}
 
     def encode_model(self, model_update):
         # serialized_data = gzip.compress(pickle.dumps(model_update)) # maybe, so that we don't stored super large models as is
@@ -281,3 +303,29 @@ class Node:
 
     def direct_inference(self, index, data):
         return self.data_handlers[index].direct_inference(data)
+
+    def push_accuracy(self, index, round_number, initial_accuracy, final_accuracy, model_path):
+        # Build the row that will be stored in AnyLog under table "node_accuracy"
+        row = {
+            "node_name":        self.replica_name,
+            "index_name":       index,
+            "round_number":     round_number,
+            "initial_accuracy": round(initial_accuracy, 4),
+            "final_accuracy":   round(final_accuracy, 4),
+            "model_path":       model_path
+        }
+        # AnyLog expects data via PUT with these headers to route the row to the right db/table
+        headers = {
+            "type":         "json",
+            "dbms":         self.databases[index],   # logical db name, "mnist_fl"
+            "table":        "node_accuracy",
+            "mode":         "streaming",
+            "Content-Type": "text/plain"
+        }
+        try:
+            self.logger.info(f"[{index}] Pushing accuracy row: {row}")
+            response = requests.put(url=self.edgelake_node_url, data=json.dumps(row), headers=headers)
+            # Log the status code so we can confirm AnyLog accepted the row
+            self.logger.info(f"[{index}][Round {round_number}] Accuracy stored: initial={initial_accuracy:.2f}%  final={final_accuracy:.2f}%  status={response.status_code}")
+        except Exception as e:
+            self.logger.error(f"[{index}] Failed to push accuracy: {str(e)}")

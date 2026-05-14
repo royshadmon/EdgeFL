@@ -72,6 +72,12 @@ class InitNodeRequest(BaseModel):
     round_number: int
 
 
+# When the aggregator calls this endpoint, three things happen:
+# 1) A node object is created
+# 2) The node loads. its training app (MnistDataHandler) dynamically from the env config
+# 3) A daemon thread is spwaned that immediately starts polling the blockchaing
+#  POST /init-node  →  Node()  →  listen_for_start_round() thread starts
+# TODO: look into how daemon threads work
 @app.post('/init-node')
 def init_node(request: InitNodeRequest):
     global node_instance, listener_thread, stop_listening_thread
@@ -89,6 +95,9 @@ def init_node(request: InitNodeRequest):
         db_name = os.getenv("LOGICAL_DATABASE")
 
         # Instantiate the Node class
+        # Where nodes are made
+        # Held under node_isntance 
+        # each node instance has: (replica name, ip, port, logger)
         logger.info(f"{replica_name} before initialized")
         if not node_instance:
             node_instance = Node(replica_name, ip, port, logger)
@@ -121,7 +130,7 @@ def init_node(request: InitNodeRequest):
         }
     except ValueError as e:
         raise ValueError(
-            f"No data found in the database: {os.getenv("LOGICAL_DATABASE")}"
+            f"No data found in the database: {os.getenv('LOGICAL_DATABASE')}"   #changed temp for 3.11 "" -> ''
         )
     except HTTPException as e:
         raise HTTPException(
@@ -133,6 +142,8 @@ def init_node(request: InitNodeRequest):
             f"Unable to access the database tables: {str(e)}"
         )
 
+# This loop runs forever on its own thread. Every 5 seconds it asks the blockchain
+# Has the aggregator published a RoundStart policy for round N?
 
 def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.round_number[index]
@@ -143,6 +154,8 @@ def listen_for_start_round(nodeInstance, index, stop_event):
             headers = {
                 'User-Agent': 'AnyLog/1.23',
                 'command': f'blockchain get {index} where round_number = {current_round} and node_type = aggregator'
+                # This command line, when it finds one, it extracts initParams (the path to the aggregated model file) and calls train_model_params()
+                # train_model_params() called here!
             }
             response = requests.get(edgelake_node_url, headers=headers)
 
@@ -164,9 +177,19 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
                     rest_ip_port = round_data.get('rest_ip_port', '')
-                    modelUpdate_metadata = nodeInstance.train_model_params(paramsLink, current_round, ip_port, rest_ip_port, index)
-                    nodeInstance.add_node_params(current_round, modelUpdate_metadata, index)
+                    
+                    #Where we call Node.py func train_model_params
+                    # train_model_params now returns a dict with model_path + both accuracy snapshots
+                    # Aggregator reads this through listen_for_update_agg() polling group
+                    #   - How agg knows which nodes finished this round and where to find each node's model file
+                    result = nodeInstance.train_model_params(paramsLink, current_round, ip_port, rest_ip_port, index)
+                    
+                    # Reminder: add_node_params() writes a submodel blockchain policy so the aggregator can find this node's model file.
+                    nodeInstance.add_node_params(current_round, result['model_path'], index)    #Goes to blockchain
                     logger.info(f"[{index}][Round {current_round}] Step 3 Complete: Model parameters published")
+
+                    # Write initial_accuracy and final_accuracy for this round to AnyLog table "node_accuracy"
+                    nodeInstance.push_accuracy(index, current_round, result['initial_accuracy'], result['final_accuracy'], result['model_path'])
                     current_round += 1
                     logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
 
@@ -247,6 +270,81 @@ def direct_inference(request: InferenceRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error executing inference on model. Check inference function in data handler"
         )
+
+# REMOVED: _current_accuracy_table() computed a partition table name like
+#   par_node_accuracy_2026_05_01_d14_insert_timestamp
+# and the /accuracy-report endpoint below queried it directly with a bare `sql` command.
+# Both are wrong per AnyLog's intended query interface:
+#   1. Partition tables are for debug inspection only — logical table is the correct target.
+#   2. `sql ...` queries only the local node; `run client () sql ...` queries the full network.
+# Keeping the old implementation commented out below as a fallback reference.
+#
+# def _current_accuracy_table() -> str:
+#     from datetime import datetime, timezone
+#     now = datetime.now(timezone.utc)
+#     period_start = (now.day // 14) * 14
+#     return f"par_node_accuracy_{now.year}_{now.month:02d}_{period_start:02d}_d14_insert_timestamp"
+
+
+@app.get('/accuracy-report', response_class=PlainTextResponse)
+def accuracy_report(index: str = None):
+    """
+    Query node_accuracy from AnyLog and print one table per index_name.
+
+    Usage:
+        curl http://localhost:8080/accuracy-report
+        curl "http://localhost:8080/accuracy-report?index=NodeAccTest11"
+    """
+    try:
+        db_name = os.getenv("LOGICAL_DATABASE", "mnist_fl")
+        where_clause = f"WHERE index_name = '{index}'" if index else ""
+        sql = (
+            f"SELECT node_name, index_name, round_number, initial_accuracy, final_accuracy "
+            f"FROM node_accuracy {where_clause} ORDER BY index_name, round_number"
+        )
+        # `run client ()` is required to query the distributed network, not just the local node.
+        headers = {
+            'User-Agent': 'AnyLog/1.23',
+            'command': f'run client () sql {db_name} format=json "{sql}"'
+        }
+        response = requests.get(edgelake_node_url, headers=headers)
+        if response.status_code != 200:
+            return f"AnyLog error: HTTP {response.status_code}\n{response.text}"
+
+        payload = response.json()
+        rows = payload.get("Query", []) if isinstance(payload, dict) else payload
+
+        if not rows:
+            # Previously: f"No accuracy data found in {table}.\n" — `table` was the old partition table variable, now removed.
+            return f"No accuracy data found in node_accuracy.\n"
+
+        # Group by index_name
+        groups: dict[str, list] = {}
+        for row in rows:
+            key = row.get('index_name', 'unknown')
+            groups.setdefault(key, []).append(row)
+
+        lines = []
+        header = f"  {'round':>5}  {'initial_acc':>11}  {'final_acc':>9}"
+        sep    = f"  {'-----':>5}  {'-----------':>11}  {'---------':>9}"
+        for idx_name in sorted(groups):
+            idx_rows = groups[idx_name]
+            node = idx_rows[0].get('node_name', '?')
+            lines.append(f"\n{'=' * 42}")
+            lines.append(f"  {idx_name}  (node: {node})")
+            lines.append(f"{'=' * 42}")
+            lines.append(header)
+            lines.append(sep)
+            for row in idx_rows:
+                lines.append(
+                    f"  {row['round_number']:>5}  "
+                    f"{float(row['initial_accuracy']):>11.1f}  "
+                    f"{float(row['final_accuracy']):>9.1f}"
+                )
+        return "\n".join(lines) + "\n"
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == '__main__':
     global port
