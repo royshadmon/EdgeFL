@@ -9,7 +9,7 @@ This branch adds two research features on top of the base platform:
 - **Model Rollback** — nodes can automatically or manually roll back to a previous model checkpoint when accuracy degrades across training rounds. Configurable patience, delta threshold, and event logging are all controlled via env vars.
 - **Push-Accuracy Tracking** — each node measures and logs pre/post-training accuracy into EdgeLake's distributed database, making per-round accuracy queryable across all nodes.
 
-For a step-by-step guide to verifying both features, see [`docs/rollback_test_walkthrough.tex`](docs/rollback_test_walkthrough.tex).
+For a step-by-step guide to verifying both features, see [`docs/rollback_test_walkthrough.md`](docs/rollback_test_walkthrough.md).
 
 ## Features at a Glance
 
