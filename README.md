@@ -2,6 +2,41 @@
 
 ## Overview
 
+EdgeFL is a Federated Learning (FL) platform built on top of [EdgeLake](https://edgelake.github.io/), a decentralized data network. It simulates a realistic FL lifecycle where multiple training nodes each hold local data, train a model, and share only their model parameters — never the raw data — through a shared aggregator. EdgeLake's blockchain-backed metadata layer handles node coordination and model sharing without a central server.
+
+This branch adds two research features on top of the base platform:
+
+- **Model Rollback** — nodes can automatically or manually roll back to a previous model checkpoint when accuracy degrades across training rounds. Configurable patience, delta threshold, and event logging are all controlled via env vars.
+- **Push-Accuracy Tracking** — each node measures and logs pre/post-training accuracy into EdgeLake's distributed database, making per-round accuracy queryable across all nodes.
+
+For a step-by-step guide to verifying both features, see [`docs/rollback_test_walkthrough.tex`](docs/rollback_test_walkthrough.tex).
+
+## Features at a Glance
+
+| Feature | Description |
+|---|---|
+| Federated Learning | 3 training nodes + 1 aggregator, no raw data movement |
+| EdgeLake integration | Distributed metadata, model storage, and querying via EdgeLake |
+| Model Rollback | Auto/manual rollback on accuracy regression (`rollback_manager.py`) |
+| Accuracy Logging | Per-round initial/final accuracy logged to `node_accuracy` table |
+| Demos | MNIST, Winniio (telemetry), Chest X-Ray bounding box |
+| Containerized | Full Docker Compose support for all nodes and the aggregator |
+
+## Rollback Configuration
+
+Rollback behavior is controlled per-node via env vars in `edgefl/env_files/mnist/`:
+
+```bash
+ROLLBACK_ENABLED=true          # master switch
+ROLLBACK_AUTO_ENABLED=false    # set true for automatic rollback on degradation
+ROLLBACK_PATIENCE_ROUNDS=3     # how many rounds of no improvement before rolling back
+ROLLBACK_MIN_DELTA=0.0         # minimum accuracy gain to count as improvement
+ROLLBACK_ALLOW_MANUAL=true     # expose /rollback endpoint for manual trigger
+ROLLBACK_LOG_EVENTS=true       # write rollback events to EdgeLake
+```
+
+---
+
 The following is instructions to simulate the continuous Federated Learning (FL) lifecycle 
 consisting of three training nodes and one aggregator node. Each node will utilize its
 own EdgeLake node, such that we will deploy four EdgeLake nodes, three of which have 
