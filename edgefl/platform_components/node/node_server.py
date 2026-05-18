@@ -27,6 +27,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
+from typing import Optional
+
+from platform_components.node.rollback_manager import (
+    RollbackConfig, load_rollback_config,
+    get_accuracy_history, should_auto_rollback, select_rollback_round,
+)
 
 from platform_components.lib.logger.logger_config import configure_logging
 
@@ -64,12 +70,33 @@ app.add_middleware(
 
 
 
+rollback_cfg: RollbackConfig = load_rollback_config()
+
+# Guards the listener thread during rollback so aggregator weights can't
+# overwrite the rolled-back model before it gets a chance to be used.
+_node_ready = threading.Event()
+_node_ready.set()  # starts in "ready" state; cleared only during rollback
+
+
 class InitNodeRequest(BaseModel):
     replica_name: str
     replica_ip: str
     replica_port: str
     replica_index: str
     round_number: int
+
+
+class RollbackRequest(BaseModel):
+    round: int
+    reason: Optional[str] = "manual"
+
+
+class RollbackConfigUpdate(BaseModel):
+    auto_enabled: Optional[bool] = None
+    patience_rounds: Optional[int] = None
+    min_delta: Optional[float] = None
+    allow_manual: Optional[bool] = None
+    log_events: Optional[bool] = None
 
 
 # When the aggregator calls this endpoint, three things happen:
@@ -173,16 +200,35 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                 #         break  # Stop searching once the current round's data is found
 
                 if round_data:
-                    logger.debug(f"[{index}] Round Data: {round_data}")  # Debugging line
+                    # Block here if a rollback is in progress so its weights
+                    # aren't overwritten the moment the next round fires.
+                    _node_ready.wait()
+                    # Resync round in case rollback changed node_instance.round_number
+                    current_round = nodeInstance.round_number[index]
+
+                    logger.debug(f"[{index}] Round Data: {round_data}")
                     paramsLink = round_data.get('initParams', '')
                     ip_port = round_data.get('ip_port', '')
                     rest_ip_port = round_data.get('rest_ip_port', '')
-                    
-                    #Where we call Node.py func train_model_params
-                    # train_model_params now returns a dict with model_path + both accuracy snapshots
-                    # Aggregator reads this through listen_for_update_agg() polling group
-                    #   - How agg knows which nodes finished this round and where to find each node's model file
-                    result = nodeInstance.train_model_params(paramsLink, current_round, ip_port, rest_ip_port, index)
+
+                    # If a rollback is pending, skip downloading initParams this round and
+                    # train directly from the rolled-back weights already in the model.
+                    # WARNING: this node's update will be stale relative to the current
+                    # global model — W_agg_{current_round-1} — and may pull aggregation
+                    # in an older direction. Use staleness-aware aggregation if this is
+                    # a concern.
+                    skip_download = nodeInstance._rollback_pending.get(index, False)
+                    if skip_download:
+                        nodeInstance._rollback_pending[index] = False
+                        logger.warning(
+                            f"[{index}] Round {current_round}: rollback active — "
+                            f"training from W_agg_{nodeInstance._stale_round.get(index, '?')} "
+                            f"instead of W_agg_{current_round - 1}. "
+                            f"Stale gradient warning: aggregator will receive an update "
+                            f"computed from an older global model."
+                        )
+
+                    result = nodeInstance.train_model_params(paramsLink, current_round, ip_port, rest_ip_port, index, skip_download=skip_download)
                     
                     # Reminder: add_node_params() writes a submodel blockchain policy so the aggregator can find this node's model file.
                     nodeInstance.add_node_params(current_round, result['model_path'], index)    #Goes to blockchain
@@ -191,7 +237,21 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                     # Write initial_accuracy and final_accuracy for this round to AnyLog table "node_accuracy"
                     nodeInstance.push_accuracy(index, current_round, result['initial_accuracy'], result['final_accuracy'], result['model_path'])
                     current_round += 1
+                    nodeInstance.round_number[index] = current_round
                     logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
+
+                    # Auto-rollback: runs only when ROLLBACK_AUTO_ENABLED=true
+                    if rollback_cfg.auto_enabled:
+                        db_name = os.getenv("LOGICAL_DATABASE", "mnist_fl")
+                        history = get_accuracy_history(index, db_name, edgelake_node_url, nodeInstance.replica_name)
+                        if should_auto_rollback(history, rollback_cfg):
+                            target = select_rollback_round(history, rollback_cfg)
+                            logger.info(f"[{index}] Auto-rollback triggered: target round={target}")
+                            try:
+                                nodeInstance.rollback_to_round(index, target, reason="automatic", trigger_type="automatic")
+                                logger.info(f"[{index}] Auto-rollback complete, resuming from round {current_round}")
+                            except Exception as rollback_err:
+                                logger.error(f"[{index}] Auto-rollback failed: {rollback_err}")
 
             time.sleep(5)  # Poll every 2 seconds
         except Exception as e:
@@ -305,7 +365,7 @@ def accuracy_report(index: str = None):
         # `run client ()` is required to query the distributed network, not just the local node.
         headers = {
             'User-Agent': 'AnyLog/1.23',
-            'command': f'run client () sql {db_name} format=json "{sql}"'
+            'command': f'sql {db_name} format=json "{sql}"'
         }
         response = requests.get(edgelake_node_url, headers=headers)
         if response.status_code != 200:
@@ -318,30 +378,163 @@ def accuracy_report(index: str = None):
             # Previously: f"No accuracy data found in {table}.\n" — `table` was the old partition table variable, now removed.
             return f"No accuracy data found in node_accuracy.\n"
 
-        # Group by index_name
-        groups: dict[str, list] = {}
+        # Group by (index_name, node_name) so each node gets its own table
+        groups: dict[tuple, list] = {}
         for row in rows:
-            key = row.get('index_name', 'unknown')
+            key = (row.get('index_name', 'unknown'), row.get('node_name', 'unknown'))
             groups.setdefault(key, []).append(row)
 
         lines = []
-        header = f"  {'round':>5}  {'initial_acc':>11}  {'final_acc':>9}"
-        sep    = f"  {'-----':>5}  {'-----------':>11}  {'---------':>9}"
-        for idx_name in sorted(groups):
-            idx_rows = groups[idx_name]
-            node = idx_rows[0].get('node_name', '?')
-            lines.append(f"\n{'=' * 42}")
-            lines.append(f"  {idx_name}  (node: {node})")
-            lines.append(f"{'=' * 42}")
+        # Column headers:
+        #   round        — training round number
+        #   global@node  — initial_accuracy: how well W_agg_{R-1} performs on THIS node's
+        #                  local test set before any training (measures global model quality
+        #                  from this node's perspective)
+        #   after_train  — final_accuracy: accuracy after this node's local fine-tuning
+        #   contributed  — improvement this node added (after_train - global@node)
+        #   Δ_global     — change in global@node vs previous round (is the global model
+        #                  improving for this node? negative = rollback candidate)
+        header = f"  {'round':>5}  {'global@node':>11}  {'after_train':>11}  {'contributed':>11}  {'Δ_global':>8}"
+        sep    = f"  {'-----':>5}  {'-----------':>11}  {'-----------':>11}  {'-----------':>11}  {'--------':>8}"
+        for (idx_name, node_name) in sorted(groups):
+            idx_rows = groups[(idx_name, node_name)]
+            lines.append(f"\n{'=' * 60}")
+            lines.append(f"  index: {idx_name}   node: {node_name}")
+            lines.append(
+                f"  global@node = accuracy of global model on this node's data (pre-train)\n"
+                f"  Δ_global    = change vs previous round — negative means rollback candidate"
+            )
+            lines.append(f"{'=' * 60}")
             lines.append(header)
             lines.append(sep)
+            prev_initial = None
             for row in idx_rows:
+                init_acc  = float(row['initial_accuracy'])
+                final_acc = float(row['final_accuracy'])
+                contributed = final_acc - init_acc
+                if prev_initial is None:
+                    delta_str = f"{'--':>8}"
+                else:
+                    delta = init_acc - prev_initial
+                    sign = "+" if delta >= 0 else ""
+                    marker = "  !" if delta < -5 else ""
+                    delta_str = f"{sign}{delta:>7.1f}{marker}"
+                prev_initial = init_acc
                 lines.append(
                     f"  {row['round_number']:>5}  "
-                    f"{float(row['initial_accuracy']):>11.1f}  "
-                    f"{float(row['final_accuracy']):>9.1f}"
+                    f"{init_acc:>10.1f}%  "
+                    f"{final_acc:>10.1f}%  "
+                    f"{'+' if contributed >= 0 else ''}{contributed:>10.1f}%  "
+                    f"{delta_str}"
                 )
         return "\n".join(lines) + "\n"
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/rollback')
+def rollback(request: RollbackRequest):
+    """
+    Manual rollback to a specific round.
+    Fetches the aggregator-published model weights for that round via the blockchain
+    RoundStart policy and loads them as the active model.
+    """
+    if not rollback_cfg.enabled:
+        raise HTTPException(status_code=403, detail="Rollback is disabled on this node")
+    if not rollback_cfg.allow_manual:
+        raise HTTPException(status_code=403, detail="Manual rollback is disabled on this node")
+    if not node_instance:
+        raise HTTPException(status_code=400, detail="Node is not initialized")
+
+    index = next(iter(node_instance.indexes), None)
+    if not index:
+        raise HTTPException(status_code=400, detail="No index initialized on this node")
+
+    _node_ready.clear()  # pause the listener thread before touching model weights
+    try:
+        result = node_instance.rollback_to_round(
+            index, request.round,
+            reason=request.reason or "manual",
+            trigger_type="manual",
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        _node_ready.set()  # always resume, even on error
+
+
+@app.get('/rollback/config')
+def get_rollback_config():
+    """Return the current rollback configuration (env defaults + any runtime overrides)."""
+    return {
+        "rollback_enabled":  rollback_cfg.enabled,
+        "auto_enabled":      rollback_cfg.auto_enabled,
+        "patience_rounds":   rollback_cfg.patience_rounds,
+        "min_delta":         rollback_cfg.min_delta,
+        "allow_manual":      rollback_cfg.allow_manual,
+        "log_events":        rollback_cfg.log_events,
+    }
+
+
+@app.put('/rollback/config')
+def update_rollback_config(request: RollbackConfigUpdate):
+    """Update rollback config at runtime (in-memory only, does not persist to .env)."""
+    global rollback_cfg
+    if request.auto_enabled is not None:
+        rollback_cfg.auto_enabled = request.auto_enabled
+    if request.patience_rounds is not None:
+        rollback_cfg.patience_rounds = request.patience_rounds
+    if request.min_delta is not None:
+        rollback_cfg.min_delta = request.min_delta
+    if request.allow_manual is not None:
+        rollback_cfg.allow_manual = request.allow_manual
+    if request.log_events is not None:
+        rollback_cfg.log_events = request.log_events
+
+    return {"status": "success", "config": {
+        "rollback_enabled":  rollback_cfg.enabled,
+        "auto_enabled":      rollback_cfg.auto_enabled,
+        "patience_rounds":   rollback_cfg.patience_rounds,
+        "min_delta":         rollback_cfg.min_delta,
+        "allow_manual":      rollback_cfg.allow_manual,
+        "log_events":        rollback_cfg.log_events,
+    }}
+
+
+@app.get('/rollback/history')
+def rollback_history(index: str = None):
+    """
+    Query rollback_events from AnyLog via run client () — the distributed network path.
+    Optional ?index= filter to scope by training index.
+    """
+    try:
+        db_name = os.getenv("LOGICAL_DATABASE", "mnist_fl")
+        where_clause = f"WHERE index_name = '{index}'" if index else ""
+        sql = (
+            f"SELECT node_name, index_name, trigger_type, from_round, to_round, reason, status "
+            f"FROM rollback_events {where_clause} ORDER BY index_name, from_round"
+        )
+        headers = {
+            'User-Agent': 'AnyLog/1.23',
+            'command': f'sql {db_name} format=json "{sql}"',
+        }
+        response = requests.get(edgelake_node_url, headers=headers)
+        if response.status_code == 400:
+            logger.warning(f"[rollback/history] AnyLog 400 — table may not exist yet. Body: {response.text[:300]}")
+            return {"events": []}
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"AnyLog error: HTTP {response.status_code}")
+
+        payload = response.json()
+        rows = payload.get("Query", []) if isinstance(payload, dict) else payload
+        return {"events": rows if rows else []}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
