@@ -147,7 +147,11 @@ class MnistDataHandler():
         self.y_test = self.y_test.astype("int64")
 
     def run_inference(self):
-        x_test_images, y_test_labels = self.get_all_test_data(self.node_name)
+        # Use cached per-node test set — deterministic across both calls within a round.
+        # get_all_test_data() had no ORDER BY, so the two calls (pre/post training) could
+        # return different rows, making the accuracy delta unreliable.
+        x_test_images = self.x_test
+        y_test_labels = self.y_test
 
         # Get predictions
         with tf.device(device):

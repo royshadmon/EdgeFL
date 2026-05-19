@@ -11,6 +11,8 @@ This branch adds two research features on top of the base platform:
 
 For a step-by-step guide to verifying both features, see [`docs/rollback_test_walkthrough.md`](docs/rollback_test_walkthrough.md).
 
+For detailed experimental results from the `ModelRollback13` run — including the stale gradient effect, per-node accuracy tables, and implementation notes — see [`docs/rollback_results.md`](docs/rollback_results.md).
+
 ---
 
 ## Rollback Experiment: End-to-End Walkthrough

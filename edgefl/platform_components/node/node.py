@@ -227,6 +227,7 @@ class Node:
         if round_number == 1 and not aggregator_model_params_db_link:
             weights = self.data_handlers[index].get_weights()
             self.data_handlers[index].update_model(weights)
+            self.logger.info(f"[{index}] Round {round_number}: loaded initial random weights (no aggregated model yet)")
         elif skip_download:
             # Rollback active: model already holds the rolled-back weights — skip fetch and load.
             # This round's gradient will be stale relative to W_agg_{round_number - 1}.
@@ -256,6 +257,7 @@ class Node:
                     raise ValueError(f"[{index}] Invalid data or 'newUpdates' missing in Firestore response: {data}")
 
                 self.data_handlers[index].update_model(weights)
+                self.logger.info(f"[{index}] Round {round_number}: loaded weights from '{filename}'")
             except Exception as e:
                 self.logger.error(f"[{index}] Error getting weights: {str(e)}")
                 raise
