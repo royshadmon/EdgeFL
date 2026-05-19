@@ -29,18 +29,23 @@
 | Parameter | Value |
 |---|---|
 | FL topology | Centralized (1 aggregator + 3 training nodes) |
-| Index | `mnist` |
+| Index | `ModelRollback12` (example; set via `start-training` payload) |
 | `minParams` | 3 — aggregator waits for all 3 nodes every round |
 | Total rounds | 10 |
 | Rollback trigger | Manual via `POST /rollback` after round 7 |
-| Rollback target | Round 6 (loads W_agg_6) |
+| Rollback target | Round 4 (loads W_agg_4) |
 | `ROLLBACK_ENABLED` | `true` |
 | `ROLLBACK_AUTO_ENABLED` | `false` (manual only) |
 | `ROLLBACK_PATIENCE_ROUNDS` | 3 |
 | `ROLLBACK_ALLOW_MANUAL` | `true` |
-| Node 1 port | 8080 |
-| Node 2 port | 8081 |
-| Node 3 port | 8082 |
+| Aggregator port | 8080 |
+| Node 1 port | 8081 |
+| Node 2 port | 8082 |
+| Node 3 port | 8083 |
+| AnyLog master REST | 127.0.0.1:32049 |
+| AnyLog operator1 REST | 127.0.0.1:32149 (TCP: 32148) |
+| AnyLog operator2 REST | 127.0.0.1:32249 (TCP: 32248) |
+| AnyLog operator3 REST | 127.0.0.1:32349 (TCP: 32348) |
 
 ### Key Model Weight Notation
 
@@ -116,16 +121,16 @@ In round 1, the aggregator publishes `RoundStart(1)` with `initParams = ""` (emp
 
 ## 3. Rounds 1–6: Normal
 
-> **Note on accuracy values:** The values below are representative for a 10-class MNIST run. Your exact numbers will differ, but the shape of the curve (rapid rise early, then diminishing returns) should match. Node 1 has a slightly harder data partition and converges more slowly.
+> **Note on accuracy values:** The values below are from the actual test run (`ModelRollback12`, ~10 test samples per node per round). All values are multiples of 10% because the test set is very small (~10 samples). With a full MNIST test set the curve would rise smoothly from ~10% toward 90%+. The rollback mechanics are identical regardless of dataset size.
 
-| Round | Aggregator Action | Node 1 global | Node 1 train | Nodes 2&3 global (avg) | Nodes 2&3 train (avg) | Produces |
-|:---:|---|:---:|:---:|:---:|:---:|:---:|
-| 1 | Publishes `RoundStart(1)`, `initParams=""` | 10.2% | 52.4% | 10.5% | 55.1% | W_agg_1 |
-| 2 | `RoundStart(2)`, `initParams=W_agg_1` | 57.3% | 63.1% | 58.6% | 65.3% | W_agg_2 |
-| 3 | `RoundStart(3)`, `initParams=W_agg_2` | 65.4% | 70.2% | 66.1% | 71.8% | W_agg_3 |
-| 4 | `RoundStart(4)`, `initParams=W_agg_3` | 70.1% | 74.3% | 71.4% | 75.9% | W_agg_4 |
-| 5 | `RoundStart(5)`, `initParams=W_agg_4` | 74.4% | 77.6% | 75.2% | 78.7% | W_agg_5 |
-| 6 | `RoundStart(6)`, `initParams=W_agg_5` | **77.2%** | **80.1%** | **78.3%** | **81.4%** | W_agg_6 |
+| Round | Aggregator Action | Node 1 global | Node 1 train | Node 2 global | Node 2 train | Node 3 global | Node 3 train | Produces |
+|:---:|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | Publishes `RoundStart(1)`, `initParams=""` | 10.0% | 0.0% | 0.0% | 10.0% | 20.0% | 30.0% | W_agg_1 |
+| 2 | `RoundStart(2)`, `initParams=W_agg_1` | 20.0% | 0.0% | 20.0% | 0.0% | 20.0% | 0.0% | W_agg_2 |
+| 3 | `RoundStart(3)`, `initParams=W_agg_2` | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% | W_agg_3 |
+| 4 | `RoundStart(4)`, `initParams=W_agg_3` | 0.0% | 10.0% | 0.0% | 0.0% | 0.0% | 0.0% | W_agg_4 |
+| 5 | `RoundStart(5)`, `initParams=W_agg_4` | 10.0% | 20.0% | 10.0% | 10.0% | 10.0% | 10.0% | W_agg_5 |
+| 6 | `RoundStart(6)`, `initParams=W_agg_5` | **10.0%** | **30.0%** | **10.0%** | **30.0%** | **10.0%** | **0.0%** | W_agg_6 |
 
 **What to observe in the logs (rounds 1–6):**
 
@@ -148,40 +153,49 @@ Round 7 starts normally. The aggregator publishes `RoundStart(7)` with `initPara
 
 | Node | Starts From | global@node | after_train | Δ_global |
 |---|:---:|:---:|:---:|:---:|
-| **Node 1** | W_agg_6 | **62.3%** | **67.1%** | **−14.9% ⚠** |
-| Node 2 | W_agg_6 | 80.1% | 83.2% | +1.8% |
-| Node 3 | W_agg_6 | 79.8% | 82.9% | +1.5% |
+| **Node 1** | W_agg_6 | **0.0%** | **20.0%** | **−10.0% ⚠** |
+| Node 2 | W_agg_6 | 0.0% | 40.0% | −10.0% ⚠ |
+| Node 3 | W_agg_6 | 0.0% | 20.0% | −10.0% ⚠ |
 
-> **Interpreting the drop on Node 1**
+> **Interpreting the drop**
 >
-> Node 1's `global@node` dropped from 77.2% (round 6) to 62.3% (round 7) — a **−14.9%** delta. The `!` marker in the accuracy report flags this. This means W_agg_6 generalises poorly to Node 1's local data distribution. Nodes 2 and 3 are unaffected; the issue is specific to Node 1's partition.
+> All three nodes' `global@node` dropped to 0.0% in round 7 (down from 10% in round 6) — a **−10.0%** delta each, flagged with `!`. With only ~10 test samples this is high variance, but the signal is still meaningful: the global model regressed for all nodes. This is the trigger for the manual rollback.
 >
-> **What happened:** the aggregation in round 6 likely shifted the global model toward Nodes 2 and 3's distribution at the expense of Node 1. This is the classic non-IID data imbalance effect in FedAvg.
+> **What happened:** the aggregation in round 6 shifted the global model in a direction that performs worse on all nodes' local test sets. This is the classic non-IID data imbalance effect in FedAvg, amplified by the very small test set.
 
 All three nodes still publish their round 7 submodel policies. The aggregator collects all three (`minParams=3` satisfied), runs FedAvg, and produces W_agg_7. Round 7 then completes normally from the aggregator's perspective.
 
 After round 7 completes on Node 1:
-- `round_number["mnist"]` is now **8**
+- `round_number["ModelRollback12"]` is now **8**
 - `listen_for_start_round` is polling for `RoundStart(8)`
-- `_rollback_pending["mnist"]` is `False`
+- `_rollback_pending["ModelRollback12"]` is `False`
 
 **Accuracy report after round 7 (Node 1 only):**
 
+```bash
+curl "http://localhost:8081/accuracy-report?index=ModelRollback12"
+```
+
 ```
 ============================================================
-  index: mnist   node: node1
+  index: ModelRollback12   node: node1
   global@node = accuracy of global model on this node's data (pre-train)
-  delta_global = change vs previous round -- negative means rollback candidate
+  Δ_global    = change vs previous round — negative means rollback candidate
 ============================================================
-  round  global@node  after_train  contributed   delta_global
-  -----  -----------  -----------  -----------   ------------
-      1        10.2%        52.4%       +42.2%            --
-      2        57.3%        63.1%        +5.8%         +47.1
-      3        65.4%        70.2%        +4.8%          +8.1
-      4        70.1%        74.3%        +4.2%          +4.7
-      5        74.4%        77.6%        +3.2%          +4.3
-      6        77.2%        80.1%        +2.9%          +2.8
-      7        62.3%        67.1%        +4.8%         -14.9  !
+  round  global@node  after_train  contributed   Δ_global
+  -----  -----------  -----------  -----------   --------
+      1        10.0%         0.0%       -10.0%         --
+      2        20.0%         0.0%       -20.0%  +   10.0
+      3         0.0%         0.0%  +     0.0%     -20.0  !
+      4         0.0%        10.0%  +    10.0%   +    0.0
+      5        10.0%        20.0%  +    10.0%   +   10.0
+      6        10.0%        30.0%  +    20.0%   +    0.0
+      7         0.0%        20.0%  +    20.0%     -10.0  !
+```
+
+**AnyLog CLI equivalent:**
+```
+AL operator1 +> run client () sql mnist_fl format=table "SELECT node_name, round_number, initial_accuracy, final_accuracy FROM node_accuracy WHERE index_name='ModelRollback12' ORDER BY node_name, round_number"
 ```
 
 The `!` on round 7 and the large negative delta are your signal to check whether rollback is warranted. In this test we decide it is.
@@ -192,18 +206,18 @@ The `!` on round 7 and the large negative delta are your signal to check whether
 
 ### Decision
 
-We want Node 1 to start round 8 from W_agg_6 — the last model where Node 1 had good accuracy — instead of W_agg_7.
+We want Node 1 to start round 8 from W_agg_4 — a stable earlier checkpoint — instead of W_agg_7.
 
-> **Why round 6?**  
-> `POST /rollback {"round": 6}` instructs the node to load W_agg_6. Internally `rollback_to_round` looks up `RoundStart(7)` on the blockchain (round + 1) because that policy's `initParams` *is* W_agg_6. It fetches and loads those weights.
+> **Why round 4?**  
+> `POST /rollback {"round": 4}` instructs the node to load W_agg_4. Internally `rollback_to_round` looks up `RoundStart(5)` on the blockchain (round + 1) because that policy's `initParams` *is* W_agg_4. It fetches and loads those weights.
 
 ### The curl Command
 
 ```bash
 # Target Node 1 only. Nodes 2 and 3 are not rolled back.
-curl -X POST http://localhost:8080/rollback \
+curl -X POST http://localhost:8081/rollback \
      -H "Content-Type: application/json" \
-     -d '{"round": 6, "reason": "round 7 accuracy dropped -14.9% on node1"}'
+     -d '{"round": 4, "reason": "manual rollback at round 7"}'
 ```
 
 ### Expected Response
@@ -211,9 +225,9 @@ curl -X POST http://localhost:8080/rollback \
 ```json
 {
   "status": "success",
-  "rolled_back_to_round": 6,
-  "model_path": "/app/file_write/node1/mnist/7-agg_update.pkl",
-  "message": "Model rolled back to round 6"
+  "rolled_back_to_round": 4,
+  "model_path": "/Users/.../file_write/node1/ModelRollback12/4-agg_update.json",
+  "message": "Model rolled back to round 4"
 }
 ```
 
@@ -242,10 +256,10 @@ curl -X POST http://localhost:8080/rollback \
 
 | Field | Value |
 |---|---|
-| Active model weights | W_agg_6 (rolled back) |
-| `round_number["mnist"]` | 8 (unchanged) |
-| `_rollback_pending["mnist"]` | `True` |
-| `_stale_round["mnist"]` | 6 |
+| Active model weights | W_agg_4 (rolled back) |
+| `round_number["ModelRollback12"]` | 8 (unchanged) |
+| `_rollback_pending["ModelRollback12"]` | `True` |
+| `_stale_round["ModelRollback12"]` | 4 |
 | Listener polling for | `RoundStart(8)` |
 
 ---
@@ -304,11 +318,11 @@ The aggregator publishes `RoundStart(9)` with `initParams = W_agg_8`.
 
 ## 7. Rounds 9–10: Recovery
 
-| Round | Aggregator Action | Node 1 global | Node 1 train | Nodes 2&3 global (avg) | Nodes 2&3 train (avg) | Produces |
-|:---:|---|:---:|:---:|:---:|:---:|:---:|
-| 8 *(stale)* | `RoundStart(8)`, `initParams=W_agg_7` | 77.1% | 80.0% | 82.3% | 84.4% | W_agg_8 (mixed) |
-| 9 | `RoundStart(9)`, `initParams=W_agg_8` | 80.3% | 82.6% | 83.1% | 85.0% | W_agg_9 |
-| 10 | `RoundStart(10)`, `initParams=W_agg_9` | 82.1% | 84.0% | 84.7% | 86.1% | W_agg_10 |
+| Round | Aggregator Action | Node 1 global | Node 1 train | Node 2 global | Node 2 train | Node 3 global | Node 3 train | Produces |
+|:---:|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 8 *(stale)* | `RoundStart(8)`, `initParams=W_agg_7` | 10.0% | 0.0% | 20.0% | 30.0% | 20.0% | 20.0% | W_agg_8 (mixed) |
+| 9 | `RoundStart(9)`, `initParams=W_agg_8` | 30.0% | 20.0% | 30.0% | 30.0% | 30.0% | 30.0% | W_agg_9 |
+| 10 | `RoundStart(10)`, `initParams=W_agg_9` | 30.0% | 30.0% | 30.0% | 40.0% | 30.0% | 40.0% | W_agg_10 |
 
 The mixed aggregation in round 8 produces W_agg_8 pulled slightly toward W_agg_6 on Node 1's component. Rounds 9 and 10 normalise as all three nodes resume training from the same global model.
 
@@ -316,62 +330,87 @@ The mixed aggregation in round 8 produces W_agg_8 pulled slightly toward W_agg_6
 
 ## 8. Full Accuracy Report: Expected Output
 
-Run this after all 10 rounds complete on any node:
+Run this after all 10 rounds complete:
 
 ```bash
-curl http://localhost:8080/accuracy-report?index=mnist
+curl "http://localhost:8081/accuracy-report?index=ModelRollback12"
 ```
 
-#### Node 1
+**AnyLog CLI equivalent:**
+```
+AL operator1 +> run client () sql mnist_fl format=table "SELECT node_name, round_number, initial_accuracy, final_accuracy FROM node_accuracy WHERE index_name='ModelRollback12' ORDER BY node_name, round_number"
+```
+
+#### Node 1 (actual output)
 
 ```
 ============================================================
-  index: mnist   node: node1
+  index: ModelRollback12   node: node1
   global@node = accuracy of global model on this node's data (pre-train)
-  delta_global = change vs previous round -- negative means rollback candidate
+  Δ_global    = change vs previous round — negative means rollback candidate
 ============================================================
-  round  global@node  after_train  contributed   delta_global
-  -----  -----------  -----------  -----------   ------------
-      1        10.2%        52.4%       +42.2%             --
-      2        57.3%        63.1%        +5.8%          +47.1
-      3        65.4%        70.2%        +4.8%           +8.1
-      4        70.1%        74.3%        +4.2%           +4.7
-      5        74.4%        77.6%        +3.2%           +4.3
-      6        77.2%        80.1%        +2.9%           +2.8
-      7        62.3%        67.1%        +4.8%          -14.9  !   <-- trigger
-      8        77.1%        80.0%        +2.9%          +14.8      <-- stale round
-      9        80.3%        82.6%        +2.3%           +3.2
-     10        82.1%        84.0%        +1.9%           +1.8
+  round  global@node  after_train  contributed   Δ_global
+  -----  -----------  -----------  -----------   --------
+      1        10.0%         0.0%       -10.0%         --
+      2        20.0%         0.0%       -20.0%  +   10.0
+      3         0.0%         0.0%  +     0.0%     -20.0  !
+      4         0.0%        10.0%  +    10.0%   +    0.0
+      5        10.0%        20.0%  +    10.0%   +   10.0
+      6        10.0%        30.0%  +    20.0%   +    0.0
+      7         0.0%        20.0%  +    20.0%     -10.0  !  <-- trigger
+      8        10.0%         0.0%       -10.0%  +   10.0   <-- stale round
+      9        30.0%        20.0%       -10.0%  +   20.0
+     10        30.0%        30.0%  +     0.0%   +    0.0
 ```
 
-#### Nodes 2 & 3 (unaffected by rollback)
+#### Node 2 (actual output)
 
 ```
 ============================================================
-  index: mnist   node: node2
+  index: ModelRollback12   node: node2
 ============================================================
-  round  global@node  after_train  contributed   delta_global
-  -----  -----------  -----------  -----------   ------------
-      1        10.5%        55.1%       +44.6%             --
-      2        58.6%        65.3%        +6.7%          +48.1
-      3        66.1%        71.8%        +5.7%           +7.5
-      4        71.4%        75.9%        +4.5%           +5.3
-      5        75.2%        78.7%        +3.5%           +3.8
-      6        78.3%        81.4%        +3.1%           +3.1
-      7        80.1%        83.2%        +3.1%           +1.8
-      8        82.4%        84.6%        +2.2%           +2.3   <-- normal, no stale
-      9        83.1%        85.0%        +1.9%           +0.7
-     10        84.7%        86.1%        +1.4%           +1.6
+  round  global@node  after_train  contributed   Δ_global
+  -----  -----------  -----------  -----------   --------
+      1         0.0%        10.0%  +    10.0%         --
+      2        20.0%         0.0%       -20.0%  +   20.0
+      3         0.0%         0.0%  +     0.0%     -20.0  !
+      4         0.0%         0.0%  +     0.0%   +    0.0
+      5        10.0%        10.0%  +     0.0%   +   10.0
+      6        10.0%        30.0%  +    20.0%   +    0.0
+      7         0.0%        40.0%  +    40.0%     -10.0  !
+      8        20.0%        30.0%  +    10.0%   +   20.0
+      9        30.0%        30.0%  +     0.0%   +   10.0
+     10        30.0%        40.0%  +    10.0%   +    0.0
 ```
 
-Notice that Nodes 2 and 3 have no interruption at round 8: their `delta_global` progresses normally.
+#### Node 3 (actual output)
+
+```
+============================================================
+  index: ModelRollback12   node: node3
+============================================================
+  round  global@node  after_train  contributed   Δ_global
+  -----  -----------  -----------  -----------   --------
+      1        20.0%        30.0%  +    10.0%         --
+      2        20.0%         0.0%       -20.0%  +    0.0
+      3         0.0%         0.0%  +     0.0%     -20.0  !
+      4         0.0%         0.0%  +     0.0%   +    0.0
+      5        10.0%        10.0%  +     0.0%   +   10.0
+      6        10.0%         0.0%       -10.0%  +    0.0
+      7         0.0%        20.0%  +    20.0%     -10.0  !
+      8        20.0%        20.0%  +     0.0%   +   20.0
+      9        30.0%        30.0%  +     0.0%   +   10.0
+     10        30.0%        40.0%  +    10.0%   +    0.0
+```
+
+Rounds 9–10 show `global@node` at 30% for all nodes — the best the global model reached — confirming that the rollback to W_agg_4 produced a better starting point than staying on W_agg_7.
 
 ---
 
 ## 9. Rollback History Endpoint
 
 ```bash
-curl http://localhost:8080/rollback/history?index=mnist
+curl "http://localhost:8081/rollback/history?index=ModelRollback12"
 ```
 
 ```json
@@ -379,18 +418,28 @@ curl http://localhost:8080/rollback/history?index=mnist
   "events": [
     {
       "node_name":    "node1",
-      "index_name":   "mnist",
+      "index_name":   "ModelRollback12",
       "trigger_type": "manual",
       "from_round":   8,
-      "to_round":     6,
-      "reason":       "round 7 accuracy dropped -14.9% on node1",
+      "to_round":     4,
+      "reason":       "manual rollback at round 7",
       "status":       "success"
     }
   ]
 }
 ```
 
-`from_round = 8` because that was `round_number["mnist"]` at the time of the call — the round Node 1 was *about to* run when the rollback was triggered. `to_round = 6` is the target.
+**AnyLog CLI equivalent:**
+```
+AL operator1 +> run client () sql mnist_fl format=table "SELECT node_name, trigger_type, from_round, to_round, reason, status FROM rollback_events"
+```
+
+Or as JSON:
+```
+AL operator1 +> run client () sql mnist_fl format=json "SELECT * FROM rollback_events"
+```
+
+`from_round = 8` because that was `round_number["ModelRollback12"]` at the time of the call — the round Node 1 was *about to* run when the rollback was triggered. `to_round = 4` is the target.
 
 ---
 
@@ -400,15 +449,16 @@ curl http://localhost:8080/rollback/history?index=mnist
 
 - [ ] All 3 nodes log `Listening for start round R` for each round — confirms listener is alive.
 - [ ] Aggregator logs `Step 4 Complete: model parameters aggregated` for rounds 1–7 — confirms FedAvg ran every round.
-- [ ] `GET /accuracy-report?index=mnist` on Node 1 shows 7 rows after round 7 completes.
-- [ ] Node 1 round 7 row has a large negative `delta_global` with `!` marker.
-- [ ] Nodes 2 and 3 round 7 rows show no `!`.
+- [ ] `GET /accuracy-report?index=ModelRollback12` on Node 1 shows 7 rows after round 7 completes.
+- [ ] Node 1 round 7 row has a negative `Δ_global` with `!` marker.
+- [ ] AnyLog row count confirms `par_node_accuracy_*` increments each round: `AL operator1 +> get rows count where dbms=mnist_fl`
 
 ### Triggering the Rollback
 
-- [ ] `POST /rollback {"round": 6}` on port 8080 (Node 1) returns `"status": "success"`.
-- [ ] Response contains `"rolled_back_to_round": 6`.
-- [ ] `GET /rollback/history?index=mnist` on Node 1 shows one event with `from_round: 8, to_round: 6, status: "success"`.
+- [ ] `POST /rollback {"round": 4}` on port 8081 (Node 1) returns `"status": "success"`.
+- [ ] Response contains `"rolled_back_to_round": 4`.
+- [ ] `GET /rollback/history?index=ModelRollback12` on Node 1 shows one event with `from_round: 8, to_round: 4, status: "success"`.
+- [ ] AnyLog CLI confirms: `AL operator1 +> run client () sql mnist_fl format=json "SELECT * FROM rollback_events"`
 
 ### Round 8 — Confirming the Stale Training Path
 
@@ -433,26 +483,48 @@ curl http://localhost:8080/rollback/history?index=mnist
 ## 11. Quick Reference: All Curl Commands
 
 ```bash
-# -- Accuracy report (any node) --
-curl http://localhost:8080/accuracy-report?index=mnist
-curl http://localhost:8081/accuracy-report?index=mnist
-curl http://localhost:8082/accuracy-report?index=mnist
+# -- Accuracy report (any node, all indexes) --
+curl http://localhost:8081/accuracy-report
+curl http://localhost:8082/accuracy-report
+curl http://localhost:8083/accuracy-report
+
+# -- Accuracy report filtered to one index --
+curl "http://localhost:8081/accuracy-report?index=ModelRollback12"
 
 # -- Trigger manual rollback on Node 1 --
-curl -X POST http://localhost:8080/rollback \
+curl -X POST http://localhost:8081/rollback \
      -H "Content-Type: application/json" \
-     -d '{"round": 6, "reason": "round 7 accuracy dropped"}'
+     -d '{"round": 4, "reason": "manual rollback at round 7"}'
 
 # -- Check rollback history --
-curl http://localhost:8080/rollback/history?index=mnist
+curl "http://localhost:8081/rollback/history?index=ModelRollback12"
 
 # -- Check current rollback config --
-curl http://localhost:8080/rollback/config
+curl http://localhost:8081/rollback/config
 
 # -- Update rollback config at runtime (no restart needed) --
-curl -X PUT http://localhost:8080/rollback/config \
+curl -X PUT http://localhost:8081/rollback/config \
      -H "Content-Type: application/json" \
      -d '{"patience_rounds": 3, "min_delta": 2.0}'
+```
+
+**AnyLog CLI equivalents** (attach to any operator with `docker attach operator1`):
+
+```
+# Row counts — monitor training progress
+AL operator1 +> get rows count where dbms=mnist_fl
+
+# Accuracy data
+AL operator1 +> run client () sql mnist_fl format=table "SELECT node_name, round_number, initial_accuracy, final_accuracy FROM node_accuracy ORDER BY node_name, round_number"
+
+# Rollback events
+AL operator1 +> run client () sql mnist_fl format=json "SELECT * FROM rollback_events"
+
+# Full blockchain state
+AL operator1 +> blockchain get *
+
+# Filter to FL experiment only
+AL operator1 +> blockchain get ModelRollback12
 ```
 
 ---
