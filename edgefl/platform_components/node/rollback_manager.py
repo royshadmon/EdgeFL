@@ -14,6 +14,7 @@ from typing import Optional
 import requests
 
 from platform_components.EdgeLake_functions.mongo_file_store import copy_file_from_container, read_file
+from platform_components.EdgeLake_functions.blockchain_EL_functions import fetch_data_from_db
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +57,9 @@ def get_accuracy_history(index: str, db_name: str, el_url: str, node_name: str) 
         f"WHERE index_name = '{index}' AND node_name = '{node_name}' "
         f"ORDER BY round_number"
     )
-    headers = {
-        'User-Agent': 'AnyLog/1.23',
-        'command': f'sql {db_name} format=json "{sql}"',
-    }
+    tcp_addr = os.getenv("EXTERNAL_TCP_IP_PORT", "")
     try:
-        response = requests.get(el_url, headers=headers)
-        if response.status_code != 200:
-            logger.error(f"[{index}] get_accuracy_history HTTP {response.status_code}")
-            return []
-        payload = response.json()
+        payload = fetch_data_from_db(el_url, f'sql {db_name} format=json "{sql}"', tcp_addr)
         rows = payload.get("Query", []) if isinstance(payload, dict) else payload
         return rows if rows else []
     except Exception as e:

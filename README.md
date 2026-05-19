@@ -11,6 +11,217 @@ This branch adds two research features on top of the base platform:
 
 For a step-by-step guide to verifying both features, see [`docs/rollback_test_walkthrough.md`](docs/rollback_test_walkthrough.md).
 
+---
+
+## Rollback Experiment: End-to-End Walkthrough
+
+This section covers the full flow from a fresh AnyLog/EdgeLake network to running a 10-round FL training session, triggering a manual rollback, and querying the results.
+
+### Prerequisites
+
+- Docker installed and running
+- Python 3.11+ with dependencies installed (`pip install -r requirements.txt`)
+- Three Postgres containers already running (see [Deploy Postgres](#deploy-postgres-container))
+
+### Step 1 — Deploy AnyLog/EdgeLake
+
+Deploy the master and three operator nodes. The ports used throughout this walkthrough are:
+
+| Node      | TCP Port | REST Port |
+|-----------|----------|-----------|
+| master    | 32048    | 32049     |
+| operator1 | 32148    | 32149     |
+| operator2 | 32248    | 32249     |
+| operator3 | 32348    | 32349     |
+
+Follow the [Deploy EdgeLake Master node](#deploy-edgelake-master-node) and [Deploy EdgeLake Operator node](#deploy-edgelake-operator-node) sections. When all four nodes are up, validate the network by attaching to the master:
+
+```bash
+docker attach master
+```
+
+Press Enter to get the prompt, then run:
+```
+AL master +> test network
+```
+
+You should see all four nodes with `+` status. Detach with `Ctrl+P+Q`.
+
+Confirm each operator is connected to `mnist_fl`:
+```bash
+docker attach operator1
+```
+```
+AL operator1 +> get databases
+```
+
+If `mnist_fl` is missing:
+```
+AL operator1 +> connect dbms mnist_fl where type=psql and user=demo and password=passwd and ip=<your-ip> and port=5432 and memory=true
+```
+
+### Step 2 — Load MNIST Data
+
+```bash
+cd edgefl/data/mnist
+python store_data.py --conn 127.0.0.1:32149 --db mnist_fl --train-table mnist_train --test-table mnist_test
+python store_data.py --conn 127.0.0.1:32249 --db mnist_fl --train-table mnist_train --test-table mnist_test
+python store_data.py --conn 127.0.0.1:32349 --db mnist_fl --train-table mnist_train --test-table mnist_test
+```
+
+Verify rows arrived on each operator:
+```bash
+docker attach operator1
+```
+```
+AL operator1 +> get rows count where dbms=mnist_fl
+```
+
+Expected output shows non-zero row counts under the partitioned tables (e.g. `par_mnist_train_2026_05_01_d14_insert_timestamp`):
+
+```
+DBMS Name Table Name                                        Rows Count
+---------|------------------------------------------------|----------|
+mnist_fl |par_mnist_test_2026_05_01_d14_insert_timestamp  |       200|
+         |par_mnist_train_2026_05_01_d14_insert_timestamp |      1000|
+```
+
+### Step 3 — Start FL Servers
+
+Start the aggregator (port 8080) and three node servers (ports 8081–8083), each loaded with their respective env files:
+
+```bash
+# Each in a separate terminal
+python edgefl/platform_components/aggregator/aggregator_server.py   # uses mnist-agg.env
+python edgefl/platform_components/node/node_server.py --p 8081      # uses mnist1.env
+python edgefl/platform_components/node/node_server.py --p 8082      # uses mnist2.env
+python edgefl/platform_components/node/node_server.py --p 8083      # uses mnist3.env
+```
+
+Each env file must have `EXTERNAL_IP` and `EXTERNAL_TCP_IP_PORT` pointing to the correct operator's REST and TCP ports:
+
+```bash
+# Example for node1 (mnist1.env)
+EXTERNAL_IP=127.0.0.1:32149
+EXTERNAL_TCP_IP_PORT=127.0.0.1:32148
+```
+
+### Step 4 — Initialize and Start Training
+
+Initialize all three nodes and kick off 10 rounds of federated learning:
+
+```bash
+curl -X POST http://localhost:8080/init \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nodeUrls": [
+      "http://localhost:8081",
+      "http://localhost:8082",
+      "http://localhost:8083"
+    ],
+    "model_def": 1
+  }'
+```
+
+```bash
+curl -X POST http://localhost:8080/start-training \
+  -H "Content-Type: application/json" \
+  -d '{"index": "ModelRollback12", "totalRounds": 10, "minParams": 1}'
+```
+
+Monitor progress in the AnyLog CLI — the `par_node_accuracy_*` row count increments once per round per node:
+
+```
+AL operator1 +> get rows count where dbms=mnist_fl
+```
+
+### Step 5 — Query Accuracy
+
+**AnyLog CLI** (attach to any operator, use `format=table` for readable output):
+```
+AL operator1 +> run client () sql mnist_fl format=table "SELECT node_name, round_number, initial_accuracy, final_accuracy FROM node_accuracy ORDER BY node_name, round_number"
+```
+
+**curl** (after all rounds complete):
+```bash
+# All nodes, all indexes
+curl http://localhost:8081/accuracy-report
+
+# Filter to one index
+curl "http://localhost:8081/accuracy-report?index=ModelRollback12"
+```
+
+The report shows `global@node` (pre-train global model accuracy on this node's data), `after_train` (post-local-training accuracy), `contributed` (the delta this node added), and `Δ_global` (round-over-round change in the global model). Rows marked `!` are rollback candidates where `Δ_global < −5%`.
+
+Check rollback configuration:
+```bash
+curl http://localhost:8081/rollback/config
+```
+
+### Step 6 — Trigger Manual Rollback
+
+Roll the model back to a specific round's aggregated weights:
+
+```bash
+curl -X POST http://localhost:8081/rollback \
+  -H "Content-Type: application/json" \
+  -d '{"round": 4, "reason": "manual rollback at round 7"}'
+```
+
+Expected response:
+```json
+{
+  "status": "success",
+  "rolled_back_to_round": 4,
+  "model_path": "/Users/.../file_write/node1/ModelRollback12/4-agg_update.json",
+  "message": "Model rolled back to round 4"
+}
+```
+
+### Step 7 — Verify Rollback History
+
+**curl:**
+```bash
+curl "http://localhost:8081/rollback/history?index=ModelRollback12"
+```
+
+Expected:
+```json
+{"events":[{"node_name":"node1","trigger_type":"manual","from_round":8,"to_round":4,"reason":"manual rollback at round 7","status":"success"}]}
+```
+
+**AnyLog CLI:**
+```
+AL operator1 +> run client () sql mnist_fl format=table "SELECT node_name, trigger_type, from_round, to_round, reason, status FROM rollback_events"
+```
+
+You can also query the raw event JSON used in the original test:
+```
+AL operator1 +> run client () sql mnist_fl format=json "SELECT * FROM rollback_events"
+```
+
+### Step 8 — Inspect the Full Blockchain State
+
+All FL coordination — round starts, per-node submodel submissions, rollback events — is written to the AnyLog blockchain. To view everything:
+
+```
+AL operator1 +> blockchain get *
+```
+
+To filter to just the FL experiment:
+```
+AL operator1 +> blockchain get ModelRollback12
+```
+
+### Known Gotchas
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Warning: New policy failed to update Blockchain at 'master'` | Timing race on startup | Safe to ignore if training proceeds normally |
+| `No accuracy data found in node_accuracy` | AnyLog REST `sql` without `destination` header returns `Nodes: 0` | Use `destination: <tcp-addr>` + `subset: false` headers (already fixed in this branch via `fetch_data_from_db`) |
+| Accuracy values only in multiples of 10% | Very small test set per node (~10 samples per round) | Load more data or remove the `round_number` filter in `get_all_test_data` |
+| `rollback/history` returns `{"events":[]}` | Same `destination` header issue as above | Fixed in this branch |
+
 ## Features at a Glance
 
 | Feature | Description |
@@ -442,12 +653,6 @@ docker compose down
 
 
 
-# ============ Please Ignore below, README being refactored ============== 
-
-<!-- To Do
-
-- Need to add different commands for Mac & Windows
-  -->
 
 ## Why EdgeLake:
 

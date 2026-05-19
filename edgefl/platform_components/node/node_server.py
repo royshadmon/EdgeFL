@@ -8,7 +8,7 @@ from fastapi.responses import PlainTextResponse
 
 # from dotenv import load_dotenv
 from platform_components.EdgeLake_functions.blockchain_EL_functions import get_local_ip, \
-    connect_to_db, get_all_databases
+    connect_to_db, get_all_databases, get_policies, fetch_data_from_db
 from platform_components.node.node import Node
 # import numpy as np
 import logging
@@ -362,17 +362,18 @@ def accuracy_report(index: str = None):
             f"SELECT node_name, index_name, round_number, initial_accuracy, final_accuracy "
             f"FROM node_accuracy {where_clause} ORDER BY index_name, round_number"
         )
-        # `run client ()` is required to query the distributed network, not just the local node.
-        headers = {
-            'User-Agent': 'AnyLog/1.23',
-            'command': f'sql {db_name} format=json "{sql}"'
-        }
-        response = requests.get(edgelake_node_url, headers=headers)
-        if response.status_code != 200:
-            return f"AnyLog error: HTTP {response.status_code}\n{response.text}"
+        query = f'sql {db_name} format=json "{sql}"'
 
-        payload = response.json()
-        rows = payload.get("Query", []) if isinstance(payload, dict) else payload
+        operators = get_policies(edgelake_node_url, index='operator')
+        rows = []
+        for op in operators:
+            rest_url = f"http://{op['ip']}:{op['rest_port']}"
+            tcp_addr = f"{op['ip']}:{op['port']}"
+            try:
+                payload = fetch_data_from_db(rest_url, query, tcp_addr)
+                rows.extend(payload.get("Query", []) if isinstance(payload, dict) else [])
+            except Exception:
+                pass
 
         if not rows:
             # Previously: f"No accuracy data found in {table}.\n" — `table` was the old partition table variable, now removed.
@@ -519,18 +520,11 @@ def rollback_history(index: str = None):
             f"SELECT node_name, index_name, trigger_type, from_round, to_round, reason, status "
             f"FROM rollback_events {where_clause} ORDER BY index_name, from_round"
         )
-        headers = {
-            'User-Agent': 'AnyLog/1.23',
-            'command': f'sql {db_name} format=json "{sql}"',
-        }
-        response = requests.get(edgelake_node_url, headers=headers)
-        if response.status_code == 400:
-            logger.warning(f"[rollback/history] AnyLog 400 — table may not exist yet. Body: {response.text[:300]}")
+        tcp_addr = os.getenv("EXTERNAL_TCP_IP_PORT", "")
+        try:
+            payload = fetch_data_from_db(edgelake_node_url, f'sql {db_name} format=json "{sql}"', tcp_addr)
+        except Exception:
             return {"events": []}
-        if response.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"AnyLog error: HTTP {response.status_code}")
-
-        payload = response.json()
         rows = payload.get("Query", []) if isinstance(payload, dict) else payload
         return {"events": rows if rows else []}
     except HTTPException:
