@@ -4,6 +4,83 @@ import { useServer } from '../contexts/ServerContext';
 import {runInference, validateInputArray, generateSampleArray, validateAndProcessImage, evaluateTestSet} from '../services/api';
 import InputDataSelector from '../components/InputDataSelector';
 
+function centerAndScale(grid) {
+  const size = 28;
+  const target = 20; // digits fill ~20x20 in MNIST
+
+  // Find bounding box of all non-zero pixels
+  let minR = size, maxR = -1, minC = size, maxC = -1;
+  for (let r = 0; r < size; r++)
+    for (let c = 0; c < size; c++)
+      if (grid[r][c] > 0) {
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+
+  // Nothing drawn — return as-is
+  if (maxR === -1) return grid;
+
+  const h = maxR - minR + 1;
+  const w = maxC - minC + 1;
+
+  // Scale factor to fit the larger dimension into target
+  const scale = target / Math.max(h, w);
+
+  const newH = Math.round(h * scale);
+  const newW = Math.round(w * scale);
+
+  // Top-left corner to center the scaled digit
+  const startR = Math.round((size - newH) / 2);
+  const startC = Math.round((size - newW) / 2);
+
+  const out = Array.from({length: size}, () => Array(size).fill(0));
+
+  for (let r = 0; r < newH; r++)
+    for (let c = 0; c < newW; c++) {
+      const srcR = Math.round(r / scale) + minR;
+      const srcC = Math.round(c / scale) + minC;
+      const dstR = startR + r;
+      const dstC = startC + c;
+      if (dstR >= 0 && dstR < size && dstC >= 0 && dstC < size)
+        out[dstR][dstC] = grid[srcR][srcC];
+    }
+
+  return out;
+}
+
+function gaussianBlur(grid) {
+  const kernel = [[1,2,1],[2,4,2],[1,2,1]];
+  const size = 28;
+
+  function blurOnce(g) {
+    const out = Array.from({length: size}, () => Array(size).fill(0));
+    for (let r = 1; r < size - 1; r++)
+      for (let c = 1; c < size - 1; c++) {
+        let val = 0;
+        for (let kr = -1; kr <= 1; kr++)
+          for (let kc = -1; kc <= 1; kc++)
+            val += g[r + kr][c + kc] * kernel[kr + 1][kc + 1];
+        out[r][c] = val / 16;
+      }
+    return out;
+  }
+
+  let result = blurOnce(blurOnce(blurOnce(grid)));
+
+  let maxVal = 0;
+  for (let r = 0; r < size; r++)
+    for (let c = 0; c < size; c++)
+      if (result[r][c] > maxVal) maxVal = result[r][c];
+  if (maxVal > 0)
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++)
+        result[r][c] /= maxVal;
+
+  return result;
+}
+
 const InferPage = () => {
   const navigate = useNavigate();
   const { serverUrl, indexValue, setIndexValue } = useServer();
@@ -56,8 +133,8 @@ const InferPage = () => {
           // console.log(inputArray)
         // throw new Error(`${inputType.toUpperCase()} file processing is coming soon!`);
       } else if (inputType === 'draw') {
-        // For grid drawings, the data is already in the correct format
-        inputArray = typeof inputData === 'string' ? JSON.parse(inputData) : inputData;
+        const rawGrid = typeof inputData === 'string' ? JSON.parse(inputData) : inputData;
+        inputArray = gaussianBlur(centerAndScale(rawGrid));
       }
 
       console.log("FINAL ARRAY:", inputArray)

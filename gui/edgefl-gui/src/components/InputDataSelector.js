@@ -23,11 +23,12 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
   };
 
   const drawGridCell = (row, col) => {
-    // Only allow turning cells on (drawing), not erasing
-    const newGridData = gridData.map((rowData, r) => 
-      rowData.map((cell, c) => 
-        r === row && c === col ? 1 : cell
-      )
+    const offsets = [[0,0],[0,1],[1,0],[1,1]];
+    const newGridData = gridData.map((rowData, r) =>
+      rowData.map((cell, c) => {
+        const hit = offsets.some(([dr, dc]) => r === row + dr && c === col + dc);
+        return hit ? 1 : cell;
+      })
     );
     setGridData(newGridData);
     setInputData(JSON.stringify(newGridData, null, 2));
