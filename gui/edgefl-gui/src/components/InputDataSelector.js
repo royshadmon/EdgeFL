@@ -23,7 +23,7 @@ const InputDataSelector = ({ inputData, setInputData, onDataChange }) => {
   };
 
   const drawGridCell = (row, col) => {
-    const offsets = [[0,0],[0,1],[1,0],[1,1]];
+    const offsets = [[0,0],[-1,0],[1,0],[0,-1],[0,1]];
     const newGridData = gridData.map((rowData, r) =>
       rowData.map((cell, c) => {
         const hit = offsets.some(([dr, dc]) => r === row + dr && c === col + dc);
