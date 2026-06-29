@@ -201,14 +201,14 @@ class MnistDataHandler():
         return acc
 
     def train(self, round_number):
-        (x_train, y_train), _ = self.load_dataset(
+        (x_train, y_train), (x_test, y_test) = self.load_dataset(
             node_name=self.node_name, round_number=round_number)
 
         early_stopping = keras.callbacks.EarlyStopping(
-            monitor='loss',
+            monitor='val_accuracy',
             patience=5,
             restore_best_weights=True,
-            mode='min'
+            mode='max'
         )
 
         classes = np.unique(y_train)
@@ -223,12 +223,9 @@ class MnistDataHandler():
                 epochs=5,
                 verbose=1,
                 callbacks=[early_stopping],
-                class_weight=class_weight_dict
+                class_weight=class_weight_dict,
+                validation_data=(x_test, y_test)
             )
-
-        acc = self.run_inference()
-        self.logger.info(f"Test set accuracy after training round {round_number}: {acc:.2f}%")
-        print(f"Test set accuracy after training round {round_number}: {acc:.2f}%")
 
         return self.get_weights()
 
