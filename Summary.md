@@ -96,6 +96,6 @@ Pipeline for canvas input: draw → centerAndScale → gaussianBlur → inferenc
 Test Results
 
 
-JSON array inference (smooth 0–255 normalized): ~92% on 30-sample test set, originally was ~68%
+JSON array inference (smooth 0–255 normalized): ~92% on 30-sample test set, originally was ~68%, about ~24% improvement.
 Canvas inference: all digits 0–9 correctly classified after fixes;
 noticeable improvement on curved digits (6, 9) after auto-centering
