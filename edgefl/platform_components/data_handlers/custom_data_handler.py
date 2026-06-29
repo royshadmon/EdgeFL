@@ -12,6 +12,7 @@ import numpy as np
 from tensorflow.python import keras
 from keras import layers, optimizers, models
 from sklearn.metrics import accuracy_score
+from sklearn.utils.class_weight import compute_class_weight
 import tensorflow as tf
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.local_model_update import LocalModelUpdate
@@ -77,12 +78,15 @@ class MnistDataHandler():
     def model_def(self):
         # Model for MNIST classification
         model = models.Sequential([
-            layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)), # Applies 2d convolution, extracting features from the input images
-            layers.MaxPooling2D(pool_size=(2, 2)), # Reduces spatial dimensions
+            layers.Conv2D(32, kernel_size=(3, 3), activation="relu", input_shape=(28, 28, 1)),
+            layers.MaxPooling2D(pool_size=(2, 2)),
+            layers.Dropout(0.25),
             layers.Conv2D(64, kernel_size=(3, 3), activation="relu"),
             layers.MaxPooling2D(pool_size=(2, 2)),
-            layers.Flatten(), # Converts 2d feature maps to 1d feature vector
-            layers.Dense(128, activation="relu"), # Fully connecting layers
+            layers.Dropout(0.25),
+            layers.Flatten(),
+            layers.Dense(128, activation="relu"),
+            layers.Dropout(0.5),
             layers.Dense(10, activation="softmax")
         ])
 
@@ -117,14 +121,9 @@ class MnistDataHandler():
         Preprocesses the training and testing datasets.
         :return: None
         """
-        self.logger.debug(f"Train data shape before preprocessing: {self.x_train.shape}")
-        self.logger.debug(f"Test data shape before preprocessing: {self.x_test.shape}")
-        img_rows, img_cols = 28, 28
-        self.logger.debug(f"Train data shape before preprocessing: {self.x_train.shape}")
-
-        # Reshape to keras format
-        self.x_train = self.x_train.reshape(-1, img_rows, img_cols, 1)
-        self.x_test = self.x_test.reshape(-1, img_rows, img_cols, 1)
+        # load_dataset already reshapes and normalizes — only cast type here
+        self.x_train = self.x_train.astype("float32")
+        self.x_test  = self.x_test.astype("float32")
 
         self.logger.debug(f"Train data shape after preprocessing: {self.x_train.shape}")
 
@@ -151,8 +150,9 @@ class MnistDataHandler():
         Run inference on raw input data against given labels (already in MNIST format).
         Handles data conversion and validation internally.
         """
-        # TODO: add another input type that allows for raw images to work (would be converted properly)
-        data = np.array(data)
+        data = np.array(data, dtype=np.float32)
+        if data.max() > 1.0:
+            data = data / 255.0
         res = self.fl_model.predict(data.reshape(1, 28, 28, 1))
         return np.argmax(res, axis=1)
 
@@ -205,20 +205,26 @@ class MnistDataHandler():
             node_name=self.node_name, round_number=round_number)
 
         early_stopping = keras.callbacks.EarlyStopping(
-            monitor='loss',
-            # patience=2,
+            monitor='val_accuracy',
+            patience=5,
             restore_best_weights=True,
-            mode='min'
+            mode='max'
         )
+
+        classes = np.unique(y_train)
+        weights = compute_class_weight('balanced', classes=classes, y=y_train)
+        class_weight_dict = dict(zip(classes, weights))
 
         with tf.device(device):
             self.fl_model.fit(
                 x_train,
                 y_train,
-                batch_size=128, # can also be 32
-                epochs=1,
+                batch_size=32,
+                epochs=5,
                 verbose=1,
-                callbacks=[early_stopping]
+                callbacks=[early_stopping],
+                class_weight=class_weight_dict,
+                validation_data=(x_test, y_test)
             )
 
         return self.get_weights()
@@ -233,39 +239,23 @@ class MnistDataHandler():
         return aggregated_params
 
     def get_all_test_data(self, node_name):
-        # 1. run sql to get all test data for x and y
-        # 2. check if number returned equals number in db
-        # 3. return test data
-        batch_amount = 50 # TODO: make this parameterized
-        # db_name = os.getenv("PSQL_DB_NAME")
+        query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} LIMIT 200"
+        test_data = fetch_data_from_db(self.edgelake_node_url, query_test, self.tcp_ip_port)
 
-        # Get number of rows
-        row_count_query = f"sql {self.db_name} SELECT count(*) FROM {TEST_TABLE}"
-        row_count = fetch_data_from_db(self.edgelake_node_url, row_count_query, self.tcp_ip_port)
-        num_rows = row_count["Query"][0].get('count(*)')
-        # fetch in offsets of 50
-        # TODO: Get row offset queries to work
-        for offset in range(1):
-        # for offset in range(0, num_rows, batch_amount):
-            query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} LIMIT 50"
-            test_data = fetch_data_from_db(self.edgelake_node_url, query_test, self.tcp_ip_port)
+        query_test_result = np.array(test_data["Query"])
+        x_test_images = []
+        y_test_labels = []
+        for i in range(len(query_test_result)):
+            x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
+            y_test_label = query_test_result[i]['label']
+            x_test_images.append(x_test_image_np_array)
+            y_test_labels.append(y_test_label)
 
-            # Assuming the data is returned as dictionaries with keys 'x' and 'y'
-            query_test_result = np.array(test_data["Query"]) # TODO: watch out when exceeding max rounds stored in the db
-            x_test_images = []
-            y_test_labels = []
-            for i in range(len(query_test_result)):
-                x_test_image_np_array = np.array(ast.literal_eval(query_test_result[i]['image']))
-                y_test_label = query_test_result[i]['label']
-                x_test_images.append(x_test_image_np_array)
-                y_test_labels.append(y_test_label)
+        img_rows, img_cols = 28, 28
+        x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1) / 255.0
+        y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
 
-            y_test_labels_final = np.array(y_test_labels, dtype=np.int64)
-
-            img_rows, img_cols = 28, 28
-            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
-
-            return x_test_images_final, y_test_labels_final
+        return x_test_images_final, y_test_labels_final
 
     # SAMPLE SQL Edgelake Commands:
     # FORMAT:
@@ -275,7 +265,7 @@ class MnistDataHandler():
     # [SQL command] a SQL command including a SQL query.
     # EXAMPLE
     # sql lsl_demo "drop table lsl_demo"
-    def load_dataset(self, node_name, round_number):
+    def load_dataset(self, node_name, round_number=None):
 
         """
         Loads the training and testing datasets by running SQL queries to fetch data.
@@ -293,8 +283,8 @@ class MnistDataHandler():
         # query_test = f"SELECT * FROM test-{node_name}-{round_number}"
 
         # db_name = os.getenv("PSQL_DB_NAME")
-        query_train = f"sql {self.db_name} SELECT image, label FROM {TRAIN_TABLE} WHERE round_number = {round_number}"
-        query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} WHERE round_number = {round_number}"
+        query_train = f"sql {self.db_name} SELECT image, label FROM {TRAIN_TABLE} LIMIT 1000"
+        query_test = f"sql {self.db_name} SELECT image, label FROM {TEST_TABLE} LIMIT 200"
 
         try:
             train_data = fetch_data_from_db(self.edgelake_node_url, query_train, self.tcp_ip_port)
@@ -322,8 +312,8 @@ class MnistDataHandler():
                 y_test_labels.append(y_test_label)
 
             img_rows, img_cols = 28, 28
-            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
-            x_test_images_final = np.array(x_test_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1)
+            x_train_images_final = np.array(x_train_images, dtype=np.float32).reshape(-1, img_rows, img_cols, 1) / 255.0
+            x_test_images_final  = np.array(x_test_images,  dtype=np.float32).reshape(-1, img_rows, img_cols, 1) / 255.0
 
             self.logger.debug(f"Train data shape after loading and reshaping: {x_train_images_final.shape}")
 

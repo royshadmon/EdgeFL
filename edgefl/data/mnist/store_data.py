@@ -1,6 +1,7 @@
 import argparse
 import requests
 import json
+import torch
 from torchvision import datasets
 import time
 
@@ -64,33 +65,65 @@ def main():
     train_dataset = datasets.MNIST('..', train=True, download=True)
     test_dataset = datasets.MNIST('..', train=False, download=True)
 
-    train_idx = 0
-    test_idx = 0
-    for round_num in range(1, args.num_rounds + 1):
-        train_end = train_idx + TRAIN_SAMPLES_PER_ROUND
-        train_images = train_dataset.data[train_idx:train_end]
-        train_labels = train_dataset.targets[train_idx:train_end]
+    # Build per-class index lists (shuffled within each class for variety)
+    num_classes = 10
+    train_by_class = {c: [] for c in range(num_classes)}
+    for i, label in enumerate(train_dataset.targets.tolist()):
+        train_by_class[label].append(i)
+    for c in range(num_classes):
+        perm = torch.randperm(len(train_by_class[c])).tolist()
+        train_by_class[c] = [train_by_class[c][p] for p in perm]
 
-        json_train = [{"image": img.numpy().flatten().tolist(), "label": int(label), "round_number": round_num} for img, label in zip(train_images, train_labels)]
-        # json_train = json.dumps(rows)
+    test_by_class = {c: [] for c in range(num_classes)}
+    for i, label in enumerate(test_dataset.targets.tolist()):
+        test_by_class[label].append(i)
+    for c in range(num_classes):
+        perm = torch.randperm(len(test_by_class[c])).tolist()
+        test_by_class[c] = [test_by_class[c][p] for p in perm]
+
+    samples_per_class_train = TRAIN_SAMPLES_PER_ROUND // num_classes
+    samples_per_class_test  = max(1, TEST_SAMPLES_PER_ROUND // num_classes)
+    train_class_pos = {c: 0 for c in range(num_classes)}
+    test_class_pos  = {c: 0 for c in range(num_classes)}
+
+    for round_num in range(1, args.num_rounds + 1):
+        # Pick exactly samples_per_class_train from each class for training
+        train_indices = []
+        for c in range(num_classes):
+            start = train_class_pos[c]
+            end   = start + samples_per_class_train
+            train_indices.extend(train_by_class[c][start:end])
+            train_class_pos[c] = end
+        perm = torch.randperm(len(train_indices)).tolist()
+        train_indices = [train_indices[p] for p in perm]
+        train_images = train_dataset.data[train_indices]
+        train_labels = train_dataset.targets[train_indices]
+
+        json_train = [{"image": json.dumps(img.numpy().flatten().tolist()), "label": int(label), "round_number": round_num} for img, label in zip(train_images, train_labels)]
         header = create_header(db_name=args.db_name, table_name="mnist_train")
 
-        print("Inserting to mnist_train")
+        print(f"Inserting to mnist_train (round {round_num})")
         try:
             __put_data(conn=args.conn, headers=header, payload=json_train)
         except Exception as error:
             raise Exception
 
-        test_end = test_idx + TEST_SAMPLES_PER_ROUND
-        test_images = test_dataset.data[test_idx:test_end]
-        test_labels = test_dataset.targets[test_idx:test_end]
+        # Pick exactly samples_per_class_test from each class for testing
+        test_indices = []
+        for c in range(num_classes):
+            start = test_class_pos[c]
+            end   = start + samples_per_class_test
+            test_indices.extend(test_by_class[c][start:end])
+            test_class_pos[c] = end
+        perm = torch.randperm(len(test_indices)).tolist()
+        test_indices = [test_indices[p] for p in perm]
+        test_images = test_dataset.data[test_indices]
+        test_labels = test_dataset.targets[test_indices]
 
-        json_test = [{"image": img.numpy().flatten().tolist(), "label": int(label), "round_number": round_num} for img, label in
-                zip(test_images, test_labels)]
-        # json_test = json.dumps(rows)
+        json_test = [{"image": json.dumps(img.numpy().flatten().tolist()), "label": int(label), "round_number": round_num} for img, label in zip(test_images, test_labels)]
         header = create_header(db_name=args.db_name, table_name="mnist_test")
 
-        print("Inserting to mnist_test")
+        print(f"Inserting to mnist_test (round {round_num})")
         try:
             __put_data(conn=args.conn, headers=header, payload=json_test)
         except Exception as error:
