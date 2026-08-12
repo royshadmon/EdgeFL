@@ -34,6 +34,8 @@ import warnings
 from platform_components.lib.logger.logger_config import configure_logging
 from platform_components.lib.modules.exceptions import NodeInitializationError
 
+from platform_components.benchmarking.benchmarker import Benchmarker
+
 warnings.filterwarnings("ignore")
 
 app = FastAPI()
@@ -57,6 +59,18 @@ logger.setLevel(logging.INFO)  # Excludes WARNING, ERROR, CRITICAL
 ip = get_local_ip()
 port = os.getenv("SERVER_PORT", "8080")
 aggregator = Aggregator(ip, port, logger)
+
+# Initialize benchmarker
+_bench_conn = os.getenv("BENCHMARK_REST_CONN") or os.getenv("EXTERNAL_IP")
+if not _bench_conn:
+    logger.error("Neither BENCHMARK_REST_CONN nor EXTERNAL_IP is set; cannot init Benchmarker.")
+
+_bench_endpoint = _bench_conn if _bench_conn.startswith("http") else f"http://{_bench_conn}"
+
+_bench_enabled = os.getenv("BENCHMARK_ENABLED", "true").strip().lower() not in ("false", "0", "no", "off")
+bench = Benchmarker(_bench_endpoint, enabled=_bench_enabled)
+
+logger.info(f"BENCHMAKER INITIALIZED IN AGG SERVER")
 
 # Track the training process of each index so that they can join once they're done
 training_processes = {}
@@ -408,6 +422,11 @@ async def listen_for_update_agg(min_params, round_number, index):
     #  as of now
     decoded_params = {} # { 'node_params_link': 'decoded_param' }
     check_chances = 5 # Once this reaches <= 0, we will ignore min_params and handle accordingly
+
+    # benchmarking: per-node param arrival tracking (straggler id and arrival time span)
+    param_arrival_ts = {} # { node_params_link: first time it appeared in decoded_params }
+    link_to_node = {}     # { node_params_link: node_name }
+
     while True:
         try:
             # Fetch policies containing the node models at index and round number
@@ -438,6 +457,14 @@ async def listen_for_update_agg(min_params, round_number, index):
                     if index in item
                 ]
 
+                node_names = [
+
+                        item.get(index).get('node')
+                        for item in result
+                        if index in item
+                ]
+                link_to_node.update(dict(zip(node_params_links, node_names)))
+
                 # Updates decoded_params with newly fetched decoded params (with node link as key)
                 aggregator.fetch_decoded_params(
                     decoded_params_dict=decoded_params,
@@ -447,14 +474,42 @@ async def listen_for_update_agg(min_params, round_number, index):
                     index=index
                 )
 
+            # benchmarking: mark time in first poll cycle
+            now = time.time()
+            for link in decoded_params:
+                param_arrival_ts.setdefault(link, now)
+            
             # If enough parameters or not getting ALL parameters in time, get the URL
             if len(decoded_params) >= min_params or (decoded_params and not check_chances):
+                # benchmarking: last params to arrive = the straggler node
+                first_ts = min(param_arrival_ts.values())
+                straggler_link = max(param_arrival_ts, key=param_arrival_ts.get)
+                # logger.info(f"\n\n[DEBUG]: param_arrival_ts={param_arrival_ts[straggler_link]}-first_ts = {param_arrival_ts[straggler_link] - first_ts}")
+                first_to_last_arrival_s = param_arrival_ts[straggler_link] - first_ts
+                straggler_node = link_to_node.get(straggler_link, "unknown")
+                digits = ''.join(ch for ch in straggler_node if ch.isdigit())
+                straggling_node_id = int(digits) if digits else -1
+
+                agg_start_ts = time.time()
 
                 aggregated_params_link = aggregator.aggregate_model_params(
                     decoded_params=list(decoded_params.values()),
                     round_number=round_number,
                     index=index
                 )
+
+                # benchmarking: 
+                aggregation_time_s = time.time() - agg_start_ts
+                logger.info(
+                    f"Benchmarker [{index}][Round {round_number}][agg]\n"
+                    f"\t* aggregation time = {aggregation_time_s:.3f}s\n"
+                    f"\t* first->last arrival = {first_to_last_arrival_s:.3f}s\n"
+                    f"\t* straggling node = {straggler_node} (id={straggling_node_id})"
+                )
+                bench.record_simple_metric(index, round_number, "agg", "aggregation_time_s", aggregation_time_s)
+                bench.record_simple_metric(index, round_number, "agg", "first_to_last_arrival_s", first_to_last_arrival_s)
+                bench.record_simple_metric(index, round_number, "agg", "straggling_node_id", straggling_node_id)
+                                           
                 return aggregated_params_link
 
             # TODO: Adjust this to decrement with >=0 decoded params, but based on nodes' training process

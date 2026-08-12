@@ -3,6 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/
 """
+import traceback
 from fastapi.responses import JSONResponse
 from fastapi.responses import PlainTextResponse
 
@@ -36,6 +37,7 @@ from platform_components.node.rollback_manager import (
 
 from platform_components.lib.logger.logger_config import configure_logging
 
+from platform_components.benchmarking.benchmarker import Benchmarker
 
 warnings.filterwarnings("ignore")
 
@@ -48,6 +50,16 @@ configure_logging(f"node_server_{edgelake_node_port}")
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)  # Excludes WARNING, ERROR, CRITICAL
+
+# BENCH - Initialize Benchmarking
+_bench_conn = os.getenv("BENCHMARK_REST_CONN") or os.getenv("EXTERNAL_IP")
+if not _bench_conn:
+    raise RuntimeError("Neither BENCHMARK_REST_CONN nor EXTERNAL_IP is set; cannot init Benchmarker.")
+
+_bench_endpoint = _bench_conn if _bench_conn.startswith("http") else f"http://{_bench_conn}"
+
+_bench_enabled = os.getenv("BENCHMARK_ENABLED", "true").strip().lower() not in ("false", "0", "no", "off")
+bench = Benchmarker(_bench_endpoint, enabled=_bench_enabled)
 
 # Initialize the Node instance
 node_instance = None
@@ -176,6 +188,10 @@ def listen_for_start_round(nodeInstance, index, stop_event):
     current_round = nodeInstance.round_number[index]
 
     logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
+
+    # benchmarking: mark beginning of polling time for this round
+    listen_start_ts = time.time()
+
     while True:
         try:
             headers = {
@@ -200,23 +216,18 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                 #         break  # Stop searching once the current round's data is found
 
                 if round_data:
-                    # Block here if a rollback is in progress so its weights
-                    # aren't overwritten the moment the next round fires.
+                    # rollback: block while a rollback is in progress so its weights
+                    # aren't overwritten the moment the next round fires, then resync.
                     _node_ready.wait()
-                    # Resync round in case rollback changed node_instance.round_number
                     current_round = nodeInstance.round_number[index]
 
                     logger.debug(f"[{index}] Round Data: {round_data}")
-                    paramsLink = round_data.get('initParams', '')
-                    ip_port = round_data.get('ip_port', '')
-                    rest_ip_port = round_data.get('rest_ip_port', '')
 
-                    # If a rollback is pending, skip downloading initParams this round and
-                    # train directly from the rolled-back weights already in the model.
-                    # WARNING: this node's update will be stale relative to the current
-                    # global model — W_agg_{current_round-1} — and may pull aggregation
-                    # in an older direction. Use staleness-aware aggregation if this is
-                    # a concern.
+                    # rollback: if a rollback is pending, skip downloading initParams this
+                    # round and train directly from the rolled-back weights already in the model.
+                    # WARNING: this node's update will be stale relative to the current global
+                    # model — W_agg_{current_round-1} — and may pull aggregation in an older
+                    # direction. Use staleness-aware aggregation if this is a concern.
                     skip_download = nodeInstance._rollback_pending.get(index, False)
                     if skip_download:
                         nodeInstance._rollback_pending[index] = False
@@ -228,19 +239,50 @@ def listen_for_start_round(nodeInstance, index, stop_event):
                             f"computed from an older global model."
                         )
 
+                    # benchmarking: mark beginning of training time
+                    round_start_ts = time.time()
+
+                    paramsLink = round_data.get('initParams', '')
+                    ip_port = round_data.get('ip_port', '')
+                    rest_ip_port = round_data.get('rest_ip_port', '')
+
                     result = nodeInstance.train_model_params(paramsLink, current_round, ip_port, rest_ip_port, index, skip_download=skip_download)
-                    
+
                     # Reminder: add_node_params() writes a submodel blockchain policy so the aggregator can find this node's model file.
                     nodeInstance.add_node_params(current_round, result['model_path'], index)    #Goes to blockchain
+
+                    # benchmarking: mark end of training time
+                    round_end_ts = time.time()
+
                     logger.info(f"[{index}][Round {current_round}] Step 3 Complete: Model parameters published")
 
-                    # Write initial_accuracy and final_accuracy for this round to AnyLog table "node_accuracy"
+                    # benchmarking: timing metrics
+                    training_time_s = round_end_ts - round_start_ts
+                    polling_time_s = round_start_ts - listen_start_ts
+                    total_round_time_s = round_end_ts - listen_start_ts
+                    logger.info(
+                            f"Benchmarker [{index}][Round {current_round}] "
+                            f" * training time={training_time_s:.3f}s"
+                            f" * polling time={polling_time_s:.3f}s"
+                            f" * total round time={total_round_time_s:.3f}s"
+                    )
+                    bench.record_simple_metric(index, current_round, nodeInstance.replica_name, "training_time_s", training_time_s)
+                    bench.record_simple_metric(index, current_round, nodeInstance.replica_name, "polling_time_s", polling_time_s)
+                    bench.record_simple_metric(index, current_round, nodeInstance.replica_name, "total_round_time_s", total_round_time_s)
+
+                    # forward post-training accuracy into benchmarkfl 
+                    bench.record_simple_metric(index, current_round, nodeInstance.replica_name, "round_accuracy", result['final_accuracy'])
+
+                    # accuracy: distributed node_accuracy store consumed by rollback
                     nodeInstance.push_accuracy(index, current_round, result['initial_accuracy'], result['final_accuracy'], result['model_path'])
                     current_round += 1
                     nodeInstance.round_number[index] = current_round
                     logger.info(f"[{index}][Round {current_round}] Listening for start round {current_round}")
 
-                    # Auto-rollback: runs only when ROLLBACK_AUTO_ENABLED=true
+                    # benchmarking: reset polling clock for next round
+                    listen_start_ts = time.time()
+
+                    # rollback: auto-rollback runs only when ROLLBACK_AUTO_ENABLED=true
                     if rollback_cfg.auto_enabled:
                         db_name = os.getenv("LOGICAL_DATABASE", "mnist_fl")
                         history = get_accuracy_history(index, db_name, edgelake_node_url, nodeInstance.replica_name)
